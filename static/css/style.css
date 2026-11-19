@@ -626,40 +626,285 @@ body {
     100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
 }
 
-/* Print Styles */
+/* ==========================================================
+   Complete High-Contrast Print & PDF Preview Stylesheet
+   ========================================================== */
 @media print {
+    /* 1. Hide non-printable elements and background animations */
     .no-print,
     .app-sidebar,
     .top-navbar,
     .btn,
+    .btn-group,
     .modal,
+    .modal-backdrop,
+    .offcanvas,
     footer,
-    .report-tabs {
+    .report-tabs,
+    #scene,
+    #vignette-overlay,
+    .toast,
+    .alert-dismissible .btn-close {
         display: none !important;
+        visibility: hidden !important;
     }
 
-    body {
+    /* 2. Page & Body base settings */
+    html, body {
+        background: #FFFFFF !important;
         background-color: #FFFFFF !important;
-        font-size: 11pt;
+        color: #111827 !important;
+        font-size: 10.5pt !important;
+        line-height: 1.4 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        margin: 0 !important;
+        padding: 0 !important;
     }
 
+    /* 3. Containers: remove glass, shadows, and overflow traps */
     .main-wrapper,
-    .content-body {
+    .page-content,
+    .content-body,
+    .container,
+    .container-fluid {
         display: block !important;
+        position: static !important;
         margin: 0 !important;
         padding: 0 !important;
         max-width: 100% !important;
-    }
-
-    .card {
-        border: 1px solid #CBD5E1 !important;
+        width: 100% !important;
+        overflow: visible !important;
+        background: transparent !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
         box-shadow: none !important;
     }
 
+    /* 4. Complete Text Contrast: force crisp, fully visible dark letters */
+    *,
+    *::before,
+    *::after {
+        text-shadow: none !important;
+        box-shadow: none !important;
+    }
+
+    body,
+    p,
+    div,
+    span,
+    label,
+    li,
+    td,
+    th,
+    h1, h2, h3, h4, h5, h6,
+    .card-header,
+    .card-title,
+    .fw-bold,
+    .fw-semibold,
+    .text-dark,
+    .kpi-value-large {
+        color: #111827 !important;
+        opacity: 1 !important;
+        -webkit-text-fill-color: #111827 !important;
+    }
+
+    /* Secondary / Muted text: solid readable charcoal gray */
+    .text-muted,
+    .text-secondary,
+    .small.text-muted,
+    .kpi-label-uppercase,
+    .kpi-subtext-muted,
+    small {
+        color: #4b5563 !important;
+        opacity: 1 !important;
+        -webkit-text-fill-color: #4b5563 !important;
+    }
+
+    /* Brand / Primary text in print */
+    .text-primary {
+        color: #0b1b3a !important;
+        -webkit-text-fill-color: #0b1b3a !important;
+    }
+
+    .text-success {
+        color: #166534 !important;
+        -webkit-text-fill-color: #166534 !important;
+    }
+
+    .text-danger {
+        color: #991b1b !important;
+        -webkit-text-fill-color: #991b1b !important;
+    }
+
+    .text-warning {
+        color: #92400e !important;
+        -webkit-text-fill-color: #92400e !important;
+    }
+
+    .text-info {
+        color: #0369a1 !important;
+        -webkit-text-fill-color: #0369a1 !important;
+    }
+
+    /* Code elements: serial numbers, SKUs, invoices */
+    code, pre {
+        color: #111827 !important;
+        background-color: #f3f4f6 !important;
+        border: 1px solid #d1d5db !important;
+        padding: 1px 4px !important;
+        border-radius: 4px !important;
+        font-family: monospace !important;
+    }
+
+    /* 5. Cards & KPI blocks */
+    .card,
+    .kpi-card,
+    .category-card {
+        background: #FFFFFF !important;
+        background-color: #FFFFFF !important;
+        border: 1px solid #d1d5db !important;
+        border-radius: 8px !important;
+        box-shadow: none !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+        margin-bottom: 1rem !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+    }
+
+    .card-header,
+    .card-footer {
+        background-color: #f8fafc !important;
+        border-color: #e2e8f0 !important;
+        color: #111827 !important;
+    }
+
+    /* 6. Tables: high contrast, no cutoff, crisp borders */
+    .table-responsive {
+        overflow: visible !important;
+        display: block !important;
+        width: 100% !important;
+    }
+
+    .table {
+        width: 100% !important;
+        border-collapse: collapse !important;
+        background-color: #FFFFFF !important;
+        color: #111827 !important;
+        border: 1px solid #d1d5db !important;
+        margin-bottom: 1rem !important;
+    }
+
+    .table th {
+        background-color: #f1f5f9 !important;
+        color: #1e293b !important;
+        border: 1px solid #cbd5e1 !important;
+        font-size: 8pt !important;
+        font-weight: 700 !important;
+        text-transform: uppercase !important;
+        padding: 6px 8px !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    .table td {
+        background-color: #FFFFFF !important;
+        color: #111827 !important;
+        border: 1px solid #e2e8f0 !important;
+        padding: 6px 8px !important;
+        font-size: 9pt !important;
+        vertical-align: middle !important;
+    }
+
+    .table-striped tbody tr:nth-of-type(odd) td,
+    .table-striped tbody tr:nth-of-type(odd) th {
+        background-color: #f8fafc !important;
+    }
+
+    .table tr {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+    }
+
+    /* 7. Badges in Print / PDF */
+    .badge {
+        border: 1px solid #94a3b8 !important;
+        font-size: 7.5pt !important;
+        padding: 2px 6px !important;
+        font-weight: 600 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    .badge.bg-success {
+        background-color: #dcfce7 !important;
+        color: #166534 !important;
+        border-color: #86efac !important;
+    }
+
+    .badge.bg-danger,
+    .badge-days-red {
+        background-color: #fee2e2 !important;
+        color: #991b1b !important;
+        border-color: #fca5a5 !important;
+    }
+
+    .badge.bg-warning,
+    .badge-days-amber {
+        background-color: #fef3c7 !important;
+        color: #92400e !important;
+        border-color: #fcd34d !important;
+    }
+
+    .badge.bg-primary {
+        background-color: #dbeafe !important;
+        color: #1e40af !important;
+        border-color: #93c5fd !important;
+    }
+
+    .badge.bg-secondary,
+    .badge.bg-dark,
+    .badge.bg-light,
+    .badge-days-green {
+        background-color: #f1f5f9 !important;
+        color: #1e293b !important;
+        border-color: #cbd5e1 !important;
+    }
+
+    /* 8. Invoice containers: pure white layout without padding cutoffs */
     .invoice-container {
         border: none !important;
         box-shadow: none !important;
         padding: 0 !important;
+        margin: 0 !important;
+        background: #FFFFFF !important;
+        background-color: #FFFFFF !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+        color: #111827 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    .invoice-container * {
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+    }
+
+    .invoice-header {
+        border-bottom: 2px solid #111827 !important;
+    }
+
+    .brand-icon-tile {
+        background: #0B1B3A !important;
+        color: #ffffff !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    .brand-icon-tile i {
+        color: #ffffff !important;
     }
 }
 
