@@ -1,0 +1,24 @@
+# Electrodesk - Project Notes
+
+- **Stack**: Python Flask, Jinja2, Bootstrap 5.3.3, Bootstrap Icons, Chart.js 4.4.3, SQLite/MySQL.
+- **Folder Map**:
+  - `app.py`: Routes, RBAC decorators, derived aggregation logic.
+  - `config.py` & `db.py`: Dual SQLite/MySQL database engine and config constants.
+  - `init_db.py`: Schema setup & 20-table relational demonstration seed data.
+  - `static/`: `css/style.css` (Dark theme, print), `js/pos.js`, `js/main.js` (INR, search, i18n).
+  - `templates/`: Top-level (`base`, `pos`, `invoice`, `warranty`, `products`), subdirs: `operations/`, `finance/`, `system/`.
+- **Data Store & Seeds**: Active SQLite at `electrodesk.db`; MySQL equivalents at `schema_mysql.sql` and `seed_data_mysql.sql`. Relational seeder: `init_db.py`.
+- **INR Formatter**: JS: `Intl.NumberFormat('en-IN', {style:'currency', currency:'INR', maximumFractionDigits:0})`. Jinja2 filter: `|inr` (e.g. `₹31,72,747`).
+- **Permission Matrix**: Enforced via `@roles_required`:
+  - *Shop Owner (Suresh)*: Full access + owner approvals (>10% discounts, PIN 9999).
+  - *System Administrator (Ram)*: Full system, catalog, user, audit, and settings access.
+  - *Shop Manager (Geetha)*: Operations, POs, inventory, and reports; cannot alter system settings.
+  - *Sales Staff (Sai)*: POS, customers, billing, warranties; blocked from settings, audit log, and deletes.
+- **Operational Date**: `APP_TODAY = datetime.date(2026, 11, 19)` in `config.py`; runtime override in Settings (`STORE_SETTING.app_today`). All statuses derive from it.
+- **Execution & Tests**:
+  - Run App: `python app.py` (Default port: http://127.0.0.1:5000).
+  - Run Unit Tests: `python -m unittest test_phase2.py`.
+- **Progress (Steps 1–8)**:
+  - **Done**: Step 1 (Data Core/Seed/CRUD), Step 2 (POS/EMI/Discounts/Thermal & A4 Invoice), Step 3 (Warranty Center/KPIs/Claims), Step 4 (Operations: Returns, Ledger, POs, Quotes, Repair Tickets).
+  - **In Progress / Coded**: Step 5 (Finance: P&L, Expenses, GST, Daily Closing), Step 6 (System: WhatsApp, Notifications, Audit, Settings, Search, i18n).
+  - **Todo**: Steps 7–8 (Part 3 specifications / final phase hardening).
