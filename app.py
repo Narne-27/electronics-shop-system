@@ -1390,7 +1390,13 @@ def warranty():
             p.product_id, p.product_name, p.product_code, p.brand, p.model,
             c.category_id, c.category_name,
             s.sale_id, s.invoice_number, s.sale_date,
-            cust.customer_id, cust.customer_name, cust.phone as customer_phone
+            cust.customer_id, cust.customer_name, cust.phone as customer_phone,
+            (SELECT wc.claim_id FROM WARRANTY_CLAIM wc 
+             WHERE wc.item_id = si.item_id OR (wc.serial_number = si.serial_number AND si.serial_number IS NOT NULL AND si.serial_number != '') 
+             ORDER BY wc.claim_id DESC LIMIT 1) as claim_id,
+            (SELECT wc.status FROM WARRANTY_CLAIM wc 
+             WHERE wc.item_id = si.item_id OR (wc.serial_number = si.serial_number AND si.serial_number IS NOT NULL AND si.serial_number != '') 
+             ORDER BY wc.claim_id DESC LIMIT 1) as claim_status
         FROM SALE_ITEM si
         JOIN PRODUCT p ON si.product_id = p.product_id
         JOIN CATEGORY c ON p.category_id = c.category_id
@@ -1461,13 +1467,12 @@ def warranty():
         processed_items.append(item)
 
     # 4th KPI: Open Claims
-    claims_count = db.query_one("SELECT COUNT(*) as count FROM WARRANTY_CLAIM WHERE status = 'Open'")['count']
+    claims_count = db.query_one("SELECT COUNT(*) as count FROM WARRANTY_CLAIM WHERE status IN ('Open', 'In Review')")['count']
     open_claims = db.query("""
-        SELECT wc.*, cust.customer_name, cust.phone, p.product_name
+        SELECT wc.*, cust.customer_name, cust.phone, p.product_name, p.product_code
         FROM WARRANTY_CLAIM wc
         LEFT JOIN CUSTOMER cust ON wc.customer_id = cust.customer_id
         LEFT JOIN PRODUCT p ON wc.product_id = p.product_id
-        WHERE wc.status = 'Open'
         ORDER BY wc.claim_id DESC
     """)
 
@@ -1494,34 +1499,76 @@ def warranty():
 @app.route('/warranty/claim/add', methods=['POST'], endpoint='warranty_claim_add')
 @login_required
 def warranty_claim_add():
+    item_id = request.form.get('item_id')
     serial = request.form.get('serial_number', '').strip().upper()
-    issue = request.form.get('issue_description', '').strip()
+    claim_type = request.form.get('claim_type', 'Manufacturer Service').strip()
+    issue = request.form.get('issue_description', '') or request.form.get('claim_reason', '')
+    issue = issue.strip()
     today = get_app_today()
 
-    item = db.query_one("""
-        SELECT si.*, s.customer_id 
-        FROM SALE_ITEM si 
-        JOIN SALE s ON si.sale_id = s.sale_id
-        WHERE UPPER(si.serial_number) = %s
-    """, (serial,))
+    item = None
+    if item_id:
+        item = db.query_one("""
+            SELECT si.*, s.customer_id 
+            FROM SALE_ITEM si 
+            JOIN SALE s ON si.sale_id = s.sale_id
+            WHERE si.item_id = %s
+        """, (item_id,))
+        if item and not serial:
+            serial = (item.get('serial_number') or '').upper()
+
+    if not item and serial:
+        item = db.query_one("""
+            SELECT si.*, s.customer_id 
+            FROM SALE_ITEM si 
+            JOIN SALE s ON si.sale_id = s.sale_id
+            WHERE UPPER(si.serial_number) = %s
+        """, (serial,))
 
     if not item:
-        flash(f"No warranty record found for serial '{serial}'.", 'danger')
+        flash(f"No warranty record found for serial/item '{serial or item_id}'.", 'danger')
         return redirect(url_for('warranty'))
 
     claim_num = f"CLM-{today.year}-{db.query_one('SELECT COUNT(*) as c FROM WARRANTY_CLAIM')['c'] + 1:04d}"
+    full_desc = f"[{claim_type}] {issue}" if claim_type else issue
 
     try:
         db.execute("""
             INSERT INTO WARRANTY_CLAIM (claim_number, item_id, serial_number, customer_id, product_id, claim_date, issue_description, status)
             VALUES (%s, %s, %s, %s, %s, %s, %s, 'Open')
-        """, (claim_num, item['item_id'], serial, item['customer_id'], item['product_id'], today.strftime('%Y-%m-%d'), issue))
+        """, (claim_num, item['item_id'], serial, item.get('customer_id'), item['product_id'], today.strftime('%Y-%m-%d'), full_desc))
         log_audit('WARRANTY_CLAIM', 'Warranty', f"Registered claim {claim_num} for serial {serial}")
-        flash(f"Warranty claim {claim_num} created successfully.", 'success')
+        flash(f"Warranty claim {claim_num} registered successfully.", 'success')
     except Exception as e:
         flash(f"Error registering claim: {str(e)}", 'danger')
 
-    return redirect(url_for('warranty'))
+    return redirect(url_for('warranty', tab='claims'))
+
+
+@app.route('/warranty/claim/update/<int:claim_id>', methods=['POST'])
+@login_required
+@roles_required('Admin', 'Manager', 'Shop Owner', 'Sales Staff')
+def warranty_claim_update(claim_id):
+    status = request.form.get('status', 'In Review').strip()
+    resolution_notes = request.form.get('resolution_notes', '').strip()
+    claim = db.query_one("SELECT * FROM WARRANTY_CLAIM WHERE claim_id = %s", (claim_id,))
+    if not claim:
+        flash('Claim record not found.', 'danger')
+        return redirect(url_for('warranty', tab='claims'))
+
+    try:
+        resolved_at = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S') if status in ('Resolved', 'Closed') else None
+        db.execute("""
+            UPDATE WARRANTY_CLAIM 
+            SET status = %s, resolution_notes = %s, resolved_at = COALESCE(%s, resolved_at) 
+            WHERE claim_id = %s
+        """, (status, resolution_notes, resolved_at, claim_id))
+        log_audit('WARRANTY_CLAIM_UPDATE', 'Warranty', f"Updated claim {claim['claim_number']} to {status}")
+        flash(f"Claim {claim['claim_number']} status updated to '{status}'.", 'success')
+    except Exception as e:
+        flash(f"Error updating claim: {str(e)}", 'danger')
+
+    return redirect(url_for('warranty', tab='claims'))
 
 
 @app.route('/warranty/renew/<int:item_id>', methods=['POST'])
