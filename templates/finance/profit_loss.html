@@ -168,4 +168,64 @@
         </div>
     </div>
 </div>
+
+<!-- Margin Per Category -->
+<div class="card border-0 shadow-sm rounded-4 mb-4">
+    <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+        <div class="fw-bold text-dark">
+            <i class="bi bi-tags-fill text-primary me-2"></i>Profit Margin per Category
+        </div>
+        <small class="text-muted">Gross Margin Performance Across Departments</small>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">Category</th>
+                        <th class="text-center">SKUs</th>
+                        <th class="text-center">Units Sold</th>
+                        <th class="text-end">Revenue (₹)</th>
+                        <th class="text-end">COGS (₹)</th>
+                        <th class="text-end">Gross Profit (₹)</th>
+                        <th class="text-end pe-4" style="min-width: 140px;">Margin (%)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cm in category_margins %}
+                    <tr>
+                        <td class="ps-4">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge bg-light text-secondary border font-monospace">{{ cm.category_code }}</span>
+                                <span class="fw-semibold text-dark"><i class="bi {{ cm.icon or 'bi-box-seam' }} me-1 text-primary"></i>{{ cm.category_name }}</span>
+                            </div>
+                        </td>
+                        <td class="text-center text-muted">{{ cm.total_skus }}</td>
+                        <td class="text-center fw-semibold">{{ cm.units_sold }}</td>
+                        <td class="text-end fw-semibold text-dark">{{ cm.revenue|inr }}</td>
+                        <td class="text-end text-muted">{{ cm.cogs|inr }}</td>
+                        <td class="text-end fw-bold {% if cm.gross_profit >= 0 %}text-success{% else %}text-danger{% endif %}">{{ cm.gross_profit|inr }}</td>
+                        <td class="text-end pe-4">
+                            <div class="d-flex align-items-center justify-content-end gap-2">
+                                <div class="progress flex-grow-1" style="height: 6px; min-width: 50px;">
+                                    <div class="progress-bar {% if cm.margin_pct >= 25 %}bg-success{% elif cm.margin_pct >= 15 %}bg-primary{% elif cm.margin_pct > 0 %}bg-warning{% else %}bg-secondary{% endif %}"
+                                         role="progressbar"
+                                         style="width: {{ [cm.margin_pct, 100]|min }}%;"></div>
+                                </div>
+                                <span class="badge {% if cm.margin_pct >= 25 %}bg-success-subtle text-success border border-success-subtle{% elif cm.margin_pct >= 15 %}bg-primary-subtle text-primary border border-primary-subtle{% elif cm.margin_pct > 0 %}bg-warning-subtle text-dark border border-warning-subtle{% else %}bg-light text-muted border{% endif %} fw-bold">
+                                    {{ "%.1f"|format(cm.margin_pct) }}%
+                                </span>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center py-4 text-muted">No category data available.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 {% endblock %}

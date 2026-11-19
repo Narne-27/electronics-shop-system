@@ -2026,6 +2026,32 @@ def repair_ticket_update_status(ticket_id):
 def reports():
     tab = request.args.get('tab', 'sales')
     today = get_app_today()
+    preset = request.args.get('preset', 'month')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+
+    if preset == 'today':
+        start_d = today
+        end_d = today
+    elif preset == 'week':
+        start_d = today - datetime.timedelta(days=7)
+        end_d = today
+    elif preset == 'year':
+        start_d = datetime.date(today.year, 1, 1)
+        end_d = today
+    elif preset == 'custom' and start_date and end_date:
+        try:
+            start_d = datetime.datetime.strptime(start_date[:10], '%Y-%m-%d').date()
+            end_d = datetime.datetime.strptime(end_date[:10], '%Y-%m-%d').date()
+        except Exception:
+            start_d = datetime.date(today.year, today.month, 1)
+            end_d = today
+    else:
+        start_d = datetime.date(today.year, today.month, 1)
+        end_d = today
+
+    start_date_str = start_d.strftime('%Y-%m-%d')
+    end_date_str = end_d.strftime('%Y-%m-%d')
 
     # Derived inventory numbers
     inv_totals = get_inventory_derived_totals()
@@ -2039,6 +2065,11 @@ def reports():
             COALESCE(SUM(discount_amount), 0.0) as total_discount
         FROM SALE
     """)
+    units_row = db.query_one("SELECT COALESCE(SUM(quantity), 0) as units FROM SALE_ITEM")
+    total_units_val = units_row['units'] if units_row else 0
+    if summary:
+        summary['total_sales'] = summary['total_orders']
+        summary['total_units'] = total_units_val
 
     # Cost of goods sold (COGS)
     cogs_row = db.query_one("""
@@ -2118,6 +2149,9 @@ def reports():
                            total_units=summary['total_units'] if summary else 0,
                            daily_labels=daily_labels,
                            daily_values=daily_values,
+                           last_14_days_labels=daily_labels,
+                           last_14_days_values=daily_values,
+                           last_14_days_data=daily_values,
                            cat_sales=cat_sales,
                            cat_breakdown=cat_sales,
                            top_products=top_10,
@@ -2125,7 +2159,13 @@ def reports():
                            inv_totals=inv_totals,
                            inventory_valuation=inv_totals,
                            cat_inventory=cat_inventory,
-                           category_stock_summary=cat_inventory)
+                           category_stock_summary=cat_inventory,
+                           date_preset=preset,
+                           start_date=start_date_str,
+                           end_date=end_date_str,
+                           start_date_formatted=format_date_in(start_date_str),
+                           end_date_formatted=format_date_in(end_date_str),
+                           today_formatted=format_date_in(today.strftime('%Y-%m-%d')))
 
 
 @app.route('/reports/profit-loss')
@@ -2133,13 +2173,21 @@ def reports():
 def reports_profit_loss():
     today = get_app_today()
 
-    rev_row = db.query_one("SELECT COALESCE(SUM(grand_total), 0.0) as rev, COALESCE(SUM(tax_amount), 0.0) as tax FROM SALE")
+    rev_row = db.query_one("SELECT COALESCE(SUM(grand_total), 0.0) as rev, COALESCE(SUM(tax_amount), 0.0) as tax, COUNT(*) as count FROM SALE")
     revenue = rev_row['rev'] if rev_row else 0.0
     tax_collected = rev_row['tax'] if rev_row else 0.0
+    sales_count = rev_row['count'] if rev_row else 0
+
+    ref_row = db.query_one("SELECT COALESCE(SUM(refund_amount), 0.0) as total_refunds, COUNT(*) as count FROM CREDIT_NOTE")
+    total_refunds = ref_row['total_refunds'] if ref_row else 0.0
+    refund_count = ref_row['count'] if ref_row else 0
+
+    net_revenue = max(0.0, revenue - total_refunds)
 
     cogs_row = db.query_one("SELECT COALESCE(SUM(si.quantity * p.cost_price), 0.0) as cogs FROM SALE_ITEM si JOIN PRODUCT p ON si.product_id = p.product_id")
     cogs = cogs_row['cogs'] if cogs_row else 0.0
-    gross_profit = revenue - cogs
+    gross_profit = net_revenue - cogs
+    gross_margin = (gross_profit / revenue * 100.0) if revenue > 0 else 0.0
 
     exp_row = db.query_one("SELECT COALESCE(SUM(amount), 0.0) as exp FROM EXPENSE")
     total_expenses = exp_row['exp'] if exp_row else 0.0
@@ -2149,14 +2197,17 @@ def reports_profit_loss():
 
     # Best-sellers
     best_sellers = db.query("""
-        SELECT p.product_name, p.brand, c.category_name,
-               SUM(si.quantity) as sold, SUM(si.total_price) as rev,
+        SELECT p.product_id, p.product_code, p.product_name, p.brand, c.category_name,
+               SUM(si.quantity) as sold, SUM(si.quantity) as total_sold,
+               SUM(si.total_price) as rev,
                SUM(si.quantity * (si.unit_price - p.cost_price)) as margin
         FROM SALE_ITEM si
         JOIN PRODUCT p ON si.product_id = p.product_id
         JOIN CATEGORY c ON p.category_id = c.category_id
-        GROUP BY p.product_id, p.product_name, p.brand, c.category_name
-        ORDER BY rev DESC LIMIT 5
+        GROUP BY p.product_id, p.product_code, p.product_name, p.brand, c.category_name
+        HAVING total_sold > 0
+        ORDER BY total_sold DESC, rev DESC
+        LIMIT 5
     """)
 
     # Slow-moving stock (high stock, 0 or low sales)
@@ -2170,35 +2221,78 @@ def reports_profit_loss():
         LIMIT 6
     """)
 
+    # Margin per category
+    category_margins = db.query("""
+        SELECT c.category_id, c.category_code, c.category_name, c.icon,
+               COALESCE(COUNT(DISTINCT p.product_id), 0) as total_skus,
+               COALESCE(SUM(si.quantity), 0) as units_sold,
+               COALESCE(SUM(si.total_price), 0.0) as revenue,
+               COALESCE(SUM(si.quantity * p.cost_price), 0.0) as cogs,
+               COALESCE(SUM(si.total_price - (si.quantity * p.cost_price)), 0.0) as gross_profit
+        FROM CATEGORY c
+        LEFT JOIN PRODUCT p ON c.category_id = p.category_id
+        LEFT JOIN SALE_ITEM si ON p.product_id = si.product_id
+        GROUP BY c.category_id, c.category_code, c.category_name, c.icon
+        ORDER BY revenue DESC
+    """)
+    for cat in category_margins:
+        c_rev = cat['revenue']
+        c_gp = cat['gross_profit']
+        cat['margin_pct'] = (c_gp / c_rev * 100.0) if c_rev > 0 else 0.0
+
     return render_template('finance/profit_loss.html',
                            revenue=revenue,
+                           gross_revenue=revenue,
+                           net_revenue=net_revenue,
+                           total_refunds=total_refunds,
+                           refund_count=refund_count,
+                           sales_count=sales_count,
                            cogs=cogs,
                            gross_profit=gross_profit,
+                           gross_margin=gross_margin,
                            total_expenses=total_expenses,
                            net_profit=net_profit,
                            net_margin=net_margin,
                            best_sellers=best_sellers,
-                           slow_moving=slow_moving)
+                           slow_moving=slow_moving,
+                           category_margins=category_margins)
 
 
 @app.route('/expenses')
 @login_required
 def expenses():
-    expenses_list = db.query("SELECT * FROM EXPENSE ORDER BY expense_date DESC")
+    today = get_app_today()
+    expenses_list = db.query("SELECT * FROM EXPENSE ORDER BY expense_date DESC, expense_id DESC")
     total_exp = sum(e['amount'] for e in expenses_list)
-    return render_template('finance/expenses.html', expenses=expenses_list, total_expense=total_exp)
+    rent_total = sum(e['amount'] for e in expenses_list if e['category'] == 'Rent')
+    salary_total = sum(e['amount'] for e in expenses_list if e['category'] == 'Salary')
+    electricity_total = sum(e['amount'] for e in expenses_list if e['category'] == 'Electricity')
+    other_total = max(0.0, total_exp - rent_total - salary_total - electricity_total)
+
+    return render_template('finance/expenses.html',
+                           expenses=expenses_list,
+                           total_expense=total_exp,
+                           rent_total=rent_total,
+                           salary_total=salary_total,
+                           electricity_total=electricity_total,
+                           other_total=other_total,
+                           app_today_str=today.strftime('%Y-%m-%d'))
 
 
 @app.route('/expenses/add', methods=['POST'])
 @login_required
 @roles_required('Admin', 'Manager', 'Shop Owner')
 def expense_add():
-    category = request.form.get('category', 'Other')
+    category = request.form.get('category', 'Other').strip()
     amount = float(request.form.get('amount', 0.0) or 0.0)
     exp_date = request.form.get('expense_date') or get_app_today().strftime('%Y-%m-%d')
-    pay_mode = request.form.get('payment_method', 'Bank Transfer')
+    pay_mode = request.form.get('payment_method', 'Bank Transfer').strip()
     notes = request.form.get('notes', '').strip()
     creator = session.get('full_name', 'Manager')
+
+    if amount <= 0:
+        flash("Expense amount must be greater than zero.", 'danger')
+        return redirect(url_for('expenses'))
 
     try:
         db.execute("""
@@ -2213,13 +2307,68 @@ def expense_add():
     return redirect(url_for('expenses'))
 
 
+@app.route('/expenses/edit/<int:expense_id>', methods=['POST'])
+@login_required
+@roles_required('Admin', 'Manager', 'Shop Owner')
+def expense_edit(expense_id):
+    existing = db.query_one("SELECT * FROM EXPENSE WHERE expense_id = %s", (expense_id,))
+    if not existing:
+        flash("Expense record not found.", 'danger')
+        return redirect(url_for('expenses'))
+
+    category = request.form.get('category', existing['category']).strip()
+    amount = float(request.form.get('amount', existing['amount']) or 0.0)
+    exp_date = request.form.get('expense_date') or existing['expense_date']
+    pay_mode = request.form.get('payment_method', existing['payment_method']).strip()
+    notes = request.form.get('notes', existing['notes'] or '').strip()
+
+    if amount <= 0:
+        flash("Expense amount must be greater than zero.", 'danger')
+        return redirect(url_for('expenses'))
+
+    try:
+        db.execute("""
+            UPDATE EXPENSE
+            SET category = %s, amount = %s, expense_date = %s, payment_method = %s, notes = %s
+            WHERE expense_id = %s
+        """, (category, amount, exp_date, pay_mode, notes, expense_id))
+        log_audit('UPDATE_EXPENSE', 'Finance', f"Updated expense #{expense_id} ({category}: ₹{amount:,.2f})")
+        flash(f"Expense #{expense_id} updated successfully.", 'success')
+    except Exception as e:
+        flash(f"Error updating expense: {str(e)}", 'danger')
+
+    return redirect(url_for('expenses'))
+
+
+@app.route('/expenses/delete/<int:expense_id>', methods=['POST'])
+@login_required
+@roles_required('Admin', 'Manager', 'Shop Owner')
+def expense_delete(expense_id):
+    existing = db.query_one("SELECT * FROM EXPENSE WHERE expense_id = %s", (expense_id,))
+    if not existing:
+        flash("Expense record not found.", 'danger')
+        return redirect(url_for('expenses'))
+
+    try:
+        db.execute("DELETE FROM EXPENSE WHERE expense_id = %s", (expense_id,))
+        log_audit('DELETE_EXPENSE', 'Finance', f"Deleted expense #{expense_id} ({existing['category']}: ₹{existing['amount']:,.2f})")
+        flash(f"Expense #{expense_id} deleted successfully.", 'success')
+    except Exception as e:
+        flash(f"Error deleting expense: {str(e)}", 'danger')
+
+    return redirect(url_for('expenses'))
+
+
 @app.route('/reports/gst')
 @login_required
 def reports_gst():
-    """Monthly GST breakdown: Taxable subtotal, CGST (9%), SGST (9%), Total Tax."""
+    """Monthly GST breakdown by rate: Taxable subtotal, CGST (9%), SGST (9%), Total Tax."""
     gst_data = db.query("""
         SELECT 
             strftime('%Y-%m', sale_date) as month,
+            18.0 as gst_rate,
+            9.0 as cgst_rate,
+            9.0 as sgst_rate,
             COUNT(*) as invoice_count,
             COALESCE(SUM(subtotal), 0.0) as taxable_amount,
             COALESCE(SUM(cgst_amount), 0.0) as total_cgst,
@@ -2232,6 +2381,7 @@ def reports_gst():
     """)
     totals = db.query_one("""
         SELECT 
+            COUNT(*) as total_invoices,
             COALESCE(SUM(subtotal), 0.0) as taxable,
             COALESCE(SUM(cgst_amount), 0.0) as cgst,
             COALESCE(SUM(sgst_amount), 0.0) as sgst,
@@ -2248,6 +2398,7 @@ def reports_gst_csv():
     gst_data = db.query("""
         SELECT 
             strftime('%Y-%m', sale_date) as month,
+            18.0 as gst_rate,
             COUNT(*) as invoice_count,
             COALESCE(SUM(subtotal), 0.0) as taxable_amount,
             COALESCE(SUM(cgst_amount), 0.0) as total_cgst,
@@ -2260,9 +2411,18 @@ def reports_gst_csv():
     """)
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(['Month', 'Invoices Count', 'Taxable Value (₹)', 'CGST 9% (₹)', 'SGST 9% (₹)', 'Total GST (₹)', 'Gross Turnover (₹)'])
+    writer.writerow(['Month', 'GST Rate (%)', 'Invoices Count', 'Taxable Value (₹)', 'CGST 9% (₹)', 'SGST 9% (₹)', 'Total GST 18% (₹)', 'Gross Turnover (₹)'])
     for g in gst_data:
-        writer.writerow([g['month'], g['invoice_count'], g['taxable_amount'], g['total_cgst'], g['total_sgst'], g['total_tax'], g['gross_turnover']])
+        writer.writerow([
+            g['month'],
+            f"{g['gst_rate']:.0f}%",
+            g['invoice_count'],
+            f"{g['taxable_amount']:.2f}",
+            f"{g['total_cgst']:.2f}",
+            f"{g['total_sgst']:.2f}",
+            f"{g['total_tax']:.2f}",
+            f"{g['gross_turnover']:.2f}"
+        ])
     return Response(output.getvalue(), mimetype="text/csv", headers={"Content-disposition": "attachment; filename=electrodesk_gst_summary.csv"})
 
 
@@ -2279,7 +2439,7 @@ def daily_closing():
         expected_upi = float(request.form.get('expected_upi', 0.0) or 0.0)
         expected_card = float(request.form.get('expected_card', 0.0) or 0.0)
         expected_total = float(request.form.get('expected_total', 0.0) or 0.0)
-        diff = actual_cash - expected_cash
+        diff = round(actual_cash - expected_cash, 2)
         notes = request.form.get('notes', 'Daily drawer reconciled').strip()
         closer = session.get('full_name', 'Cashier')
 
@@ -2289,20 +2449,72 @@ def daily_closing():
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (closing_date, expected_cash, actual_cash, expected_upi, expected_card, expected_total, diff, notes, closer))
             log_audit('DAILY_CLOSING', 'Finance', f"Completed daily closing for {closing_date}: Difference = ₹{diff:,.2f}")
-            flash(f"Daily closing for {closing_date} saved successfully. Difference: ₹{diff:,.2f}.", 'success')
+            if abs(diff) < 0.01:
+                flash(f"Daily closing for {closing_date} finalized: Drawer balanced perfectly (₹0 difference).", 'success')
+            elif diff > 0:
+                flash(f"Daily closing for {closing_date} saved with Cash Surplus: +₹{diff:,.2f}.", 'warning')
+            else:
+                flash(f"Daily closing for {closing_date} saved with Cash Shortage: -₹{abs(diff):,.2f}.", 'danger')
         except Exception as e:
             flash(f"Error saving closing: {str(e)}", 'danger')
 
         return redirect(url_for('daily_closing', date=closing_date))
 
-    # Calculate expected cash, UPI, card for selected date
-    sales_today = db.query("SELECT payment_method, grand_total FROM SALE WHERE DATE(sale_date) = %s", (selected_date,))
-    exp_cash = sum(s['grand_total'] for s in sales_today if s['payment_method'] == 'Cash')
-    exp_upi = sum(s['grand_total'] for s in sales_today if s['payment_method'] == 'UPI')
-    exp_card = sum(s['grand_total'] for s in sales_today if s['payment_method'] == 'Card')
-    exp_tot = sum(s['grand_total'] for s in sales_today)
+    # Calculate expected cash, UPI, card from SALE for selected date
+    sales_today = db.query("""
+        SELECT payment_method, payment_status, grand_total, amount_paid 
+        FROM SALE 
+        WHERE DATE(sale_date) = %s
+    """, (selected_date,))
+
+    exp_cash = 0.0
+    exp_upi = 0.0
+    exp_card = 0.0
+
+    for s in sales_today:
+        pm = s['payment_method']
+        amt = s['amount_paid'] if (s['amount_paid'] is not None and s['amount_paid'] > 0) else s['grand_total']
+        if pm == 'Cash':
+            exp_cash += amt
+        elif pm == 'UPI':
+            exp_upi += amt
+        elif pm == 'Card':
+            exp_card += amt
+        elif pm in ['Partial', 'Pay Later']:
+            exp_cash += amt
+
+    # Customer Payments collected today (from ledger dues)
+    cust_payments = db.query("""
+        SELECT payment_method, amount 
+        FROM CUSTOMER_PAYMENT 
+        WHERE DATE(payment_date) = %s
+    """, (selected_date,))
+    for cp in cust_payments:
+        pm = cp['payment_method']
+        amt = cp['amount']
+        if pm == 'Cash':
+            exp_cash += amt
+        elif pm == 'UPI':
+            exp_upi += amt
+        elif pm == 'Card':
+            exp_card += amt
+
+    # Subtract cash refunds from returns today if any
+    cash_refunds = db.query_one("""
+        SELECT COALESCE(SUM(refund_amount), 0.0) as ref 
+        FROM CREDIT_NOTE 
+        WHERE DATE(created_at) = %s
+    """, (selected_date,))
+    if cash_refunds and cash_refunds['ref']:
+        exp_cash = max(0.0, exp_cash - cash_refunds['ref'])
+
+    exp_cash = round(exp_cash, 2)
+    exp_upi = round(exp_upi, 2)
+    exp_card = round(exp_card, 2)
+    exp_tot = round(exp_cash + exp_upi + exp_card, 2)
 
     existing_closing = db.query_one("SELECT * FROM DAILY_CLOSING WHERE closing_date = %s", (selected_date,))
+    past_closings = db.query("SELECT * FROM DAILY_CLOSING ORDER BY closing_date DESC LIMIT 10")
 
     return render_template('finance/daily_closing.html',
                            selected_date=selected_date,
@@ -2310,7 +2522,8 @@ def daily_closing():
                            expected_upi=exp_upi,
                            expected_card=exp_card,
                            expected_total=exp_tot,
-                           existing_closing=existing_closing)
+                           existing_closing=existing_closing,
+                           past_closings=past_closings)
 
 
 # ==========================================================

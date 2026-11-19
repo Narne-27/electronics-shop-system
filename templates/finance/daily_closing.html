@@ -124,9 +124,18 @@
             </div>
             <div class="card-body p-4">
                 {% if existing_closing %}
-                <div class="alert alert-success rounded-3 mb-3">
-                    <i class="bi bi-check2-all me-1"></i>
+                <div class="alert {% if existing_closing.cash_difference == 0 %}alert-success{% elif existing_closing.cash_difference > 0 %}alert-warning{% else %}alert-danger{% endif %} rounded-3 mb-3">
+                    <i class="bi {% if existing_closing.cash_difference == 0 %}bi-check2-all{% else %}bi-exclamation-triangle-fill{% endif %} me-1"></i>
                     <strong>Reconciled by {{ existing_closing.closed_by }}</strong>
+                    <div class="mt-1 small">
+                        {% if existing_closing.cash_difference == 0 %}
+                        Drawer balanced accurately with zero discrepancy.
+                        {% elif existing_closing.cash_difference > 0 %}
+                        Discrepancy: Physical cash exceeds system expectation by {{ existing_closing.cash_difference|inr }}.
+                        {% else %}
+                        Discrepancy: Physical cash is short by {{ existing_closing.cash_difference|inr }}.
+                        {% endif %}
+                    </div>
                 </div>
                 <div class="d-flex justify-content-between py-2 border-bottom">
                     <span class="text-muted">System Expected:</span>
@@ -136,12 +145,22 @@
                     <span class="text-muted">Physical Count:</span>
                     <span class="fw-semibold">{{ existing_closing.actual_cash|inr }}</span>
                 </div>
-                <div class="d-flex justify-content-between py-2 border-bottom">
+                <div class="d-flex justify-content-between py-2 border-bottom align-items-center">
                     <span class="text-muted">Difference Flag:</span>
-                    <span class="fw-bold {% if existing_closing.cash_difference == 0 %}text-success{% else %}text-danger{% endif %}">
-                        {{ existing_closing.cash_difference|inr }}
-                    </span>
+                    {% if existing_closing.cash_difference == 0 %}
+                    <span class="badge bg-success px-3 py-2 fs-6"><i class="bi bi-check-circle me-1"></i>Balanced (₹0)</span>
+                    {% elif existing_closing.cash_difference > 0 %}
+                    <span class="badge bg-warning text-dark px-3 py-2 fs-6"><i class="bi bi-exclamation-triangle-fill me-1"></i>Surplus (+{{ existing_closing.cash_difference|inr }})</span>
+                    {% else %}
+                    <span class="badge bg-danger px-3 py-2 fs-6"><i class="bi bi-exclamation-octagon-fill me-1"></i>Shortage ({{ existing_closing.cash_difference|inr }})</span>
+                    {% endif %}
                 </div>
+                {% if existing_closing.notes %}
+                <div class="py-2 border-bottom">
+                    <span class="text-muted small d-block">Closing Notes:</span>
+                    <span class="small text-dark">{{ existing_closing.notes }}</span>
+                </div>
+                {% endif %}
                 {% else %}
                 <div class="alert alert-warning rounded-3 mb-3">
                     <i class="bi bi-clock-history me-1"></i>
@@ -152,6 +171,62 @@
                 </p>
                 {% endif %}
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Daily Closing History Table -->
+<div class="card border-0 shadow-sm rounded-4 mt-4 mb-4">
+    <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+        <div class="fw-bold text-dark">
+            <i class="bi bi-clock-history text-primary me-2"></i>Recent Register Closings
+        </div>
+        <small class="text-muted">Past Audited Closings</small>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">Date</th>
+                        <th class="text-end">Expected Cash (₹)</th>
+                        <th class="text-end">Actual Count (₹)</th>
+                        <th class="text-center">Difference Flag</th>
+                        <th class="text-end">Expected Total (₹)</th>
+                        <th>Closed By</th>
+                        <th class="pe-4">Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for pc in past_closings %}
+                    <tr {% if pc.closing_date == selected_date %}class="table-active"{% endif %}>
+                        <td class="ps-4 fw-bold">
+                            <a href="{{ url_for('daily_closing', date=pc.closing_date) }}" class="text-decoration-none">
+                                {{ pc.closing_date|date_in }}
+                            </a>
+                        </td>
+                        <td class="text-end text-muted">{{ pc.expected_cash|inr }}</td>
+                        <td class="text-end fw-semibold text-dark">{{ pc.actual_cash|inr }}</td>
+                        <td class="text-center">
+                            {% if pc.cash_difference == 0 %}
+                            <span class="badge bg-success-subtle text-success border border-success-subtle fw-bold">Balanced</span>
+                            {% elif pc.cash_difference > 0 %}
+                            <span class="badge bg-warning-subtle text-dark border border-warning-subtle fw-bold">+{{ pc.cash_difference|inr }}</span>
+                            {% else %}
+                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle fw-bold">{{ pc.cash_difference|inr }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end fw-semibold text-primary">{{ pc.expected_total|inr }}</td>
+                        <td><span class="badge bg-light text-secondary border">{{ pc.closed_by }}</span></td>
+                        <td class="pe-4 text-truncate text-muted small" style="max-width: 200px;">{{ pc.notes or '-' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center py-4 text-muted">No historical closing records recorded yet.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
 </div>

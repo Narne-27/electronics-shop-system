@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 from app import app
 import db
 import init_db
+import config
 
 
 class TestElectrodeskSystem(unittest.TestCase):
@@ -22,7 +23,9 @@ class TestElectrodeskSystem(unittest.TestCase):
     def setUpClass(cls):
         app.config['TESTING'] = True
         app.config['WTF_CSRF_ENABLED'] = False
-        init_db.ensure_db_initialized()
+        if os.path.exists(config.SQLITE_DB_PATH):
+            os.remove(config.SQLITE_DB_PATH)
+        init_db.init_sqlite_db()
         cls.client = app.test_client()
 
     def login(self, username, password):
@@ -124,7 +127,7 @@ class TestElectrodeskSystem(unittest.TestCase):
         # Edit category
         resp = self.client.post(f'/categories/edit/{cat["category_id"]}', data={
             'category_code': 'CAT-99',
-            'category_name': 'Smart Home & IoT',
+            'category_name': 'Smart Home Automation Pro',
             'icon': 'bi-cpu',
             'description': 'Updated description'
         }, follow_redirects=True)
@@ -176,6 +179,7 @@ class TestElectrodeskSystem(unittest.TestCase):
         self.assertIn(b'updated successfully', resp.data)
 
         # Clean up test product
+        db.execute("DELETE FROM STOCK_MOVEMENT WHERE product_id = %s", (prod['product_id'],))
         db.execute("DELETE FROM PRODUCT WHERE product_id = %s", (prod['product_id'],))
         self.logout()
 

@@ -269,6 +269,221 @@ class ElectrodeskPhase2Tests(unittest.TestCase):
         self.assertEqual(curr_prod_count, initial_prod_count)
         self.logout()
 
+    # -------------------------------------------------------------
+    # 10. PROFIT & LOSS: DERIVED TOTALS, BEST-SELLERS & CATEGORY MARGINS
+    # -------------------------------------------------------------
+    def test_10_profit_and_loss_derived_totals_and_margins(self):
+        """P&L page verifies Gross Revenue, COGS, Gross Profit, Expenses, Net Profit and Category Margins."""
+        self.login('admin')
+        res = self.client.get('/reports/profit-loss')
+        self.assertEqual(res.status_code, 200)
+        self.assertIn(b'Profit & Loss Financial Statement', res.data)
+        self.assertIn(b'Top Best-Selling Products', res.data)
+        self.assertIn(b'Slow-Moving Inventory Alert', res.data)
+        self.assertIn(b'Profit Margin per Category', res.data)
+
+        # Database verification of derived numbers
+        rev_row = db.query_one("SELECT COALESCE(SUM(grand_total), 0.0) as rev FROM SALE")
+        expected_rev = rev_row['rev'] if rev_row else 0.0
+
+        cogs_row = db.query_one("""
+            SELECT COALESCE(SUM(si.quantity * p.cost_price), 0.0) as cogs 
+            FROM SALE_ITEM si 
+            JOIN PRODUCT p ON si.product_id = p.product_id
+        """)
+        expected_cogs = cogs_row['cogs'] if cogs_row else 0.0
+
+        ref_row = db.query_one("SELECT COALESCE(SUM(refund_amount), 0.0) as ref FROM CREDIT_NOTE")
+        expected_refunds = ref_row['ref'] if ref_row else 0.0
+
+        exp_row = db.query_one("SELECT COALESCE(SUM(amount), 0.0) as exp FROM EXPENSE")
+        expected_exp = exp_row['exp'] if exp_row else 0.0
+
+        net_rev = expected_rev - expected_refunds
+        expected_gross_profit = net_rev - expected_cogs
+        expected_net_profit = expected_gross_profit - expected_exp
+
+        # Verify values in database match expectations
+        self.assertGreater(expected_rev, 0)
+        self.assertGreater(expected_cogs, 0)
+        self.assertGreater(expected_exp, 0)
+        self.assertEqual(round(expected_gross_profit - (net_rev - expected_cogs), 2), 0)
+        self.assertEqual(round(expected_net_profit - (expected_gross_profit - expected_exp), 2), 0)
+
+        # Verify category margins list
+        cat_margins = db.query("""
+            SELECT c.category_name, 
+                   COALESCE(SUM(si.total_price), 0.0) as rev,
+                   COALESCE(SUM(si.quantity * p.cost_price), 0.0) as cogs
+            FROM CATEGORY c
+            LEFT JOIN PRODUCT p ON c.category_id = p.category_id
+            LEFT JOIN SALE_ITEM si ON p.product_id = si.product_id
+            GROUP BY c.category_id, c.category_name
+        """)
+        self.assertGreaterEqual(len(cat_margins), 6)
+        self.logout()
+
+    # -------------------------------------------------------------
+    # 11. EXPENSES CRUD: ADD, EDIT, DELETE & FEEDING NET PROFIT
+    # -------------------------------------------------------------
+    def test_11_expenses_crud_feeds_net_profit(self):
+        """Adding, editing and deleting expenses updates operational expenses and feeds P&L net profit."""
+        self.login('admin')
+
+        # Baseline expenses
+        init_exp = db.query_one("SELECT COALESCE(SUM(amount), 0.0) as exp FROM EXPENSE")['exp']
+
+        # 1. Add new expense (e.g. Electricity bill)
+        res_add = self.client.post('/expenses/add', data={
+            'category': 'Electricity',
+            'amount': 12500.0,
+            'expense_date': '2026-11-19',
+            'payment_method': 'UPI',
+            'notes': 'Supplementary showroom lighting bill'
+        }, follow_redirects=True)
+        self.assertEqual(res_add.status_code, 200)
+        self.assertIn(b'recorded successfully', res_add.data)
+
+        # Verify database updated
+        new_exp_row = db.query_one("SELECT * FROM EXPENSE WHERE notes = 'Supplementary showroom lighting bill'")
+        self.assertIsNotNone(new_exp_row)
+        self.assertEqual(new_exp_row['amount'], 12500.0)
+
+        updated_total = db.query_one("SELECT COALESCE(SUM(amount), 0.0) as exp FROM EXPENSE")['exp']
+        self.assertEqual(round(updated_total - init_exp, 2), 12500.0)
+
+        # 2. Edit expense (e.g. adjust rent or salary amount)
+        res_edit = self.client.post(f'/expenses/edit/{new_exp_row["expense_id"]}', data={
+            'category': 'Electricity',
+            'amount': 15000.0,
+            'expense_date': '2026-11-19',
+            'payment_method': 'Bank Transfer',
+            'notes': 'Updated showroom lighting bill'
+        }, follow_redirects=True)
+        self.assertEqual(res_edit.status_code, 200)
+        self.assertIn(b'updated successfully', res_edit.data)
+
+        edited_row = db.query_one("SELECT * FROM EXPENSE WHERE expense_id = %s", (new_exp_row['expense_id'],))
+        self.assertEqual(edited_row['amount'], 15000.0)
+        self.assertEqual(edited_row['payment_method'], 'Bank Transfer')
+
+        # 3. Delete expense
+        res_del = self.client.post(f'/expenses/delete/{new_exp_row["expense_id"]}', follow_redirects=True)
+        self.assertEqual(res_del.status_code, 200)
+        self.assertIn(b'deleted successfully', res_del.data)
+
+        restored_total = db.query_one("SELECT COALESCE(SUM(amount), 0.0) as exp FROM EXPENSE")['exp']
+        self.assertEqual(round(restored_total, 2), round(init_exp, 2))
+
+        # 4. RBAC: Sales Staff cannot add expenses
+        self.logout()
+        self.login('sai')
+        res_staff = self.client.post('/expenses/add', data={
+            'category': 'Other',
+            'amount': 1000.0
+        }, follow_redirects=False)
+        self.assertEqual(res_staff.status_code, 302)
+        self.logout()
+
+    # -------------------------------------------------------------
+    # 12. MONTHLY GST SUMMARY AND CSV EXPORT
+    # -------------------------------------------------------------
+    def test_12_monthly_gst_summary_and_csv_export(self):
+        """Monthly GST summary calculates statutory taxes and exports valid CSV."""
+        self.login('admin')
+        res_gst = self.client.get('/reports/gst')
+        self.assertEqual(res_gst.status_code, 200)
+        self.assertIn(b'Monthly GST Filing', res_gst.data)
+        self.assertIn(b'CGST 9%', res_gst.data)
+        self.assertIn(b'SGST 9%', res_gst.data)
+        self.assertIn(b'Export GST CSV', res_gst.data)
+
+        # Database verification
+        gst_totals = db.query_one("""
+            SELECT 
+                COALESCE(SUM(subtotal), 0.0) as taxable,
+                COALESCE(SUM(cgst_amount), 0.0) as cgst,
+                COALESCE(SUM(sgst_amount), 0.0) as sgst,
+                COALESCE(SUM(tax_amount), 0.0) as tax,
+                COALESCE(SUM(grand_total), 0.0) as turnover
+            FROM SALE
+        """)
+        self.assertGreater(gst_totals['taxable'], 0)
+        self.assertEqual(round(gst_totals['cgst'] + gst_totals['sgst'], 2), round(gst_totals['tax'], 2))
+
+        # Test CSV export
+        res_csv = self.client.get('/reports/gst/export.csv')
+        self.assertEqual(res_csv.status_code, 200)
+        self.assertIn('text/csv', res_csv.content_type)
+        self.assertIn('electrodesk_gst_summary.csv', res_csv.headers.get('Content-Disposition', ''))
+
+        csv_text = res_csv.data.decode('utf-8')
+        self.assertIn('Month', csv_text)
+        self.assertIn('Taxable Value', csv_text)
+        self.assertIn('CGST', csv_text)
+        self.assertIn('SGST', csv_text)
+        self.assertIn('Total GST', csv_text)
+        self.assertIn('2026-11', csv_text)
+        self.logout()
+
+    # -------------------------------------------------------------
+    # 13. DAILY CLOSING REPORT: CASH/UPI/CARD & DIFFERENCE FLAG
+    # -------------------------------------------------------------
+    def test_13_daily_closing_report_and_difference_flag(self):
+        """Daily closing verifies cash, UPI, card totals vs expected and calculates difference flag."""
+        self.login('geetha')
+        today = get_app_today()
+        today_str = today.strftime('%Y-%m-%d')
+
+        # 1. View Daily Closing for today
+        res = self.client.get(f'/reports/daily-closing?date={today_str}')
+        self.assertEqual(res.status_code, 200)
+        self.assertIn(b'Daily Register Closing', res.data)
+        self.assertIn(b'Expected Cash Sales', res.data)
+        self.assertIn(b'Expected UPI Sales', res.data)
+        self.assertIn(b'Expected Card / POS', res.data)
+
+        # Calculate expected numbers from database
+        sales_today = db.query("SELECT payment_method, payment_status, grand_total, amount_paid FROM SALE WHERE DATE(sale_date) = %s", (today_str,))
+        exp_cash = sum(s['amount_paid'] if s['payment_status'] == 'Partial' else s['grand_total'] for s in sales_today if s['payment_method'] == 'Cash' or s['payment_method'] == 'Partial')
+        exp_upi = sum(s['grand_total'] for s in sales_today if s['payment_method'] == 'UPI')
+        exp_card = sum(s['grand_total'] for s in sales_today if s['payment_method'] == 'Card')
+        exp_total = exp_cash + exp_upi + exp_card
+
+        # 2. Submit Balanced Closing (actual == expected)
+        res_post_balanced = self.client.post('/reports/daily-closing', data={
+            'closing_date': today_str,
+            'expected_cash': exp_cash,
+            'actual_cash': exp_cash,
+            'expected_upi': exp_upi,
+            'expected_card': exp_card,
+            'expected_total': exp_total,
+            'notes': 'End of day register balancing test'
+        }, follow_redirects=True)
+        self.assertEqual(res_post_balanced.status_code, 200)
+        self.assertIn(b'finalized', res_post_balanced.data)
+
+        closing_record = db.query_one("SELECT * FROM DAILY_CLOSING WHERE closing_date = %s", (today_str,))
+        self.assertIsNotNone(closing_record)
+        self.assertEqual(closing_record['cash_difference'], 0.0)
+
+        # 3. Submit Discrepancy Closing (shortage of ₹500)
+        res_post_short = self.client.post('/reports/daily-closing', data={
+            'closing_date': today_str,
+            'expected_cash': exp_cash,
+            'actual_cash': exp_cash - 500.0,
+            'expected_upi': exp_upi,
+            'expected_card': exp_card,
+            'expected_total': exp_total,
+            'notes': 'Cash shortage test'
+        }, follow_redirects=True)
+        self.assertEqual(res_post_short.status_code, 200)
+        self.assertIn(b'Cash Shortage', res_post_short.data)
+
+        updated_closing = db.query_one("SELECT * FROM DAILY_CLOSING WHERE closing_date = %s", (today_str,))
+        self.assertEqual(round(updated_closing['cash_difference'], 2), -500.0)
+        self.logout()
+
 
 if __name__ == '__main__':
     unittest.main()

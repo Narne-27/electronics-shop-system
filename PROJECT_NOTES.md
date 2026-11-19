@@ -19,6 +19,6 @@
   - Run App: `python app.py` (Default port: http://127.0.0.1:5000).
   - Run Unit Tests: `python -m unittest test_phase2.py`.
 - **Progress (Steps 1–8)**:
-  - **Done**: Step 1 (Data Core/Seed/CRUD), Step 2 (POS/EMI/Discounts/Thermal & A4 Invoice), Step 3 (Warranty Center/KPIs/Claims), Step 4 (Operations: Returns, Ledger, POs, Quotes, Repair Tickets).
-  - **In Progress / Coded**: Step 5 (Finance: P&L, Expenses, GST, Daily Closing), Step 6 (System: WhatsApp, Notifications, Audit, Settings, Search, i18n).
+  - **Done**: Step 1 (Data Core/Seed/CRUD), Step 2 (POS/EMI/Discounts/Thermal & A4 Invoice), Step 3 (Warranty Center/KPIs/Claims), Step 4 (Operations: Returns, Ledger, POs, Quotes, Repair Tickets), Step 5 (Finance: P&L statement, category margins, best-sellers, slow-moving stock, expenses CRUD feeding net profit, monthly GST summary by rate with CSV export, daily closing report with physical cash count & difference flags).
+  - **In Progress / Coded**: Step 6 (System: WhatsApp, Notifications, Audit, Settings, Search, i18n).
   - **Todo**: Steps 7–8 (Part 3 specifications / final phase hardening).
