@@ -16,9 +16,20 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
     <!-- Custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Three.js r0.143.0 Import Map & Wormhole Background -->
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.143.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.143.0/examples/jsm/"
+      }
+    }
+    </script>
+    <script type="module" src="{{ url_for('static', filename='js/tunnel-background.js') }}"></script>
     {% block head %}{% endblock %}
 </head>
 <body>
+<canvas id="scene" style="position:fixed; inset:0; width:100vw; height:100vh; display:block; z-index:-1; pointer-events:none;"></canvas>
 
 <div class="main-wrapper">
     {% if current_user %}

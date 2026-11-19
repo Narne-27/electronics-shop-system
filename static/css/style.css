@@ -801,3 +801,54 @@ body {
         display: none !important;
     }
 }
+
+/* ==========================================================
+   Three.js Wormhole Tunnel Background Layer
+   ========================================================== */
+#scene {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    display: block;
+    z-index: -1;
+    pointer-events: none;
+}
+
+html, body {
+    background: transparent !important;
+}
+
+.main-wrapper, .content-body {
+    background: transparent !important;
+}
+
+.top-navbar {
+    background: rgba(255, 255, 255, 0.82) !important;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+[data-theme="dark"] .top-navbar {
+    background: rgba(15, 23, 42, 0.85) !important;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+.card {
+    background-color: rgba(255, 255, 255, 0.88);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+[data-theme="dark"] .card {
+    background-color: rgba(30, 41, 59, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+.app-sidebar {
+    background: linear-gradient(180deg, rgba(11, 27, 58, 0.94) 0%, rgba(15, 33, 71, 0.96) 100%) !important;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+}
