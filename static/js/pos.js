@@ -9,21 +9,6 @@ let appliedCoupon = null;
 let ownerApproved = false;
 let ownerApprovalPin = '';
 
-// Shared inrFormatter and formatINR are loaded from main.js; define fallback if loaded standalone
-if (typeof inrFormatter === 'undefined') {
-    var inrFormatter = new Intl.NumberFormat('en-IN', {
-        style: 'currency',
-        currency: 'INR',
-        maximumFractionDigits: 0
-    });
-}
-
-if (typeof formatINR === 'undefined') {
-    var formatINR = function(val) {
-        if (val === null || val === undefined || isNaN(val)) return '₹0';
-        return inrFormatter.format(Math.round(val));
-    };
-}
 
 document.addEventListener('DOMContentLoaded', function() {
     initFilters();
@@ -149,15 +134,18 @@ function initPOSControls() {
 }
 
 function addToCart(productId) {
-    const product = PRODUCTS_MAP[productId];
-    if (!product) return;
+    const product = (typeof PRODUCTS_MAP !== 'undefined') ? (PRODUCTS_MAP[productId] || PRODUCTS_MAP[parseInt(productId)] || PRODUCTS_MAP[String(productId)]) : null;
+    if (!product) {
+        console.error('Product not found in PRODUCTS_MAP for ID:', productId);
+        return;
+    }
 
     if (product.stock_quantity <= 0) {
         alert(`Sorry, "${product.product_name}" is currently out of stock.`);
         return;
     }
 
-    const existingIndex = cart.findIndex(item => item.product_id === productId);
+    const existingIndex = cart.findIndex(item => item.product_id == product.product_id);
 
     if (existingIndex > -1) {
         if (cart[existingIndex].quantity + 1 > product.stock_quantity) {
@@ -187,7 +175,7 @@ function addToCart(productId) {
 }
 
 function updateQuantity(productId, delta) {
-    const index = cart.findIndex(item => item.product_id === productId);
+    const index = cart.findIndex(item => item.product_id == productId);
     if (index === -1) return;
 
     const newQty = cart[index].quantity + delta;
@@ -206,14 +194,14 @@ function updateQuantity(productId, delta) {
 }
 
 function updateItemSerial(productId, serialVal) {
-    const index = cart.findIndex(item => item.product_id === productId);
+    const index = cart.findIndex(item => item.product_id == productId);
     if (index > -1) {
         cart[index].serial_number = serialVal.trim().toUpperCase();
     }
 }
 
 function removeFromCart(productId) {
-    cart = cart.filter(item => item.product_id !== productId);
+    cart = cart.filter(item => item.product_id != productId);
     renderCart();
 }
 
@@ -511,3 +499,17 @@ async function processCheckout() {
         checkoutBtn.innerHTML = `<i class="bi bi-check-circle-fill fs-5"></i> <span>Generate Bill & Invoice</span>`;
     }
 }
+
+// Explicit window bindings for inline HTML event handlers
+window.addToCart = addToCart;
+window.updateQuantity = updateQuantity;
+window.updateItemSerial = updateItemSerial;
+window.removeFromCart = removeFromCart;
+window.clearCart = clearCart;
+window.renderCart = renderCart;
+window.recalculateCart = recalculateCart;
+window.applyCouponCode = applyCouponCode;
+window.promptOwnerApproval = promptOwnerApproval;
+window.verifyOwnerPin = verifyOwnerPin;
+window.processCheckout = processCheckout;
+
