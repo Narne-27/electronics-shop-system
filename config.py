@@ -3,12 +3,17 @@ Electrodesk - Electronics Shop Management System
 Configuration Settings
 """
 import os
+import datetime
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
 # Flask settings
 SECRET_KEY = os.environ.get('SECRET_KEY', 'electrodesk-secure-secret-key-2026-prod')
 DEBUG = os.environ.get('FLASK_DEBUG', 'True').lower() in ('true', '1', 'yes')
+
+# Global Date Constant: APP_TODAY (can be overridden dynamically in Settings)
+# Default is the current operational reference date 2026-11-19
+APP_TODAY = datetime.date(2026, 11, 19)
 
 # Store Branding & Details for Invoices & Receipts
 STORE_NAME = os.environ.get('STORE_NAME', 'Electrodesk')
@@ -23,9 +28,26 @@ CGST_RATE = 9.0
 SGST_RATE = 9.0
 CURRENCY_SYMBOL = '₹'
 
+# Financing & EMI Defaults (Annual Interest Rates)
+EMI_PLANS = {
+    3: {'months': 3, 'interest_rate': 0.0, 'label': '3 Months No-Cost EMI (0%)'},
+    6: {'months': 6, 'interest_rate': 12.0, 'label': '6 Months Standard EMI (12% p.a.)'},
+    9: {'months': 9, 'interest_rate': 14.0, 'label': '9 Months Standard EMI (14% p.a.)'},
+    12: {'months': 12, 'interest_rate': 15.0, 'label': '12 Months Extended EMI (15% p.a.)'}
+}
+
+# Standard Active Promotional Coupons
+ACTIVE_COUPONS = {
+    'WELCOME5': {'type': 'percent', 'value': 5.0, 'description': 'Welcome Discount 5% Off', 'max_discount': 2500},
+    'FESTIVE10': {'type': 'percent', 'value': 10.0, 'description': 'Festival Electronics Offer 10% Off', 'max_discount': 5000},
+    'VIP15': {'type': 'percent', 'value': 15.0, 'description': 'VIP Special 15% Off (Requires Owner Approval)', 'max_discount': 10000},
+    'FLAT1000': {'type': 'flat', 'value': 1000.0, 'description': 'Flat ₹1,000 Off on orders above ₹20,000', 'min_order': 20000}
+}
+
+# Owner Authorization PIN for discounts > 10%
+OWNER_APPROVAL_PIN = '9999'
+
 # Database Configuration
-# Set DB_TYPE to 'mysql' or 'sqlite'. Default is 'sqlite' for zero-setup execution,
-# with automated fallback if MySQL server is not running.
 DB_TYPE = os.environ.get('DB_TYPE', 'sqlite').lower()
 
 # MySQL Settings

@@ -190,6 +190,75 @@
 </div>
 {% endif %}
 
+<!-- Warranties Expiring Soon Widget -->
+{% if expiring_soon_warranties %}
+<div class="card border-warning border-opacity-50 mb-4 shadow-sm" style="border-radius: 16px;">
+    <div class="card-header bg-warning bg-opacity-10 text-dark d-flex justify-content-between align-items-center py-3">
+        <div class="d-flex align-items-center gap-2 fw-bold">
+            <i class="bi bi-shield-exclamation text-warning fs-5"></i>
+            <span>Action Required: {{ expiring_soon_warranties|length }} Equipment Warranties Expiring Soon (&le;30 Days)</span>
+        </div>
+        <a href="{{ url_for('warranty', tab='expiring') }}" class="btn btn-outline-dark btn-sm rounded-pill fw-semibold">
+            Open Warranty Center <i class="bi bi-arrow-right"></i>
+        </a>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">Product & Brand</th>
+                        <th>Device Serial / IMEI</th>
+                        <th>Customer</th>
+                        <th>Invoice No</th>
+                        <th>Warranty Expiry</th>
+                        <th>Days Left</th>
+                        <th class="text-end pe-4">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for w in expiring_soon_warranties %}
+                    <tr>
+                        <td class="ps-4">
+                            <div class="fw-semibold text-dark">{{ w.product_name }}</div>
+                            <small class="text-muted">{{ w.brand }}</small>
+                        </td>
+                        <td>
+                            <code class="fw-bold text-dark">{{ w.serial_number or 'N/A' }}</code>
+                        </td>
+                        <td>
+                            {% if w.customer_name %}
+                            <div class="fw-semibold text-dark">{{ w.customer_name }}</div>
+                            <small class="text-muted">{{ w.phone or '' }}</small>
+                            {% else %}
+                            <span class="text-muted fst-italic">Retail Counter</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('invoice_view', sale_id=w.sale_id) }}" class="fw-semibold font-monospace text-primary text-decoration-none">
+                                {{ w.invoice_number }}
+                            </a>
+                        </td>
+                        <td>
+                            <span class="fw-bold text-dark">{{ w.warranty_expiry_date|date_in }}</span>
+                        </td>
+                        <td>
+                            <span class="badge badge-days-amber">{{ w.days_left }} days left</span>
+                        </td>
+                        <td class="text-end pe-4">
+                            <a href="{{ url_for('warranty', search=w.serial_number) }}" class="btn btn-sm btn-outline-primary rounded-pill">
+                                <i class="bi bi-shield-check"></i> Manage
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- Charts Section -->
 <div class="row g-4 mb-4">
     <!-- Category Revenue Chart -->

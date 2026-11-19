@@ -1,0 +1,144 @@
+{% extends 'base.html' %}
+
+{% block title %}Sales Quotations - Electrodesk{% endblock %}
+
+{% block content %}
+<div class="page-header-container">
+    <div>
+        <h1 class="page-title-h1">Sales Quotations & Estimates</h1>
+        <p class="page-subtitle-muted">Draft price quotations for retail and enterprise clients, and convert to active invoices with one click</p>
+    </div>
+    <div>
+        <button type="button" class="btn btn-navy d-flex align-items-center gap-2 shadow-sm" data-bs-toggle="modal" data-bs-target="#createQuoteModal">
+            <i class="bi bi-file-earmark-plus"></i>
+            <span>New Quotation</span>
+        </button>
+    </div>
+</div>
+
+<!-- Quotations Table -->
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+        <div class="fw-bold text-dark">
+            <i class="bi bi-file-earmark-text text-primary me-2"></i>Active & Converted Quotations
+        </div>
+        <span class="badge bg-secondary-subtle text-secondary">{{ quotes|length }} Estimate(s)</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">Quotation #</th>
+                        <th>Customer</th>
+                        <th>Created Date</th>
+                        <th>Valid Until</th>
+                        <th class="text-end">Taxable Value (₹)</th>
+                        <th class="text-end">Grand Total (₹)</th>
+                        <th>Status</th>
+                        <th class="text-end pe-4">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for q in quotes %}
+                    <tr>
+                        <td class="ps-4">
+                            <span class="fw-bold font-monospace text-primary">{{ q.quote_number }}</span>
+                        </td>
+                        <td>
+                            <div class="fw-semibold text-dark">{{ q.customer_name or 'Prospective Client' }}</div>
+                            <small class="text-muted">{{ q.phone or '' }}</small>
+                        </td>
+                        <td>{{ q.quote_date|date_in }}</td>
+                        <td>
+                            <span class="text-muted">{{ q.valid_until|date_in if q.valid_until else '15 Days' }}</span>
+                        </td>
+                        <td class="text-end text-secondary">{{ q.subtotal|inr }}</td>
+                        <td class="text-end fw-bold text-dark">{{ q.grand_total|inr }}</td>
+                        <td>
+                            {% if q.status == 'Converted' %}
+                            <span class="badge bg-success-subtle text-success border border-success-subtle">
+                                <i class="bi bi-check-circle-fill me-1"></i>Converted to Invoice
+                            </span>
+                            {% elif q.status == 'Draft' %}
+                            <span class="badge bg-secondary-subtle text-secondary border">
+                                Draft
+                            </span>
+                            {% else %}
+                            <span class="badge bg-warning text-dark border">
+                                Active Proposal
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end pe-4">
+                            {% if q.status != 'Converted' %}
+                            <form method="POST" action="{{ url_for('quotation_convert', quote_id=q.quote_id) }}" class="d-inline" onsubmit="return confirm('Convert Quotation {{ q.quote_number }} directly into a finalized Tax Invoice? Stock will be updated.');">
+                                <button type="submit" class="btn btn-sm btn-navy d-inline-flex align-items-center gap-1 shadow-sm">
+                                    <i class="bi bi-lightning-charge-fill text-warning"></i>
+                                    <span>Convert to Invoice</span>
+                                </button>
+                            </form>
+                            {% else %}
+                            <span class="text-muted small"><i class="bi bi-check2-all text-success me-1"></i>Invoiced</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="text-center py-5 text-muted">
+                            <i class="bi bi-file-earmark-text fs-1 text-secondary opacity-50 d-block mb-2"></i>
+                            No quotations created yet. Click "New Quotation" to draft one.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Create Quotation Modal -->
+<div class="modal fade" id="createQuoteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content rounded-4 border-0">
+            <form method="POST" action="{{ url_for('quotation_create') }}">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-file-earmark-plus text-primary me-2"></i>Draft Price Quotation</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Customer / Client</label>
+                        <select name="customer_id" class="form-select">
+                            <option value="">Walk-in / General Prospect</option>
+                            {% for c in customers %}
+                            <option value="{{ c.customer_id }}">{{ c.customer_name }} ({{ c.phone }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Primary Product *</label>
+                        <select name="product_id" class="form-select" required>
+                            {% for p in products %}
+                            <option value="{{ p.product_id }}">{{ p.product_name }} - {{ p.selling_price|inr }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Quantity *</label>
+                        <input type="number" name="quantity" class="form-control" min="1" value="1" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Quotation Notes / Terms</label>
+                        <textarea name="notes" class="form-control" rows="2" placeholder="e.g. Price includes standard warranty and local delivery"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-navy">Generate Quotation</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -93,6 +93,8 @@ def query(sql, params=()):
     """
     Execute a SELECT query and return all matching rows as a list of dicts.
     """
+    if params is None:
+        params = ()
     conn = get_connection()
     try:
         adapted_sql = _adapt_sql(sql)
@@ -108,6 +110,8 @@ def query_one(sql, params=()):
     """
     Execute a SELECT query and return the first matching row as a dict, or None.
     """
+    if params is None:
+        params = ()
     conn = get_connection()
     try:
         adapted_sql = _adapt_sql(sql)
@@ -124,6 +128,8 @@ def execute(sql, params=(), return_id=False):
     Execute an INSERT, UPDATE, or DELETE query and commit the transaction.
     Returns lastrowid if return_id=True, else rowcount.
     """
+    if params is None:
+        params = ()
     conn = get_connection()
     try:
         adapted_sql = _adapt_sql(sql)

@@ -1,0 +1,164 @@
+{% extends 'base.html' %}
+
+{% block title %}Operational Expenses - Electrodesk{% endblock %}
+
+{% block content %}
+<div class="page-header-container">
+    <div>
+        <h1 class="page-title-h1">Operational Expenses Management</h1>
+        <p class="page-subtitle-muted">Track monthly showroom rent, employee salaries, electricity bills, internet and maintenance feeding the P&L statement</p>
+    </div>
+    {% if current_user.role in ['Admin', 'Manager', 'Shop Owner'] %}
+    <div>
+        <button type="button" class="btn btn-navy d-flex align-items-center gap-2 shadow-sm" data-bs-toggle="modal" data-bs-target="#addExpenseModal">
+            <i class="bi bi-plus-circle-fill"></i>
+            <span>Record New Expense</span>
+        </button>
+    </div>
+    {% endif %}
+</div>
+
+<!-- KPI Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="kpi-card">
+            <div class="kpi-top-row">
+                <span class="kpi-label-uppercase">Total Operational Expenses</span>
+                <div class="kpi-tile kpi-tile-red">
+                    <i class="bi bi-cash-coin"></i>
+                </div>
+            </div>
+            <div class="kpi-value-large text-danger">{{ total_expense|inr }}</div>
+            <div class="kpi-subtext-muted">Direct overhead deductions from gross margin</div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="kpi-card">
+            <div class="kpi-top-row">
+                <span class="kpi-label-uppercase">Total Expense Records</span>
+                <div class="kpi-tile kpi-tile-navy">
+                    <i class="bi bi-receipt"></i>
+                </div>
+            </div>
+            <div class="kpi-value-large text-dark">{{ expenses|length }}</div>
+            <div class="kpi-subtext-muted">Itemized overhead payments recorded</div>
+        </div>
+    </div>
+</div>
+
+<!-- Expenses Table -->
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+        <div class="fw-bold text-dark">
+            <i class="bi bi-list-check text-primary me-2"></i>Expense Ledger
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">Expense Date</th>
+                        <th>Category</th>
+                        <th>Purpose / Description</th>
+                        <th>Payment Mode</th>
+                        <th class="text-end">Amount (₹)</th>
+                        <th class="text-end pe-4">Recorded By</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for e in expenses %}
+                    <tr>
+                        <td class="ps-4">{{ e.expense_date|date_in }}</td>
+                        <td>
+                            {% if e.category == 'Rent' %}
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle"><i class="bi bi-building me-1"></i>Showroom Rent</span>
+                            {% elif e.category == 'Salary' %}
+                            <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-person-badge me-1"></i>Staff Salary</span>
+                            {% elif e.category == 'Electricity' %}
+                            <span class="badge bg-warning text-dark border"><i class="bi bi-lightning-charge me-1"></i>Electricity</span>
+                            {% elif e.category == 'Internet' %}
+                            <span class="badge bg-info-subtle text-info border border-info-subtle"><i class="bi bi-wifi me-1"></i>Broadband / Telecom</span>
+                            {% else %}
+                            <span class="badge bg-light text-secondary border">{{ e.category }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="text-dark">{{ e.notes or 'Monthly overhead expense' }}</span>
+                        </td>
+                        <td>
+                            <span class="badge bg-light text-dark border">{{ e.payment_method }}</span>
+                        </td>
+                        <td class="text-end fw-bold text-danger">{{ e.amount|inr }}</td>
+                        <td class="text-end pe-4">
+                            <span class="badge bg-secondary-subtle text-secondary">{{ e.created_by or 'Manager' }}</span>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center py-5 text-muted">
+                            <i class="bi bi-cash-coin fs-1 text-secondary opacity-50 d-block mb-2"></i>
+                            No expenses recorded yet. Click "Record New Expense" to add overhead costs.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Add Expense Modal -->
+<div class="modal fade" id="addExpenseModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content rounded-4 border-0">
+            <form method="POST" action="{{ url_for('expense_add') }}">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-cash-coin text-primary me-2"></i>Record Operational Expense</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Expense Category *</label>
+                        <select name="category" class="form-select" required>
+                            <option value="Rent">Showroom Rent</option>
+                            <option value="Salary">Staff Salary</option>
+                            <option value="Electricity">Electricity & Power</option>
+                            <option value="Internet">Internet & Telecom</option>
+                            <option value="Maintenance">Maintenance & Repairs</option>
+                            <option value="Marketing">Marketing & Advertising</option>
+                            <option value="Logistics">Logistics & Courier</option>
+                            <option value="Other">Other Miscellaneous</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Expense Amount (₹) *</label>
+                        <input type="number" step="0.01" name="amount" class="form-control" placeholder="Amount in ₹" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Expense Date *</label>
+                        <input type="date" name="expense_date" class="form-control" value="{{ app_today_str }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Payment Method *</label>
+                        <select name="payment_method" class="form-select" required>
+                            <option value="Bank Transfer" selected>Bank Transfer / NEFT</option>
+                            <option value="UPI">UPI (GPay / PhonePe / Paytm)</option>
+                            <option value="Cheque">Cheque</option>
+                            <option value="Cash">Cash</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Purpose / Reference Notes</label>
+                        <textarea name="notes" class="form-control" rows="2" placeholder="e.g. November 2026 showroom floor lease payment"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-navy">Save Expense</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+
+{% block title %}System Audit Trail & Security Logs - Electrodesk{% endblock %}
+
+{% block content %}
+<div class="page-header-container">
+    <div>
+        <h1 class="page-title-h1">System Audit Trail & Activity Logs</h1>
+        <p class="page-subtitle-muted">Restricted security log tracking administrative actions, transactions, inventory adjustments, and user authentications</p>
+    </div>
+    <div>
+        <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-3 py-2 fw-semibold">
+            <i class="bi bi-shield-lock-fill me-1"></i>Owner & Admin Restricted Access
+        </span>
+    </div>
+</div>
+
+<!-- Audit Log Table -->
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+        <div class="fw-bold text-dark">
+            <i class="bi bi-journal-text text-primary me-2"></i>Audit Events (Last 100 Entries)
+        </div>
+        <span class="badge bg-secondary-subtle text-secondary">{{ logs|length }} Events Logged</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 font-monospace small">
+                <thead class="table-light font-sans-serif">
+                    <tr>
+                        <th class="ps-4">Timestamp</th>
+                        <th>User</th>
+                        <th>Module</th>
+                        <th>Action</th>
+                        <th>Audit Details</th>
+                        <th class="pe-4">Origin IP</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for l in logs %}
+                    <tr>
+                        <td class="ps-4 text-secondary">{{ l.timestamp }}</td>
+                        <td>
+                            <strong class="text-dark">{{ l.user_name or 'System' }}</strong>
+                        </td>
+                        <td>
+                            <span class="badge bg-light text-secondary border font-sans-serif">{{ l.module }}</span>
+                        </td>
+                        <td>
+                            {% if 'SALE' in l.action or 'CHECKOUT' in l.action %}
+                            <span class="badge bg-success-subtle text-success border border-success-subtle font-sans-serif">{{ l.action }}</span>
+                            {% elif 'LOGIN' in l.action %}
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle font-sans-serif">{{ l.action }}</span>
+                            {% elif 'RESET' in l.action or 'DELETE' in l.action %}
+                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle font-sans-serif">{{ l.action }}</span>
+                            {% else %}
+                            <span class="badge bg-secondary-subtle text-secondary border font-sans-serif">{{ l.action }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-dark text-break" style="max-width: 360px;">{{ l.details }}</td>
+                        <td class="pe-4 text-muted">{{ l.ip_address or '127.0.0.1' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center py-5 text-muted font-sans-serif">
+                            <i class="bi bi-journal-check fs-1 text-secondary opacity-50 d-block mb-2"></i>
+                            No audit log events recorded yet.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

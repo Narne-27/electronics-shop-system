@@ -226,4 +226,69 @@
         </div>
     </div>
 </div>
+
+<!-- Stock Movements Log (Audit Trail) -->
+<div class="card border-0 shadow-sm rounded-4 mt-4">
+    <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+        <div class="fw-bold text-dark">
+            <i class="bi bi-clock-history text-primary me-2"></i>Recent Stock In / Out Audit Trail
+        </div>
+        <span class="badge bg-secondary-subtle text-secondary">{{ recent_movements|length }} Movements</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 font-monospace small">
+                <thead class="table-light font-sans-serif">
+                    <tr>
+                        <th class="ps-4">Timestamp</th>
+                        <th>Product & SKU</th>
+                        <th>Movement Type</th>
+                        <th class="text-center">Quantity</th>
+                        <th>Stock After</th>
+                        <th>Reason / Reference Notes</th>
+                        <th class="pe-4">Recorded By</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in recent_movements %}
+                    <tr>
+                        <td class="ps-4 text-secondary">{{ m.created_at }}</td>
+                        <td>
+                            <strong class="text-dark">{{ m.product_name }}</strong>
+                            <small class="text-muted d-block"><code>{{ m.product_code }}</code></small>
+                        </td>
+                        <td>
+                            {% if m.movement_type == 'IN' %}
+                            <span class="badge bg-success-subtle text-success border border-success-subtle font-sans-serif">
+                                <i class="bi bi-arrow-down-left me-1"></i>Stock IN (+)
+                            </span>
+                            {% elif m.movement_type == 'OUT' %}
+                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle font-sans-serif">
+                                <i class="bi bi-arrow-up-right me-1"></i>Stock OUT (-)
+                            </span>
+                            {% else %}
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle font-sans-serif">
+                                <i class="bi bi-sliders me-1"></i>Audit SET (=)
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center fw-bold {% if m.movement_type == 'IN' %}text-success{% else %}text-danger{% endif %}">
+                            {% if m.movement_type == 'IN' %}+{% else %}-{% endif %}{{ m.quantity }}
+                        </td>
+                        <td class="fw-bold text-dark">{{ m.stock_after }} units</td>
+                        <td class="text-secondary text-break">{{ m.notes or 'Stock adjustment' }}</td>
+                        <td class="pe-4 text-muted font-sans-serif">{{ m.created_by or 'Manager' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center py-4 text-muted font-sans-serif">
+                            No stock movement records yet.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 {% endblock %}

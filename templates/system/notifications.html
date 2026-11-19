@@ -1,0 +1,159 @@
+{% extends 'base.html' %}
+
+{% block title %}Notifications & Alerts Center - Electrodesk{% endblock %}
+
+{% block content %}
+<div class="page-header-container">
+    <div>
+        <h1 class="page-title-h1">Notifications & System Alerts</h1>
+        <p class="page-subtitle-muted">Real-time alerts for low inventory thresholds, upcoming warranty expirations, customer dues, and open claims</p>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Expiring Warranties Alert with WhatsApp Reminders -->
+    <div class="col-12 col-lg-6">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                <div class="fw-bold text-dark">
+                    <i class="bi bi-shield-exclamation text-warning me-2"></i>Warranties Expiring Soon (&le;30 Days)
+                </div>
+                <span class="badge bg-warning text-dark">{{ expiring|length }} alert(s)</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    {% for item in expiring %}
+                    <div class="list-group-item p-3">
+                        <div class="d-flex justify-content-between align-items-start mb-1">
+                            <div>
+                                <span class="fw-bold text-dark">{{ item.product_name }}</span>
+                                <div class="small text-muted font-monospace">SN: {{ item.serial_number }} &bull; Customer: {{ item.customer_name or 'Retail Buyer' }}</div>
+                            </div>
+                            <span class="badge bg-warning text-dark">Expires: {{ item.warranty_expiry_date|date_in }}</span>
+                        </div>
+                        {% if item.phone %}
+                        <div class="mt-2">
+                            {% set wa_msg = "Hello " ~ (item.customer_name or "Valued Customer") ~ ", greetings from Electrodesk! Your warranty for " ~ item.product_name ~ " (Serial: " ~ item.serial_number ~ ") is expiring on " ~ item.warranty_expiry_date ~ ". Contact us to renew your extended warranty coverage." %}
+                            <a href="https://wa.me/91{{ item.phone }}?text={{ wa_msg|urlencode }}" target="_blank" class="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1 rounded-pill" style="font-size: 0.78rem;">
+                                <i class="bi bi-whatsapp"></i> Send WhatsApp Expiry Reminder
+                            </a>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% else %}
+                    <div class="p-4 text-center text-muted">
+                        <i class="bi bi-shield-check fs-2 text-success opacity-50 d-block mb-1"></i>
+                        No warranties expiring within the next 30 days.
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Low Stock Inventory Alerts -->
+    <div class="col-12 col-lg-6">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                <div class="fw-bold text-dark">
+                    <i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>Critical Low Stock Items
+                </div>
+                <span class="badge bg-danger">{{ low_stock|length }} item(s)</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    {% for p in low_stock %}
+                    <div class="list-group-item p-3 d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="fw-bold text-dark">{{ p.product_name }}</div>
+                            <div class="small text-muted">Code: <code>{{ p.product_code }}</code> &bull; Reorder Level: {{ p.reorder_level }} units</div>
+                        </div>
+                        <div class="text-end">
+                            <span class="badge bg-danger fs-6">{{ p.stock_quantity }} left</span>
+                            <div class="mt-1">
+                                <a href="{{ url_for('purchase_orders') }}" class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size: 0.75rem;">Create PO</a>
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="p-4 text-center text-muted">
+                        <i class="bi bi-check-circle-fill fs-2 text-success opacity-50 d-block mb-1"></i>
+                        All catalog products are well-stocked above reorder thresholds.
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pending Customer Receivables -->
+    <div class="col-12 col-lg-6">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                <div class="fw-bold text-dark">
+                    <i class="bi bi-wallet2 text-primary me-2"></i>Customer Dues Follow-ups
+                </div>
+                <span class="badge bg-primary-subtle text-primary">{{ dues|length }} customer(s)</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    {% for d in dues %}
+                    <div class="list-group-item p-3 d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="fw-semibold text-dark">{{ d.customer_name or 'Retail Buyer' }}</div>
+                            <div class="small text-muted font-monospace">{{ d.invoice_number }} &bull; {{ d.phone or '' }}</div>
+                        </div>
+                        <div class="text-end">
+                            <span class="fw-bold text-danger">{{ d.balance_due|inr }}</span>
+                            <div class="mt-1">
+                                <a href="{{ url_for('customer_dues') }}" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size: 0.75rem;">Collect</a>
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="p-4 text-center text-muted">
+                        <i class="bi bi-wallet-fill fs-2 text-success opacity-50 d-block mb-1"></i>
+                        No pending customer credit dues.
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Open Claims -->
+    <div class="col-12 col-lg-6">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                <div class="fw-bold text-dark">
+                    <i class="bi bi-tools text-info me-2"></i>Open Warranty Claims Under Review
+                </div>
+                <span class="badge bg-info-subtle text-info">{{ claims|length }} claim(s)</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    {% for c in claims %}
+                    <div class="list-group-item p-3 d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="fw-semibold text-dark">{{ c.claim_type or 'Manufacturer Service' }}</div>
+                            <div class="small text-muted">{{ c.claim_reason or 'Diagnostic inspection requested' }}</div>
+                        </div>
+                        <div class="text-end">
+                            <span class="badge bg-warning text-dark">Open</span>
+                            <div class="mt-1">
+                                <a href="{{ url_for('warranty') }}" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size: 0.75rem;">View</a>
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="p-4 text-center text-muted">
+                        <i class="bi bi-patch-check-fill fs-2 text-success opacity-50 d-block mb-1"></i>
+                        Zero open claims pending service.
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

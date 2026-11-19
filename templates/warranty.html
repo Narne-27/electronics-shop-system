@@ -1,57 +1,173 @@
 {% extends 'base.html' %}
 
-{% block title %}Warranty Tracking Center{% endblock %}
+{% block title %}Warranty Tracking Center - Electrodesk{% endblock %}
 
 {% block content %}
-<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+<div class="page-header-container">
     <div>
-        <h1 class="page-title fw-bold mb-1 text-dark">Electronics Warranty Tracking & Claims</h1>
-        <p class="text-muted mb-0 small">Verify equipment serial numbers, validate manufacturer warranty status, and check active coverage</p>
+        <h1 class="page-title-h1">Warranty Management & Claims Center</h1>
+        <p class="page-subtitle-muted">Serial number tracking, manufacturer warranty periods, claims registration, and expiry countdowns</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('warranty_csv') }}" class="btn btn-outline-secondary d-flex align-items-center gap-2 shadow-sm">
+            <i class="bi bi-file-earmark-arrow-down"></i>
+            <span>Export CSV</span>
+        </a>
+        <button type="button" class="btn btn-navy d-flex align-items-center gap-2 shadow-sm" data-bs-toggle="modal" data-bs-target="#claimModalGeneric">
+            <i class="bi bi-shield-plus"></i>
+            <span>Register Claim</span>
+        </button>
     </div>
 </div>
 
-<!-- Search & Status Filter Bar -->
+<!-- 4 KPI Cards: Active, Expiring Soon, Expired, Open Claims -->
+<div class="row g-3 mb-4">
+    <!-- Active Warranties -->
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="kpi-card">
+            <div class="kpi-top-row">
+                <span class="kpi-label-uppercase">Active Coverage</span>
+                <div class="kpi-tile kpi-tile-green">
+                    <i class="bi bi-shield-check"></i>
+                </div>
+            </div>
+            <div class="kpi-value-large text-success">{{ active_count }}</div>
+            <div class="kpi-subtext-muted">Devices covered under valid warranty</div>
+        </div>
+    </div>
+
+    <!-- Expiring Soon (<=30 Days) -->
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="kpi-card {% if expiring_count > 0 %}border-warning border-opacity-50 alert-pulse{% endif %}">
+            <div class="kpi-top-row">
+                <span class="kpi-label-uppercase">Expiring Soon</span>
+                <div class="kpi-tile kpi-tile-yellow">
+                    <i class="bi bi-clock-history"></i>
+                </div>
+            </div>
+            <div class="kpi-value-large text-warning text-dark">{{ expiring_count }}</div>
+            <div class="kpi-subtext-muted">Expiring within 30 days &bull; Action required</div>
+        </div>
+    </div>
+
+    <!-- Expired Warranties -->
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="kpi-card">
+            <div class="kpi-top-row">
+                <span class="kpi-label-uppercase">Expired Warranties</span>
+                <div class="kpi-tile kpi-tile-red">
+                    <i class="bi bi-shield-x"></i>
+                </div>
+            </div>
+            <div class="kpi-value-large text-danger">{{ expired_count }}</div>
+            <div class="kpi-subtext-muted">Coverage elapsed &bull; Eligible for renewal</div>
+        </div>
+    </div>
+
+    <!-- Open Claims -->
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="kpi-card">
+            <div class="kpi-top-row">
+                <span class="kpi-label-uppercase">Open Service Claims</span>
+                <div class="kpi-tile kpi-tile-blue">
+                    <i class="bi bi-tools"></i>
+                </div>
+            </div>
+            <div class="kpi-value-large text-primary">{{ claims_count }}</div>
+            <div class="kpi-subtext-muted">Undergoing manufacturer diagnostics</div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabs: All | Active | Expiring Soon | Expired -->
+<ul class="nav nav-pills custom-nav-pills mb-3">
+    <li class="nav-item">
+        <a class="nav-link {% if current_tab == 'all' %}active{% endif %}" href="{{ url_for('warranty', tab='all', search=search, category=selected_category, brand=selected_brand, sort=current_sort) }}">
+            All Warranties
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if current_tab == 'active' %}active{% endif %}" href="{{ url_for('warranty', tab='active', search=search, category=selected_category, brand=selected_brand, sort=current_sort) }}">
+            Active <span class="badge bg-success ms-1">{{ active_count }}</span>
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if current_tab == 'expiring' %}active{% endif %}" href="{{ url_for('warranty', tab='expiring', search=search, category=selected_category, brand=selected_brand, sort=current_sort) }}">
+            Expiring Soon <span class="badge bg-warning text-dark ms-1">{{ expiring_count }}</span>
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if current_tab == 'expired' %}active{% endif %}" href="{{ url_for('warranty', tab='expired', search=search, category=selected_category, brand=selected_brand, sort=current_sort) }}">
+            Expired <span class="badge bg-danger ms-1">{{ expired_count }}</span>
+        </a>
+    </li>
+</ul>
+
+<!-- Search & Filtering Bar -->
 <div class="card border-0 shadow-sm rounded-4 mb-4">
     <div class="card-body p-3">
         <form method="GET" action="{{ url_for('warranty') }}" class="row g-2 align-items-center">
-            <div class="col-12 col-md-6">
+            <input type="hidden" name="tab" value="{{ current_tab }}">
+
+            <div class="col-12 col-md-4">
                 <div class="input-group">
                     <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
-                    <input type="text" name="search" class="form-control border-start-0" placeholder="Search by Serial Number (SN-...), Invoice #, Product, or Customer..." value="{{ search }}" autofocus>
+                    <input type="text" name="search" class="form-control border-start-0" placeholder="Search Serial/IMEI, Invoice #, Product, Customer..." value="{{ search }}">
                 </div>
             </div>
-            <div class="col-6 col-md-3">
-                <select name="status" class="form-select">
-                    <option value="all">All Warranty Statuses</option>
-                    <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active Warranties</option>
-                    <option value="expiring" {% if status_filter == 'expiring' %}selected{% endif %}>Expiring Soon (&le; 30 Days)</option>
-                    <option value="expired" {% if status_filter == 'expired' %}selected{% endif %}>Expired Warranties</option>
+
+            <div class="col-6 col-md-2">
+                <select name="category" class="form-select">
+                    <option value="">All Categories</option>
+                    {% for cat in categories %}
+                    <option value="{{ cat.category_id }}" {% if selected_category|string == cat.category_id|string %}selected{% endif %}>{{ cat.category_name }}</option>
+                    {% endfor %}
                 </select>
             </div>
-            <div class="col-6 col-md-3 d-flex gap-2">
-                <button type="submit" class="btn btn-navy w-100">Lookup Warranty</button>
-                {% if search or status_filter != 'all' %}
-                <a href="{{ url_for('warranty') }}" class="btn btn-outline-secondary" title="Reset filter"><i class="bi bi-x-lg"></i></a>
+
+            <div class="col-6 col-md-2">
+                <select name="brand" class="form-select">
+                    <option value="">All Brands</option>
+                    {% for b in brands %}
+                    <option value="{{ b.brand }}" {% if selected_brand == b.brand %}selected{% endif %}>{{ b.brand }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-6 col-md-2">
+                <select name="sort" class="form-select">
+                    <option value="expiry_asc" {% if current_sort == 'expiry_asc' %}selected{% endif %}>Expiry (Earliest First)</option>
+                    <option value="expiry_desc" {% if current_sort == 'expiry_desc' %}selected{% endif %}>Expiry (Latest First)</option>
+                </select>
+            </div>
+
+            <div class="col-6 col-md-2 d-flex gap-2">
+                <button type="submit" class="btn btn-navy w-100">Filter</button>
+                {% if search or selected_category or selected_brand or current_sort != 'expiry_asc' or current_tab != 'all' %}
+                <a href="{{ url_for('warranty') }}" class="btn btn-outline-secondary" title="Clear Filters"><i class="bi bi-x-lg"></i></a>
                 {% endif %}
             </div>
         </form>
     </div>
 </div>
 
-<!-- Warranty Table -->
+<!-- Warranties Table -->
 <div class="card border-0 shadow-sm rounded-4">
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
                 <thead class="table-light">
                     <tr>
-                        <th class="ps-4">Device Serial Number</th>
+                        <th class="ps-4">Warranty ID</th>
                         <th>Product & Model</th>
+                        <th>Serial / IMEI</th>
                         <th>Customer</th>
-                        <th>Invoice #</th>
+                        <th>Invoice No</th>
                         <th>Purchase Date</th>
-                        <th>Warranty Expiry</th>
-                        <th>Coverage Status</th>
+                        <th>Period</th>
+                        <th>Expiry Date</th>
+                        <th>Days Left</th>
+                        <th>Status</th>
                         <th class="text-end pe-4">Actions</th>
                     </tr>
                 </thead>
@@ -59,21 +175,25 @@
                     {% for w in warranties %}
                     <tr>
                         <td class="ps-4">
-                            <div class="d-flex align-items-center gap-2">
-                                <i class="bi bi-upc-scan text-primary"></i>
-                                <code class="fw-bold fs-6 text-dark">{{ w.serial_number or 'No Serial Recorded' }}</code>
-                            </div>
+                            <span class="badge bg-light text-dark border font-monospace">WAR-{{ "%04d"|format(w.item_id) }}</span>
                         </td>
                         <td>
                             <div class="fw-semibold text-dark">{{ w.product_name }}</div>
-                            <small class="text-muted">{{ w.brand }} &bull; {{ w.warranty_months }} Months Coverage</small>
+                            <small class="text-muted">{{ w.brand }}</small>
+                        </td>
+                        <td>
+                            {% if w.serial_number %}
+                            <code class="fw-bold text-dark">{{ w.serial_number }}</code>
+                            {% else %}
+                            <span class="text-muted small">N/A</span>
+                            {% endif %}
                         </td>
                         <td>
                             {% if w.customer_name %}
                             <div class="fw-semibold text-dark">{{ w.customer_name }}</div>
-                            <small class="text-muted">{{ w.customer_phone }}</small>
+                            <small class="text-muted">{{ w.customer_phone or '' }}</small>
                             {% else %}
-                            <span class="text-muted fst-italic">Walk-in Customer</span>
+                            <span class="text-muted fst-italic">Retail Counter</span>
                             {% endif %}
                         </td>
                         <td>
@@ -82,35 +202,43 @@
                             </a>
                         </td>
                         <td>{{ w.sale_date|date_in }}</td>
+                        <td><span class="badge bg-light text-secondary border">{{ w.warranty_months }} Mo</span></td>
                         <td>
-                            <span class="fw-semibold text-dark">{{ w.warranty_expiry_date|date_in }}</span>
+                            <span class="fw-bold text-dark">{{ w.warranty_expiry_date|date_in }}</span>
+                        </td>
+                        <td>
+                            {% if w.days_left < 0 %}
+                            <span class="badge badge-days-red">{{ w.days_left|abs }}d ago</span>
+                            {% elif w.days_left <= 30 %}
+                            <span class="badge badge-days-amber">{{ w.days_left }}d left</span>
+                            {% else %}
+                            <span class="badge badge-days-green">{{ w.days_left }}d left</span>
+                            {% endif %}
                         </td>
                         <td>
                             <span class="badge {{ w.badge_class }} py-1 px-2">
                                 {{ w.status }}
                             </span>
-                            {% if w.status == 'Active' %}
-                            <small class="text-muted d-block" style="font-size: 0.72rem;">{{ w.days_left }} days left</small>
-                            {% elif w.status == 'Expiring Soon' %}
-                            <small class="text-warning text-dark d-block fw-semibold" style="font-size: 0.72rem;">{{ w.days_left }} days left</small>
-                            {% endif %}
                         </td>
                         <td class="text-end pe-4">
                             <div class="btn-group btn-group-sm">
-                                <button type="button" class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#claimModal{{ w.item_id }}" title="Warranty Verification Certificate">
-                                    <i class="bi bi-patch-check"></i> Verify
+                                <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#viewModal{{ w.item_id }}" title="View Certificate">
+                                    <i class="bi bi-eye"></i> View
                                 </button>
-                                <a href="{{ url_for('invoice_view', sale_id=w.sale_id) }}" class="btn btn-outline-secondary" title="View Original Invoice">
-                                    <i class="bi bi-receipt"></i>
-                                </a>
+                                <button type="button" class="btn btn-outline-warning text-dark" data-bs-toggle="modal" data-bs-target="#claimModal{{ w.item_id }}" title="Register Claim">
+                                    <i class="bi bi-tools"></i> Claim
+                                </button>
+                                <button type="button" class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#renewModal{{ w.item_id }}" title="Renew Coverage">
+                                    <i class="bi bi-arrow-repeat"></i> Renew
+                                </button>
                             </div>
 
-                            <!-- Warranty Verification Certificate Modal -->
-                            <div class="modal fade text-start" id="claimModal{{ w.item_id }}" tabindex="-1">
+                            <!-- View Certificate Modal -->
+                            <div class="modal fade text-start" id="viewModal{{ w.item_id }}" tabindex="-1">
                                 <div class="modal-dialog">
                                     <div class="modal-content rounded-4 border-0">
                                         <div class="modal-header border-0 bg-light">
-                                            <h5 class="modal-title fw-bold"><i class="bi bi-shield-check text-success me-2"></i>Warranty Verification</h5>
+                                            <h5 class="modal-title fw-bold"><i class="bi bi-shield-check text-success me-2"></i>Warranty Certificate</h5>
                                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                         </div>
                                         <div class="modal-body p-4">
@@ -119,12 +247,12 @@
                                                     {{ w.status }}
                                                 </span>
                                                 <h5 class="fw-bold text-dark mb-0">{{ w.product_name }}</h5>
-                                                <div class="text-muted font-monospace mt-1">Serial: {{ w.serial_number }}</div>
+                                                <div class="text-muted font-monospace mt-1">Serial/IMEI: {{ w.serial_number or 'Not Recorded' }}</div>
                                             </div>
 
                                             <div class="row g-2 small">
                                                 <div class="col-6 text-muted">Customer Name:</div>
-                                                <div class="col-6 fw-semibold text-dark text-end">{{ w.customer_name or 'Walk-in Retail' }}</div>
+                                                <div class="col-6 fw-semibold text-dark text-end">{{ w.customer_name or 'Retail Buyer' }}</div>
 
                                                 <div class="col-6 text-muted">Customer Phone:</div>
                                                 <div class="col-6 fw-semibold text-dark text-end">{{ w.customer_phone or 'N/A' }}</div>
@@ -132,7 +260,7 @@
                                                 <div class="col-6 text-muted">Invoice Reference:</div>
                                                 <div class="col-6 fw-semibold text-dark text-end">{{ w.invoice_number }}</div>
 
-                                                <div class="col-6 text-muted">Date of Purchase:</div>
+                                                <div class="col-6 text-muted">Purchase Date:</div>
                                                 <div class="col-6 fw-semibold text-dark text-end">{{ w.sale_date|date_in }}</div>
 
                                                 <div class="col-6 text-muted">Warranty Period:</div>
@@ -141,21 +269,93 @@
                                                 <div class="col-6 text-muted">Expiry Date:</div>
                                                 <div class="col-6 fw-bold text-dark text-end">{{ w.warranty_expiry_date|date_in }}</div>
 
-                                                <div class="col-6 text-muted">Authorized Service Center:</div>
-                                                <div class="col-6 fw-semibold text-success text-end">Eligible for Support</div>
-                                            </div>
-
-                                            <div class="alert alert-info small mt-3 mb-0 rounded-3">
-                                                <i class="bi bi-info-circle-fill me-1"></i>
-                                                Present this serial record alongside original Invoice #{{ w.invoice_number }} for warranty servicing.
+                                                <div class="col-6 text-muted">Days Left:</div>
+                                                <div class="col-6 fw-bold text-end">{{ w.days_left }} days</div>
                                             </div>
                                         </div>
                                         <div class="modal-footer border-0">
                                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                                             <a href="{{ url_for('invoice_view', sale_id=w.sale_id) }}" class="btn btn-navy">
-                                                <i class="bi bi-printer me-1"></i> Print Invoice
+                                                <i class="bi bi-printer me-1"></i> View Invoice
                                             </a>
                                         </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Register Claim Modal -->
+                            <div class="modal fade text-start" id="claimModal{{ w.item_id }}" tabindex="-1">
+                                <div class="modal-dialog">
+                                    <div class="modal-content rounded-4 border-0">
+                                        <form method="POST" action="{{ url_for('warranty_claim_register') }}">
+                                            <input type="hidden" name="item_id" value="{{ w.item_id }}">
+                                            <input type="hidden" name="customer_id" value="{{ w.customer_id or '' }}">
+                                            <input type="hidden" name="product_id" value="{{ w.product_id }}">
+                                            <div class="modal-header border-0 pb-0">
+                                                <h5 class="modal-title fw-bold"><i class="bi bi-tools text-warning me-2"></i>Register Warranty Claim</h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <div class="p-3 bg-light rounded-3 mb-3 border">
+                                                    <div class="fw-bold">{{ w.product_name }}</div>
+                                                    <div class="small text-muted">Serial: <code>{{ w.serial_number }}</code> &bull; Status: {{ w.status }}</div>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label fw-semibold">Claim Type *</label>
+                                                    <select name="claim_type" class="form-select" required>
+                                                        <option value="Manufacturer Service">Authorized Manufacturer Service</option>
+                                                        <option value="Hardware Replacement">In-Store Replacement</option>
+                                                        <option value="Display Repair">Display / Screen Service</option>
+                                                        <option value="Battery Service">Battery Performance Degradation</option>
+                                                    </select>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label fw-semibold">Defect Description *</label>
+                                                    <textarea name="claim_reason" class="form-control" rows="3" placeholder="Describe the hardware defect reported by the customer..." required></textarea>
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer border-0">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                <button type="submit" class="btn btn-warning text-dark fw-semibold">Submit Claim</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Renew Warranty Modal -->
+                            <div class="modal fade text-start" id="renewModal{{ w.item_id }}" tabindex="-1">
+                                <div class="modal-dialog">
+                                    <div class="modal-content rounded-4 border-0">
+                                        <form method="POST" action="{{ url_for('warranty_renew', item_id=w.item_id) }}">
+                                            <input type="hidden" name="item_id" value="{{ w.item_id }}">
+                                            <div class="modal-header border-0 pb-0">
+                                                <h5 class="modal-title fw-bold"><i class="bi bi-arrow-repeat text-success me-2"></i>Renew Extended Warranty</h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <div class="p-3 bg-light rounded-3 mb-3 border">
+                                                    <div class="fw-bold">{{ w.product_name }}</div>
+                                                    <div class="small text-muted">Current Expiry: {{ w.warranty_expiry_date|date_in }}</div>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label fw-semibold">Extension Period *</label>
+                                                    <select name="months" class="form-select" required>
+                                                        <option value="6">Extend by 6 Months</option>
+                                                        <option value="12" selected>Extend by 12 Months (1 Year)</option>
+                                                        <option value="24">Extend by 24 Months (2 Years)</option>
+                                                    </select>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label fw-semibold">Renewal Fee (₹)</label>
+                                                    <input type="number" step="0.01" name="renewal_fee" class="form-control" value="999.00">
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer border-0">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                <button type="submit" class="btn btn-success">Confirm Renewal</button>
+                                            </div>
+                                        </form>
                                     </div>
                                 </div>
                             </div>
@@ -163,14 +363,51 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="8" class="text-center py-5 text-muted">
-                            <i class="bi bi-patch-question fs-1 text-secondary opacity-50 d-block mb-2"></i>
+                        <td colspan="11" class="text-center py-5 text-muted">
+                            <i class="bi bi-shield-slash fs-1 text-secondary opacity-50 d-block mb-2"></i>
                             No warranty records match your criteria.
                         </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
+        </div>
+    </div>
+</div>
+
+<!-- Generic Claim Modal -->
+<div class="modal fade" id="claimModalGeneric" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content rounded-4 border-0">
+            <form method="POST" action="{{ url_for('warranty_claim_register') }}">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-shield-plus text-primary me-2"></i>Register Warranty Claim</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Serial Number / IMEI *</label>
+                        <input type="text" name="serial_number" class="form-control font-monospace" placeholder="Enter device serial number..." required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Claim Type *</label>
+                        <select name="claim_type" class="form-select" required>
+                            <option value="Manufacturer Service">Authorized Manufacturer Service</option>
+                            <option value="Hardware Replacement">In-Store Replacement</option>
+                            <option value="Display Repair">Display / Screen Service</option>
+                            <option value="Battery Service">Battery Performance Degradation</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Defect Description *</label>
+                        <textarea name="claim_reason" class="form-control" rows="3" placeholder="Describe the customer's reported issue..." required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-navy">Submit Claim</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>

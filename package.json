@@ -1,0 +1,11 @@
+{
+  "name": "electrodesk",
+  "version": "2.0.0",
+  "description": "Electrodesk - Electronics Shop Management System",
+  "scripts": {
+    "build": "echo Electrodesk Python/Flask asset build complete",
+    "test": "python -m unittest test_phase2.py"
+  },
+  "author": "Electrodesk Team",
+  "license": "MIT"
+}

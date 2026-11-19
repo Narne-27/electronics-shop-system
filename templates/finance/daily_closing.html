@@ -1,0 +1,181 @@
+{% extends 'base.html' %}
+
+{% block title %}Daily Register Closing - Electrodesk{% endblock %}
+
+{% block content %}
+<div class="page-header-container">
+    <div>
+        <h1 class="page-title-h1">Daily Register Closing & Reconciliation</h1>
+        <p class="page-subtitle-muted">Reconcile physical cash drawer counts against system-recorded Cash, UPI and Card collections</p>
+    </div>
+    <div>
+        <form method="GET" action="{{ url_for('daily_closing') }}" class="d-flex align-items-center gap-2">
+            <label class="form-label mb-0 fw-semibold text-secondary small">Reconciliation Date:</label>
+            <input type="date" name="date" class="form-control form-control-sm" value="{{ selected_date }}" onchange="this.form.submit()">
+        </form>
+    </div>
+</div>
+
+<!-- Daily Sales Channel Breakdown Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="kpi-card">
+            <div class="kpi-top-row">
+                <span class="kpi-label-uppercase">Expected Cash Sales</span>
+                <div class="kpi-tile kpi-tile-green">
+                    <i class="bi bi-cash-stack"></i>
+                </div>
+            </div>
+            <div class="kpi-value-large text-success">{{ expected_cash|inr }}</div>
+            <div class="kpi-subtext-muted">Physical drawer currency target</div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="kpi-card">
+            <div class="kpi-top-row">
+                <span class="kpi-label-uppercase">Expected UPI Sales</span>
+                <div class="kpi-tile kpi-tile-blue">
+                    <i class="bi bi-qr-code-scan"></i>
+                </div>
+            </div>
+            <div class="kpi-value-large text-primary">{{ expected_upi|inr }}</div>
+            <div class="kpi-subtext-muted">Direct merchant bank settlement</div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="kpi-card">
+            <div class="kpi-top-row">
+                <span class="kpi-label-uppercase">Expected Card / POS</span>
+                <div class="kpi-tile kpi-tile-navy">
+                    <i class="bi bi-credit-card-2-front-fill"></i>
+                </div>
+            </div>
+            <div class="kpi-value-large text-dark">{{ expected_card|inr }}</div>
+            <div class="kpi-subtext-muted">EDC terminal card transactions</div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="kpi-card">
+            <div class="kpi-top-row">
+                <span class="kpi-label-uppercase">Day's Total Turnover</span>
+                <div class="kpi-tile kpi-tile-navy">
+                    <i class="bi bi-calendar2-check-fill"></i>
+                </div>
+            </div>
+            <div class="kpi-value-large text-dark">{{ expected_total|inr }}</div>
+            <div class="kpi-subtext-muted">Consolidated collections for {{ selected_date }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- Cash Count & Drawer Balancing Form -->
+<div class="row g-4">
+    <div class="col-12 col-lg-7">
+        <div class="card border-0 shadow-sm rounded-4">
+            <div class="card-header bg-white border-bottom py-3">
+                <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-safe2-fill text-primary me-2"></i>Cash Drawer Physical Count</h5>
+            </div>
+            <div class="card-body p-4">
+                <form method="POST" action="{{ url_for('daily_closing') }}">
+                    <input type="hidden" name="closing_date" value="{{ selected_date }}">
+                    <input type="hidden" name="expected_cash" value="{{ expected_cash }}">
+                    <input type="hidden" name="expected_upi" value="{{ expected_upi }}">
+                    <input type="hidden" name="expected_card" value="{{ expected_card }}">
+                    <input type="hidden" name="expected_total" value="{{ expected_total }}">
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Expected Cash in Drawer</label>
+                        <input type="text" class="form-control bg-light font-monospace" value="{{ expected_cash|inr }}" readonly>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Actual Physical Cash Counted (₹) *</label>
+                        <div class="input-group">
+                            <span class="input-group-text">₹</span>
+                            <input type="number" step="0.01" name="actual_cash" id="actualCashInput" class="form-control fs-5 fw-bold" value="{{ existing_closing.actual_cash if existing_closing else expected_cash }}" required oninput="calcDifference()">
+                        </div>
+                        <small class="text-muted">Count all physical currency notes and coins present in the register till</small>
+                    </div>
+
+                    <div class="p-3 rounded-3 mb-3 border" id="diffBox" style="background: #F8FAFC;">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="fw-semibold text-secondary">Cash Count Difference:</span>
+                            <span id="diffBadge" class="badge bg-success fs-6 px-3 py-2">Balanced (₹0)</span>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Closing Notes / Discrepancy Reason</label>
+                        <textarea name="notes" class="form-control" rows="2" placeholder="e.g. All shifts reconciled, cash deposited into safety vault">{{ existing_closing.notes if existing_closing else '' }}</textarea>
+                    </div>
+
+                    <button type="submit" class="btn btn-navy w-100 py-2 fw-semibold">
+                        <i class="bi bi-check2-circle me-1"></i> Save Daily Closing Record
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-5">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-header bg-white border-bottom py-3">
+                <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-info-circle-fill text-info me-2"></i>Closing Status</h5>
+            </div>
+            <div class="card-body p-4">
+                {% if existing_closing %}
+                <div class="alert alert-success rounded-3 mb-3">
+                    <i class="bi bi-check2-all me-1"></i>
+                    <strong>Reconciled by {{ existing_closing.closed_by }}</strong>
+                </div>
+                <div class="d-flex justify-content-between py-2 border-bottom">
+                    <span class="text-muted">System Expected:</span>
+                    <span class="fw-semibold">{{ existing_closing.expected_cash|inr }}</span>
+                </div>
+                <div class="d-flex justify-content-between py-2 border-bottom">
+                    <span class="text-muted">Physical Count:</span>
+                    <span class="fw-semibold">{{ existing_closing.actual_cash|inr }}</span>
+                </div>
+                <div class="d-flex justify-content-between py-2 border-bottom">
+                    <span class="text-muted">Difference Flag:</span>
+                    <span class="fw-bold {% if existing_closing.cash_difference == 0 %}text-success{% else %}text-danger{% endif %}">
+                        {{ existing_closing.cash_difference|inr }}
+                    </span>
+                </div>
+                {% else %}
+                <div class="alert alert-warning rounded-3 mb-3">
+                    <i class="bi bi-clock-history me-1"></i>
+                    Closing not yet finalized for {{ selected_date }}.
+                </div>
+                <p class="text-muted small">
+                    Count the physical cash in the drawer and submit the form to finalize this operational business day.
+                </p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function calcDifference() {
+    const exp = {{ expected_cash }};
+    const act = parseFloat(document.getElementById('actualCashInput').value) || 0;
+    const diff = act - exp;
+    const diffBadge = document.getElementById('diffBadge');
+
+    if (Math.abs(diff) < 0.01) {
+        diffBadge.className = 'badge bg-success fs-6 px-3 py-2';
+        diffBadge.innerText = 'Balanced (₹0)';
+    } else if (diff > 0) {
+        diffBadge.className = 'badge bg-warning text-dark fs-6 px-3 py-2';
+        diffBadge.innerText = 'Cash Surplus: +' + formatINR(diff);
+    } else {
+        diffBadge.className = 'badge bg-danger fs-6 px-3 py-2';
+        diffBadge.innerText = 'Cash Shortage: ' + formatINR(diff);
+    }
+}
+calcDifference();
+</script>
+{% endblock %}

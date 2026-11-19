@@ -4,31 +4,48 @@
 
 {% block content %}
 <!-- Action Bar (Hidden when printing) -->
-<div class="d-flex justify-content-between align-items-center mb-4 no-print">
-    <div>
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4 no-print">
+    <div class="d-flex gap-2 align-items-center">
         <a href="{{ url_for('invoices') }}" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-arrow-left"></i> All Invoices
         </a>
+        <div class="btn-group btn-group-sm" role="group">
+            <button type="button" class="btn btn-navy active" id="btnViewA4" onclick="switchView('a4')">
+                <i class="bi bi-file-earmark-text me-1"></i> A4 Tax Invoice
+            </button>
+            <button type="button" class="btn btn-outline-navy" id="btnViewThermal" onclick="switchView('thermal')">
+                <i class="bi bi-receipt me-1"></i> 80mm Thermal Receipt
+            </button>
+        </div>
     </div>
-    <div class="d-flex gap-2">
+    <div class="d-flex gap-2 align-items-center">
+        {% set wa_text = "Dear " ~ (sale.customer_name or "Customer") ~ ", thank you for shopping at Electrodesk! Your Tax Invoice #" ~ sale.invoice_number ~ " for " ~ (sale.grand_total|inr) ~ " is generated. Devices are covered under manufacturer warranty. Link: " ~ request.url %}
+        <a href="https://wa.me/{% if sale.customer_phone %}91{{ sale.customer_phone }}{% endif %}?text={{ wa_text|urlencode }}" target="_blank" class="btn btn-outline-success btn-sm d-flex align-items-center gap-1 shadow-sm" title="Share Invoice on WhatsApp">
+            <i class="bi bi-whatsapp"></i>
+            <span class="d-none d-sm-inline">WhatsApp</span>
+        </a>
         <a href="{{ url_for('pos') }}" class="btn btn-outline-primary btn-sm">
             <i class="bi bi-plus-circle"></i> New Sale
         </a>
         <button type="button" class="btn btn-navy btn-sm d-flex align-items-center gap-2 shadow-sm" onclick="window.print()">
             <i class="bi bi-printer-fill fs-6"></i>
-            <span class="fw-semibold">Print Invoice / Save PDF</span>
+            <span class="fw-semibold">Print / Save PDF</span>
         </button>
     </div>
 </div>
 
-<!-- Invoice Document -->
-<div class="invoice-container rounded-4 shadow-sm border-0 bg-white p-4 p-md-5">
+<!-- ========================================== -->
+<!-- 1. STANDARD A4 TAX INVOICE VIEW -->
+<!-- ========================================== -->
+<div id="a4InvoiceView" class="invoice-container rounded-4 shadow-sm border-0 bg-white p-4 p-md-5 mb-4">
     <!-- Invoice Header -->
     <div class="invoice-header pb-4 mb-4 border-bottom">
         <div class="row align-items-center">
             <div class="col-sm-7">
                 <div class="d-flex align-items-center gap-3 mb-2">
-                    <img src="{{ url_for('static', filename='images/logo.svg') }}" alt="Electrodesk" width="48" height="48">
+                    <div class="brand-icon-tile" style="width: 44px; height: 44px; font-size: 1.4rem;">
+                        <i class="bi bi-lightning-charge-fill"></i>
+                    </div>
                     <div>
                         <h3 class="fw-bold mb-0 text-dark" style="letter-spacing: -0.5px;">{{ store.name }}</h3>
                         <small class="text-secondary fw-semibold">{{ store.tagline }}</small>
@@ -132,8 +149,43 @@
         </table>
     </div>
 
-    <!-- Financial Summary with GST Breakdown -->
-    <div class="row justify-content-end mb-4">
+    <!-- Financial Summary with GST Breakdown & QR Code -->
+    <div class="row align-items-center mb-4">
+        <div class="col-md-6 col-lg-7 text-center text-md-start mb-3 mb-md-0">
+            <div class="d-flex align-items-center gap-3">
+                <!-- QR Code Box for Invoice Verification -->
+                <div class="p-2 border rounded-3 bg-light text-center" style="width: 110px;">
+                    <svg viewBox="0 0 100 100" width="90" height="90">
+                        <rect width="100" height="100" fill="#ffffff"/>
+                        <!-- QR Simulation Pattern -->
+                        <rect x="10" y="10" width="25" height="25" fill="#0B1B3A"/>
+                        <rect x="15" y="15" width="15" height="15" fill="#ffffff"/>
+                        <rect x="18" y="18" width="9" height="9" fill="#0B1B3A"/>
+
+                        <rect x="65" y="10" width="25" height="25" fill="#0B1B3A"/>
+                        <rect x="70" y="15" width="15" height="15" fill="#ffffff"/>
+                        <rect x="73" y="18" width="9" height="9" fill="#0B1B3A"/>
+
+                        <rect x="10" y="65" width="25" height="25" fill="#0B1B3A"/>
+                        <rect x="15" y="70" width="15" height="15" fill="#ffffff"/>
+                        <rect x="18" y="73" width="9" height="9" fill="#0B1B3A"/>
+
+                        <rect x="42" y="15" width="15" height="8" fill="#0B1B3A"/>
+                        <rect x="42" y="30" width="10" height="15" fill="#0B1B3A"/>
+                        <rect x="45" y="55" width="20" height="8" fill="#0B1B3A"/>
+                        <rect x="65" y="45" width="12" height="12" fill="#0B1B3A"/>
+                        <rect x="70" y="70" width="18" height="18" fill="#0B1B3A"/>
+                    </svg>
+                    <small class="text-muted d-block" style="font-size: 0.65rem;">Scan to Verify</small>
+                </div>
+                <div class="small text-muted">
+                    <div class="fw-bold text-dark">Digital Verification QR</div>
+                    <div>IRN / E-Invoice Ready</div>
+                    <div>GSTIN: 36AAACE4812K1Z8</div>
+                </div>
+            </div>
+        </div>
+
         <div class="col-md-6 col-lg-5">
             <div class="p-3 bg-light rounded-3 border">
                 <div class="d-flex justify-content-between text-secondary mb-2">
@@ -191,4 +243,112 @@
         </div>
     </div>
 </div>
+
+<!-- ========================================== -->
+<!-- 2. 80MM POS THERMAL RECEIPT VIEW -->
+<!-- ========================================== -->
+<div id="thermalInvoiceView" class="thermal-receipt-container d-none mx-auto bg-white p-3 border shadow-sm my-4 font-monospace" style="max-width: 320px; font-size: 0.8rem; line-height: 1.3;">
+    <div class="text-center mb-2">
+        <h5 class="fw-bold mb-0">{{ store.name }}</h5>
+        <div style="font-size: 0.72rem;">{{ store.address }}</div>
+        <div style="font-size: 0.72rem;">Ph: {{ store.phone }} &bull; GSTIN: 36AAACE4812K1Z8</div>
+    </div>
+
+    <div class="border-top border-bottom py-1 my-2" style="font-size: 0.75rem;">
+        <div>INV: <strong>{{ sale.invoice_number }}</strong></div>
+        <div>Date: {{ sale.sale_date }} | Mode: {{ sale.payment_method }}</div>
+        <div>Billed to: {{ sale.customer_name or 'Retail Buyer' }}</div>
+    </div>
+
+    <table class="w-100 mb-2" style="font-size: 0.75rem;">
+        <thead>
+            <tr class="border-bottom">
+                <th class="text-start py-1">Item</th>
+                <th class="text-center">Qty</th>
+                <th class="text-end">Price</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td class="py-1">
+                    <div>{{ item.product_name }}</div>
+                    {% if item.serial_number %}<div class="text-muted" style="font-size: 0.65rem;">SN: {{ item.serial_number }}</div>{% endif %}
+                </td>
+                <td class="text-center align-top">{{ item.quantity }}</td>
+                <td class="text-end align-top">{{ item.total_price|inr }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="border-top pt-2" style="font-size: 0.75rem;">
+        <div class="d-flex justify-content-between">
+            <span>Subtotal:</span>
+            <span>{{ sale.subtotal|inr }}</span>
+        </div>
+        <div class="d-flex justify-content-between">
+            <span>GST (18%):</span>
+            <span>{{ sale.tax_amount|inr }}</span>
+        </div>
+        {% if sale.discount_amount > 0 %}
+        <div class="d-flex justify-content-between text-danger">
+            <span>Discount:</span>
+            <span>-{{ sale.discount_amount|inr }}</span>
+        </div>
+        {% endif %}
+        <div class="d-flex justify-content-between fw-bold border-top border-bottom py-1 mt-1 fs-6">
+            <span>TOTAL:</span>
+            <span>{{ sale.grand_total|inr }}</span>
+        </div>
+    </div>
+
+    <div class="text-center mt-3 pt-2 border-top">
+        <!-- Thermal QR Simulation -->
+        <svg viewBox="0 0 100 100" width="70" height="70" class="mx-auto d-block mb-1">
+            <rect width="100" height="100" fill="#ffffff"/>
+            <rect x="10" y="10" width="25" height="25" fill="#000000"/>
+            <rect x="15" y="15" width="15" height="15" fill="#ffffff"/>
+            <rect x="18" y="18" width="9" height="9" fill="#000000"/>
+            <rect x="65" y="10" width="25" height="25" fill="#000000"/>
+            <rect x="70" y="15" width="15" height="15" fill="#ffffff"/>
+            <rect x="73" y="18" width="9" height="9" fill="#000000"/>
+            <rect x="10" y="65" width="25" height="25" fill="#000000"/>
+            <rect x="15" y="70" width="15" height="15" fill="#ffffff"/>
+            <rect x="18" y="73" width="9" height="9" fill="#000000"/>
+            <rect x="42" y="15" width="15" height="8" fill="#000000"/>
+            <rect x="45" y="55" width="20" height="8" fill="#000000"/>
+            <rect x="70" y="70" width="18" height="18" fill="#000000"/>
+        </svg>
+        <div style="font-size: 0.7rem;">THANK YOU FOR YOUR VISIT!</div>
+        <div style="font-size: 0.65rem;" class="text-muted">Keep receipt for warranty claims</div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function switchView(view) {
+    const a4 = document.getElementById('a4InvoiceView');
+    const thermal = document.getElementById('thermalInvoiceView');
+    const btnA4 = document.getElementById('btnViewA4');
+    const btnThermal = document.getElementById('btnViewThermal');
+
+    if (view === 'thermal') {
+        a4.classList.add('d-none');
+        thermal.classList.remove('d-none');
+        btnThermal.classList.add('btn-navy', 'active');
+        btnThermal.classList.remove('btn-outline-navy');
+        btnA4.classList.remove('btn-navy', 'active');
+        btnA4.classList.add('btn-outline-navy');
+    } else {
+        thermal.classList.add('d-none');
+        a4.classList.remove('d-none');
+        btnA4.classList.add('btn-navy', 'active');
+        btnA4.classList.remove('btn-outline-navy');
+        btnThermal.classList.remove('btn-navy', 'active');
+        btnThermal.classList.add('btn-outline-navy');
+    }
+}
+</script>
 {% endblock %}

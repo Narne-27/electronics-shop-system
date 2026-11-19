@@ -1,0 +1,171 @@
+{% extends 'base.html' %}
+
+{% block title %}Profit & Loss Statement - Electrodesk{% endblock %}
+
+{% block content %}
+<div class="page-header-container">
+    <div>
+        <h1 class="page-title-h1">Profit & Loss Financial Statement</h1>
+        <p class="page-subtitle-muted">Real-time revenue, cost of goods sold (COGS), operating expenses, category margins, and net profitability</p>
+    </div>
+</div>
+
+<!-- Financial Summary KPI Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-sm-6 col-xl-2">
+        <div class="kpi-card">
+            <div class="kpi-top-row">
+                <span class="kpi-label-uppercase">Gross Revenue</span>
+                <div class="kpi-tile kpi-tile-blue">
+                    <i class="bi bi-graph-up-arrow"></i>
+                </div>
+            </div>
+            <div class="kpi-value-large text-primary">{{ revenue|inr }}</div>
+            <div class="kpi-subtext-muted">Net sales turnover</div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-2">
+        <div class="kpi-card">
+            <div class="kpi-top-row">
+                <span class="kpi-label-uppercase">Cost of Goods (COGS)</span>
+                <div class="kpi-tile kpi-tile-navy">
+                    <i class="bi bi-box-arrow-right"></i>
+                </div>
+            </div>
+            <div class="kpi-value-large text-dark">{{ cogs|inr }}</div>
+            <div class="kpi-subtext-muted">Product acquisition cost</div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-2">
+        <div class="kpi-card">
+            <div class="kpi-top-row">
+                <span class="kpi-label-uppercase">Gross Profit</span>
+                <div class="kpi-tile kpi-tile-green">
+                    <i class="bi bi-cash-stack"></i>
+                </div>
+            </div>
+            <div class="kpi-value-large text-success">{{ gross_profit|inr }}</div>
+            <div class="kpi-subtext-muted">Revenue &minus; COGS</div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="kpi-card">
+            <div class="kpi-top-row">
+                <span class="kpi-label-uppercase">Operating Expenses</span>
+                <div class="kpi-tile kpi-tile-red">
+                    <i class="bi bi-receipt"></i>
+                </div>
+            </div>
+            <div class="kpi-value-large text-danger">{{ total_expenses|inr }}</div>
+            <div class="kpi-subtext-muted">
+                <a href="{{ url_for('expenses') }}" class="text-decoration-none text-danger fw-semibold">Rent, Salaries & Utilities &rarr;</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="kpi-card">
+            <div class="kpi-top-row">
+                <span class="kpi-label-uppercase">Net Profit & Margin</span>
+                <div class="kpi-tile kpi-tile-green">
+                    <i class="bi bi-trophy-fill"></i>
+                </div>
+            </div>
+            <div class="kpi-value-large {% if net_profit >= 0 %}text-success{% else %}text-danger{% endif %}">
+                {{ net_profit|inr }}
+            </div>
+            <div class="kpi-subtext-muted">
+                <span class="badge bg-success-subtle text-success border border-success-subtle fw-bold">{{ "%.1f"|format(net_margin) }}% Net Margin</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Best Sellers & Slow Moving Stock -->
+<div class="row g-4 mb-4">
+    <!-- Best Sellers -->
+    <div class="col-12 col-lg-6">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                <div class="fw-bold text-dark">
+                    <i class="bi bi-star-fill text-warning me-2"></i>Top Best-Selling Products
+                </div>
+                <small class="text-muted">By Sales Volume</small>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-4">Product</th>
+                                <th>Category</th>
+                                <th class="text-center">Units Sold</th>
+                                <th class="text-end pe-4">Total Revenue (₹)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for b in best_sellers %}
+                            <tr>
+                                <td class="ps-4">
+                                    <div class="fw-semibold text-dark">{{ b.product_name }}</div>
+                                    <small class="text-muted">{{ b.brand }}</small>
+                                </td>
+                                <td><span class="badge bg-light text-secondary border">{{ b.category_name }}</span></td>
+                                <td class="text-center fw-bold">{{ b.total_sold }}</td>
+                                <td class="text-end pe-4 fw-bold text-primary">{{ b.rev|inr }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="4" class="text-center py-4 text-muted">No sales data yet.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Slow Moving Stock -->
+    <div class="col-12 col-lg-6">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                <div class="fw-bold text-dark">
+                    <i class="bi bi-hourglass-split text-info me-2"></i>Slow-Moving Inventory Alert
+                </div>
+                <small class="text-muted">High Stock / Low Demand</small>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-4">Product Code & Name</th>
+                                <th>Category</th>
+                                <th class="text-center">Stock Held</th>
+                                <th class="text-end pe-4">Units Sold</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for s in slow_moving %}
+                            <tr>
+                                <td class="ps-4">
+                                    <div class="fw-semibold text-dark">{{ s.product_name }}</div>
+                                    <small class="text-muted">Code: <code>{{ s.product_code }}</code></small>
+                                </td>
+                                <td><span class="badge bg-light text-secondary border">{{ s.category_name }}</span></td>
+                                <td class="text-center fw-bold text-warning text-dark">{{ s.stock_quantity }} units</td>
+                                <td class="text-end pe-4 text-muted">{{ s.total_sold }} units</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="4" class="text-center py-4 text-muted">All inventory is moving well!</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
