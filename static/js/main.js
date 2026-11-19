@@ -178,4 +178,10 @@ document.addEventListener('DOMContentLoaded', function() {
             } catch (e) {}
         }, 5000);
     });
+
+    // 5. Chart.js Dark Glass Palette Defaults
+    if (typeof Chart !== 'undefined') {
+        Chart.defaults.color = 'rgba(232, 246, 255, 0.75)';
+        Chart.defaults.borderColor = 'rgba(143, 230, 255, 0.12)';
+    }
 });

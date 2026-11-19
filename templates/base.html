@@ -29,9 +29,10 @@
     {% block head %}{% endblock %}
 </head>
 <body>
-<canvas id="scene" style="position:fixed; inset:0; width:100vw; height:100vh; display:block; z-index:-1; pointer-events:none;"></canvas>
+<canvas id="scene" style="position:fixed; inset:0; width:100vw; height:100vh; display:block; z-index:0; pointer-events:none;"></canvas>
+<div id="vignette-overlay" style="position:fixed; inset:0; width:100vw; height:100vh; z-index:0; pointer-events:none; background:radial-gradient(circle at center, transparent 40%, rgba(0,0,0,0.35) 100%);"></div>
 
-<div class="main-wrapper">
+<div class="main-wrapper" style="position:relative; z-index:1;">
     {% if current_user %}
     <!-- Fixed Dark-Navy Sidebar (#0B1B3A - #0F2147) -->
     <aside class="app-sidebar no-print d-none d-lg-flex flex-column">

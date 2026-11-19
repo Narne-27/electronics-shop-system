@@ -88,7 +88,7 @@ function initTunnel() {
 
   const w = window.innerWidth;
   const h = window.innerHeight;
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
 
   // Renderer
   const renderer = new THREE.WebGL1Renderer({ canvas, antialias: true, alpha: false });
@@ -125,7 +125,7 @@ function initTunnel() {
     uColLow: { value: hexToVec3('#180a3a') },
     uColHigh: { value: hexToVec3('#2bf0ff') },
     uOpacity: { value: 1.44 },
-    uSize: { value: 5 },
+    uSize: { value: 3.5 },
     uBrightness: { value: 0.4 },
     uSwirl: { value: 0.39 },
     uScale: { value: 0.17 },
@@ -342,9 +342,29 @@ function initTunnel() {
   let scrollSmooth = 0;
   let scrollCurrent = 0;
 
-  function updateScroll() {
-    const scrollMax = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
-    scrollTarget = clamp(window.scrollY / scrollMax, 0, 1);
+  function onScroll(e) {
+    let el = (e && e.target && e.target !== document) ? e.target : null;
+    if (!el || !el.scrollHeight || !el.clientHeight || (el.scrollHeight - el.clientHeight <= 1)) {
+      const doc = document.scrollingElement || document.documentElement || document.body;
+      if (doc && (doc.scrollHeight - doc.clientHeight > 1)) {
+        el = doc;
+      } else {
+        const candidates = document.querySelectorAll('.main-wrapper, .content-body, main, .sidebar-scrollable, body, html');
+        for (const c of candidates) {
+          if (c.scrollHeight - c.clientHeight > 1) {
+            el = c;
+            break;
+          }
+        }
+      }
+    }
+
+    if (el && (el.scrollHeight - el.clientHeight > 1)) {
+      const maxScroll = el.scrollHeight - el.clientHeight;
+      scrollTarget = clamp(el.scrollTop / maxScroll, 0, 1);
+    } else {
+      scrollTarget = 0;
+    }
   }
 
   // Event Listeners
@@ -362,7 +382,7 @@ function initTunnel() {
   function onResize() {
     const curW = window.innerWidth;
     const curH = window.innerHeight;
-    const curDpr = Math.min(window.devicePixelRatio || 1, 2);
+    const curDpr = Math.min(window.devicePixelRatio || 1, 1.5);
 
     renderer.setPixelRatio(curDpr);
     renderer.setSize(curW, curH, false);
@@ -380,10 +400,10 @@ function initTunnel() {
     finalComposer.setSize(curW, curH);
 
     atmoMat.uniforms.uRes.value.set(curW * curDpr, curH * curDpr);
-    updateScroll();
+    onScroll();
   }
 
-  window.addEventListener('scroll', updateScroll, { passive: true });
+  window.addEventListener('scroll', onScroll, { capture: true, passive: true });
   window.addEventListener('resize', onResize, { passive: true });
   window.addEventListener('mousemove', onPointerMove, { passive: true });
   window.addEventListener('mouseout', onPointerLeave, { passive: true });
@@ -404,7 +424,7 @@ function initTunnel() {
   document.addEventListener('visibilitychange', onVisibilityChange);
 
   // Initial scroll calculation
-  updateScroll();
+  onScroll();
 
   // Animation Loop
   let rAFId = null;
@@ -439,7 +459,7 @@ function initTunnel() {
   // Cleanup on unload or unmount
   function cleanup() {
     cancelAnimationFrame(rAFId);
-    window.removeEventListener('scroll', updateScroll);
+    window.removeEventListener('scroll', onScroll, { capture: true });
     window.removeEventListener('resize', onResize);
     window.removeEventListener('mousemove', onPointerMove);
     window.removeEventListener('mouseout', onPointerLeave);

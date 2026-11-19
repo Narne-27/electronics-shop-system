@@ -803,52 +803,266 @@ body {
 }
 
 /* ==========================================================
-   Three.js Wormhole Tunnel Background Layer
+   Three.js Wormhole Tunnel Background Layer & Dark Glass Theme
    ========================================================== */
+
+/* 4. Canvas layering */
 #scene {
     position: fixed;
     inset: 0;
     width: 100vw;
     height: 100vh;
     display: block;
-    z-index: -1;
+    z-index: 0;
     pointer-events: none;
 }
 
-html, body {
+#vignette-overlay {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 0;
+    pointer-events: none;
+    background: radial-gradient(circle at center, transparent 40%, rgba(0, 0, 0, 0.35) 100%);
+}
+
+.main-wrapper {
+    position: relative;
+    z-index: 1;
     background: transparent !important;
 }
 
-.main-wrapper, .content-body {
+/* 1. Remove light backgrounds: canvas shows through as pure dark */
+html, body {
+    background: #000000 !important;
+    color: #e8f6ff;
+}
+
+.content-body,
+.container,
+.container-fluid,
+.page-header-container {
     background: transparent !important;
+}
+
+/* Sidebar and top bar: solid dark navy */
+.app-sidebar {
+    background: #0B1B3A !important;
+    border-right: 1px solid rgba(143, 230, 255, 0.15) !important;
+}
+
+.sidebar-brand-block {
+    border-bottom: 1px solid rgba(143, 230, 255, 0.12) !important;
+}
+
+.sidebar-user-block {
+    border-top: 1px solid rgba(143, 230, 255, 0.12) !important;
 }
 
 .top-navbar {
-    background: rgba(255, 255, 255, 0.82) !important;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: #0B1B3A !important;
+    border-bottom: 1px solid rgba(143, 230, 255, 0.15) !important;
+    color: #e8f6ff !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
 }
 
-[data-theme="dark"] .top-navbar {
-    background: rgba(15, 23, 42, 0.85) !important;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+.topbar-date-badge,
+.topbar-user-chip {
+    background: rgba(10, 5, 36, 0.6) !important;
+    color: #e8f6ff !important;
+    border: 1px solid rgba(143, 230, 255, 0.2) !important;
 }
 
-.card {
-    background-color: rgba(255, 255, 255, 0.88);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+.topbar-user-chip .text-dark {
+    color: #e8f6ff !important;
 }
 
-[data-theme="dark"] .card {
-    background-color: rgba(30, 41, 59, 0.85);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+/* 2. Dark glass cards, tables, alert banners */
+.card,
+.kpi-card,
+.category-card,
+.list-group-item,
+.modal-content,
+.offcanvas {
+    background: rgba(10, 5, 36, 0.55) !important;
+    backdrop-filter: blur(14px) !important;
+    -webkit-backdrop-filter: blur(14px) !important;
+    border: 1px solid rgba(143, 230, 255, 0.15) !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.37) !important;
 }
 
-.app-sidebar {
-    background: linear-gradient(180deg, rgba(11, 27, 58, 0.94) 0%, rgba(15, 33, 71, 0.96) 100%) !important;
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
+.card-header,
+.category-card-footer,
+.modal-header,
+.modal-footer {
+    background: rgba(10, 5, 36, 0.45) !important;
+    border-color: rgba(143, 230, 255, 0.12) !important;
+    color: #e8f6ff !important;
+}
+
+.alert {
+    background: rgba(10, 5, 36, 0.65) !important;
+    backdrop-filter: blur(14px) !important;
+    -webkit-backdrop-filter: blur(14px) !important;
+    border: 1px solid rgba(143, 230, 255, 0.2) !important;
+    color: #e8f6ff !important;
+}
+
+/* Text inside: primary #e8f6ff, secondary rgba(232, 246, 255, 0.65) */
+.page-header-container h1,
+.page-title-h1,
+h1, h2, h3, h4, h5, h6,
+.card-header,
+.card-title,
+.fw-bold,
+.text-dark,
+.kpi-value-large {
+    color: #e8f6ff !important;
+}
+
+.page-subtitle-muted,
+.text-muted,
+.text-secondary,
+.small.text-muted,
+.kpi-label-uppercase,
+.kpi-subtext-muted {
+    color: rgba(232, 246, 255, 0.65) !important;
+}
+
+/* Tables */
+.table {
+    --bs-table-bg: transparent !important;
+    --bs-table-color: #e8f6ff !important;
+    color: #e8f6ff !important;
+    border-color: rgba(143, 230, 255, 0.12) !important;
+}
+
+.table th {
+    background-color: rgba(10, 5, 36, 0.75) !important;
+    color: rgba(232, 246, 255, 0.85) !important;
+    border-bottom: 1px solid rgba(143, 230, 255, 0.18) !important;
+}
+
+.table td {
+    background-color: transparent !important;
+    color: #e8f6ff !important;
+    border-bottom: 1px solid rgba(143, 230, 255, 0.08) !important;
+}
+
+.table-hover tbody tr:hover td {
+    background-color: rgba(143, 230, 255, 0.08) !important;
+    color: #ffffff !important;
+}
+
+/* Brightened status badges on dark glass */
+.badge.bg-success,
+.text-success,
+.perm-check {
+    color: #00f0a0 !important;
+}
+
+.badge.bg-success-subtle {
+    background-color: rgba(0, 240, 160, 0.18) !important;
+    color: #00f0a0 !important;
+    border: 1px solid rgba(0, 240, 160, 0.35) !important;
+}
+
+.badge.bg-danger,
+.text-danger {
+    color: #ff4d6d !important;
+}
+
+.badge.bg-danger-subtle {
+    background-color: rgba(255, 77, 109, 0.18) !important;
+    color: #ff4d6d !important;
+    border: 1px solid rgba(255, 77, 109, 0.35) !important;
+}
+
+.badge.bg-warning,
+.text-warning,
+.topbar-bell-badge {
+    color: #ffbe3b !important;
+}
+
+.badge.bg-warning-subtle {
+    background-color: rgba(255, 190, 59, 0.18) !important;
+    color: #ffbe3b !important;
+    border: 1px solid rgba(255, 190, 59, 0.35) !important;
+}
+
+.badge.bg-primary,
+.badge.bg-primary-subtle {
+    background-color: rgba(43, 240, 255, 0.18) !important;
+    color: #2bf0ff !important;
+    border: 1px solid rgba(43, 240, 255, 0.35) !important;
+}
+
+.badge.bg-light {
+    background-color: rgba(143, 230, 255, 0.12) !important;
+    color: #e8f6ff !important;
+    border: 1px solid rgba(143, 230, 255, 0.25) !important;
+}
+
+/* Forms and Inputs */
+.form-control,
+.form-select {
+    background-color: rgba(10, 5, 36, 0.65) !important;
+    border: 1px solid rgba(143, 230, 255, 0.2) !important;
+    color: #e8f6ff !important;
+}
+
+.form-control:focus,
+.form-select:focus {
+    background-color: rgba(10, 5, 36, 0.85) !important;
+    border-color: #2bf0ff !important;
+    color: #e8f6ff !important;
+    box-shadow: 0 0 0 0.25rem rgba(43, 240, 255, 0.25) !important;
+}
+
+.form-control::placeholder {
+    color: rgba(232, 246, 255, 0.45) !important;
+}
+
+.input-group-text {
+    background-color: rgba(10, 5, 36, 0.75) !important;
+    border: 1px solid rgba(143, 230, 255, 0.2) !important;
+    color: rgba(232, 246, 255, 0.7) !important;
+}
+
+/* Dropdowns & Modals */
+.dropdown-menu {
+    background-color: rgba(11, 27, 58, 0.95) !important;
+    backdrop-filter: blur(14px) !important;
+    -webkit-backdrop-filter: blur(14px) !important;
+    border: 1px solid rgba(143, 230, 255, 0.2) !important;
+}
+
+.dropdown-item {
+    color: #e8f6ff !important;
+}
+
+.dropdown-item:hover {
+    background-color: rgba(43, 240, 255, 0.15) !important;
+    color: #ffffff !important;
+}
+
+.dropdown-divider {
+    border-color: rgba(143, 230, 255, 0.15) !important;
+}
+
+/* POS Specific Cards on Dark Glass */
+.pos-cart-panel {
+    background: rgba(10, 5, 36, 0.6) !important;
+    border: 1px solid rgba(143, 230, 255, 0.2) !important;
+}
+
+.pos-product-card {
+    background: rgba(10, 5, 36, 0.55) !important;
+    border: 1px solid rgba(143, 230, 255, 0.15) !important;
+}
+
+.pos-product-card:hover {
+    border-color: #2bf0ff !important;
+    box-shadow: 0 4px 20px rgba(43, 240, 255, 0.2) !important;
 }
