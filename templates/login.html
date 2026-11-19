@@ -1,0 +1,127 @@
+{% extends 'base.html' %}
+
+{% block title %}Sign In - Electrodesk{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center align-items-center" style="min-height: 80vh;">
+    <div class="col-12 col-md-8 col-lg-5">
+        <div class="card shadow-lg border-0 overflow-hidden" style="border-radius: 20px;">
+            <div class="card-header text-white text-center py-4 border-0" style="background: linear-gradient(135deg, #0B1B3A 0%, #0F2147 100%);">
+                <div class="d-inline-flex align-items-center justify-content-center brand-icon-tile mx-auto mb-2" style="width: 48px; height: 48px;">
+                    <i class="bi bi-lightning-charge-fill fs-4"></i>
+                </div>
+                <h3 class="fw-bold mb-1 letter-spacing-tight">Electrodesk</h3>
+                <p class="text-white-50 mb-0 small">Smart Electronics Shop Management & Retail Billing</p>
+            </div>
+            <div class="card-body p-4 p-md-5">
+                <h5 class="fw-bold text-dark mb-3">Sign In to Your Workspace</h5>
+                <form method="POST" action="{{ url_for('login') }}" id="loginForm">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold text-secondary small">Username</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light border-end-0"><i class="bi bi-person text-muted"></i></span>
+                            <input type="text" name="username" id="usernameInput" class="form-control" placeholder="Enter username (e.g. admin, geetha, sai, suresh)" required autofocus>
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold text-secondary small">Password</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light border-end-0"><i class="bi bi-lock text-muted"></i></span>
+                            <input type="password" name="password" id="passwordInput" class="form-control" placeholder="Enter password" required>
+                            <button class="btn btn-outline-secondary" type="button" id="togglePasswordBtn">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-navy w-100 py-2 fw-semibold shadow-sm mb-4">
+                        <i class="bi bi-box-arrow-in-right me-1"></i> Sign In to Electrodesk
+                    </button>
+                </form>
+
+                <!-- Quick 1-Click Role Login for Evaluation & Testing -->
+                <div class="border-top pt-3">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <span class="text-muted small fw-bold text-uppercase" style="letter-spacing: 0.05em; font-size: 0.72rem;">1-Click Quick Demo Sign In</span>
+                        <span class="badge bg-light text-muted border">4 Roles</span>
+                    </div>
+                    <div class="d-grid gap-2">
+                        <!-- Ram - System Administrator -->
+                        <button type="button" class="btn btn-outline-dark btn-sm text-start d-flex justify-content-between align-items-center p-2" onclick="fillDemo('admin', 'admin123')">
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="user-avatar-circle" style="width: 30px; height: 30px; font-size: 0.75rem; background: #0B1B3A;">RA</div>
+                                <div>
+                                    <strong class="d-block text-dark lh-1">Ram</strong>
+                                    <small class="text-muted" style="font-size: 0.7rem;">System Administrator</small>
+                                </div>
+                            </div>
+                            <span class="badge bg-primary">Full Control</span>
+                        </button>
+
+                        <!-- Geetha - Shop Manager -->
+                        <button type="button" class="btn btn-outline-dark btn-sm text-start d-flex justify-content-between align-items-center p-2" onclick="fillDemo('geetha', 'geetha123')">
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="user-avatar-circle" style="width: 30px; height: 30px; font-size: 0.75rem; background: #0284C7;">GE</div>
+                                <div>
+                                    <strong class="d-block text-dark lh-1">Geetha</strong>
+                                    <small class="text-muted" style="font-size: 0.7rem;">Shop Manager</small>
+                                </div>
+                            </div>
+                            <span class="badge bg-info text-white">Stock &amp; Catalog</span>
+                        </button>
+
+                        <!-- Sai - Sales Staff -->
+                        <button type="button" class="btn btn-outline-dark btn-sm text-start d-flex justify-content-between align-items-center p-2" onclick="fillDemo('sai', 'sai123')">
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="user-avatar-circle" style="width: 30px; height: 30px; font-size: 0.75rem; background: #059669;">SA</div>
+                                <div>
+                                    <strong class="d-block text-dark lh-1">Sai</strong>
+                                    <small class="text-muted" style="font-size: 0.7rem;">Sales Staff</small>
+                                </div>
+                            </div>
+                            <span class="badge bg-success">POS &amp; Billing</span>
+                        </button>
+
+                        <!-- Suresh - Shop Owner -->
+                        <button type="button" class="btn btn-outline-dark btn-sm text-start d-flex justify-content-between align-items-center p-2" onclick="fillDemo('suresh', 'suresh123')">
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="user-avatar-circle" style="width: 30px; height: 30px; font-size: 0.75rem; background: #4338CA;">S</div>
+                                <div>
+                                    <strong class="d-block text-dark lh-1">Suresh</strong>
+                                    <small class="text-muted" style="font-size: 0.7rem;">Shop Owner</small>
+                                </div>
+                            </div>
+                            <span class="badge" style="background: #4338CA; color: white;">Business Owner</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer bg-light text-center py-3 text-muted small border-0">
+                Electrodesk Retail Operations &bull; Authorized Access
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function fillDemo(username, password) {
+    document.getElementById('usernameInput').value = username;
+    document.getElementById('passwordInput').value = password;
+    document.getElementById('loginForm').submit();
+}
+
+document.getElementById('togglePasswordBtn').addEventListener('click', function() {
+    const pwd = document.getElementById('passwordInput');
+    const icon = this.querySelector('i');
+    if (pwd.type === 'password') {
+        pwd.type = 'text';
+        icon.className = 'bi bi-eye-slash';
+    } else {
+        pwd.type = 'password';
+        icon.className = 'bi bi-eye';
+    }
+});
+</script>
+{% endblock %}

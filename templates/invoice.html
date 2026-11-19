@@ -1,0 +1,194 @@
+{% extends 'base.html' %}
+
+{% block title %}Invoice {{ sale.invoice_number }} - {{ store.name }}{% endblock %}
+
+{% block content %}
+<!-- Action Bar (Hidden when printing) -->
+<div class="d-flex justify-content-between align-items-center mb-4 no-print">
+    <div>
+        <a href="{{ url_for('invoices') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left"></i> All Invoices
+        </a>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('pos') }}" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-plus-circle"></i> New Sale
+        </a>
+        <button type="button" class="btn btn-navy btn-sm d-flex align-items-center gap-2 shadow-sm" onclick="window.print()">
+            <i class="bi bi-printer-fill fs-6"></i>
+            <span class="fw-semibold">Print Invoice / Save PDF</span>
+        </button>
+    </div>
+</div>
+
+<!-- Invoice Document -->
+<div class="invoice-container rounded-4 shadow-sm border-0 bg-white p-4 p-md-5">
+    <!-- Invoice Header -->
+    <div class="invoice-header pb-4 mb-4 border-bottom">
+        <div class="row align-items-center">
+            <div class="col-sm-7">
+                <div class="d-flex align-items-center gap-3 mb-2">
+                    <img src="{{ url_for('static', filename='images/logo.svg') }}" alt="Electrodesk" width="48" height="48">
+                    <div>
+                        <h3 class="fw-bold mb-0 text-dark" style="letter-spacing: -0.5px;">{{ store.name }}</h3>
+                        <small class="text-secondary fw-semibold">{{ store.tagline }}</small>
+                    </div>
+                </div>
+                <div class="text-muted small mt-2">
+                    <div>{{ store.address }}</div>
+                    <div>Phone: {{ store.phone }} &bull; Email: {{ store.email }}</div>
+                    <div class="fw-semibold text-dark mt-1">GSTIN: 36AAACE4812K1Z8</div>
+                </div>
+            </div>
+            <div class="col-sm-5 text-sm-end mt-3 mt-sm-0">
+                <span class="badge bg-dark fs-6 px-3 py-2 text-uppercase mb-2">Tax Invoice</span>
+                <h4 class="fw-bold text-primary mb-1 font-monospace">{{ sale.invoice_number }}</h4>
+                <div class="text-muted small">
+                    <div><strong>Invoice Date:</strong> {{ sale.sale_date|date_in }}</div>
+                    <div><strong>Payment Mode:</strong> <span class="badge bg-light text-dark border">{{ sale.payment_method }}</span></div>
+                    <div><strong>Status:</strong> <span class="badge bg-success">{{ sale.payment_status }}</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Customer & Cashier Metadata -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-6">
+            <div class="p-3 bg-light rounded-3 h-100 border">
+                <h6 class="text-secondary fw-bold text-uppercase small mb-2"><i class="bi bi-person-fill text-primary me-1"></i> Billed To:</h6>
+                {% if sale.customer_name %}
+                <h6 class="fw-bold text-dark mb-1">{{ sale.customer_name }}</h6>
+                <div class="text-muted small">
+                    <div><strong>Phone:</strong> {{ sale.customer_phone }}</div>
+                    {% if sale.customer_email %}<div><strong>Email:</strong> {{ sale.customer_email }}</div>{% endif %}
+                    {% if sale.customer_address %}<div><strong>Address:</strong> {{ sale.customer_address }}</div>{% endif %}
+                </div>
+                {% else %}
+                <h6 class="fw-bold text-secondary mb-1">Walk-in Customer</h6>
+                <p class="text-muted small mb-0">Direct retail counter sale</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="p-3 bg-light rounded-3 h-100 border">
+                <h6 class="text-secondary fw-bold text-uppercase small mb-2"><i class="bi bi-shop text-primary me-1"></i> Sale Details:</h6>
+                <div class="text-muted small">
+                    <div><strong>Sold By:</strong> {{ sale.staff_name }} ({{ sale.staff_role }})</div>
+                    <div><strong>Transaction Ref:</strong> #SALE-{{ sale.sale_id }}</div>
+                    <div><strong>Store Location:</strong> Road No. 36, Jubilee Hills, Hyderabad</div>
+                    {% if sale.notes %}
+                    <div class="mt-2 text-dark"><strong>Remarks:</strong> {{ sale.notes }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Itemized Products Table -->
+    <div class="table-responsive mb-4">
+        <table class="table table-bordered align-middle invoice-table mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th style="width: 5%;">#</th>
+                    <th style="width: 38%;">Product & Specifications</th>
+                    <th style="width: 22%;">Serial Number / IMEI</th>
+                    <th style="width: 12%;">Warranty</th>
+                    <th class="text-center" style="width: 6%;">Qty</th>
+                    <th class="text-end" style="width: 12%;">Unit Price</th>
+                    <th class="text-end" style="width: 15%;">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>
+                        <div class="fw-bold text-dark">{{ item.product_name }}</div>
+                        <small class="text-muted">{{ item.brand }} &bull; {{ item.model or '' }} &bull; Code: <code>{{ item.product_code }}</code></small>
+                    </td>
+                    <td>
+                        {% if item.serial_number %}
+                        <code class="fw-semibold text-dark">{{ item.serial_number }}</code>
+                        {% else %}
+                        <span class="text-muted small">N/A</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="badge bg-light text-dark border">
+                            {{ item.warranty_months }} Months
+                        </span>
+                        {% if item.warranty_expiry_date %}
+                        <div class="small text-muted" style="font-size: 0.72rem;">Exp: {{ item.warranty_expiry_date|date_in }}</div>
+                        {% endif %}
+                    </td>
+                    <td class="text-center fw-semibold">{{ item.quantity }}</td>
+                    <td class="text-end">{{ item.unit_price|inr }}</td>
+                    <td class="text-end fw-bold text-dark">{{ item.total_price|inr }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Financial Summary with GST Breakdown -->
+    <div class="row justify-content-end mb-4">
+        <div class="col-md-6 col-lg-5">
+            <div class="p-3 bg-light rounded-3 border">
+                <div class="d-flex justify-content-between text-secondary mb-2">
+                    <span>Taxable Subtotal</span>
+                    <span class="fw-semibold text-dark">{{ sale.subtotal|inr }}</span>
+                </div>
+                {% set half_tax = (sale.tax_amount / 2)|round %}
+                <div class="d-flex justify-content-between text-secondary mb-1 small">
+                    <span>CGST (9.0%)</span>
+                    <span class="fw-semibold text-dark">{{ half_tax|inr }}</span>
+                </div>
+                <div class="d-flex justify-content-between text-secondary mb-2 small">
+                    <span>SGST (9.0%)</span>
+                    <span class="fw-semibold text-dark">{{ (sale.tax_amount - half_tax)|inr }}</span>
+                </div>
+                <div class="d-flex justify-content-between text-secondary mb-2 pt-1 border-top">
+                    <span>Total GST (18%)</span>
+                    <span class="fw-semibold text-dark">{{ sale.tax_amount|inr }}</span>
+                </div>
+                {% if sale.discount_amount > 0 %}
+                <div class="d-flex justify-content-between text-danger mb-2">
+                    <span>Discount Applied</span>
+                    <span class="fw-semibold">-{{ sale.discount_amount|inr }}</span>
+                </div>
+                {% endif %}
+                <div class="d-flex justify-content-between border-top pt-2 fs-5">
+                    <span class="fw-bold text-dark">Grand Total</span>
+                    <span class="fw-bold text-primary">{{ sale.grand_total|inr }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Terms & Warranty Conditions -->
+    <div class="border-top pt-3 text-muted" style="font-size: 0.78rem;">
+        <h6 class="fw-bold text-dark small text-uppercase mb-1"><i class="bi bi-shield-check text-success me-1"></i> Warranty & Service Policy:</h6>
+        <ul class="ps-3 mb-3">
+            <li>Electronic items are covered by standard manufacturer brand warranty against manufacturing defects for the period specified above from invoice date.</li>
+            <li>Physical, liquid, or accidental damages and unauthorized tampering/opening void all warranty claims.</li>
+            <li>Original purchase invoice and verifiable serial number are required for warranty claims at authorized service centers across India.</li>
+            <li>Goods once sold can be returned within 7 days in original sealed condition with original packaging.</li>
+        </ul>
+
+        <div class="row pt-4 mt-2">
+            <div class="col-6 text-center">
+                <div class="border-top border-secondary border-opacity-50 pt-2 w-75 mx-auto">
+                    <small class="fw-semibold text-dark">Customer's Signature</small>
+                </div>
+            </div>
+            <div class="col-6 text-center">
+                <div class="border-top border-secondary border-opacity-50 pt-2 w-75 mx-auto">
+                    <small class="fw-semibold text-dark">Authorized Signatory for {{ store.name }}</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

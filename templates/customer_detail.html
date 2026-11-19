@@ -1,0 +1,155 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ customer.customer_name }} - Profile & History{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+    <div>
+        <a href="{{ url_for('customers') }}" class="btn btn-outline-secondary btn-sm mb-2">
+            <i class="bi bi-arrow-left"></i> Back to Customers
+        </a>
+        <h1 class="page-title fw-bold mb-0 text-dark">{{ customer.customer_name }}</h1>
+        <small class="text-muted">Customer Account #{{ customer.customer_id }} &bull; Member since {{ customer.created_at|date_in }}</small>
+    </div>
+    <div>
+        <a href="{{ url_for('pos') }}" class="btn btn-navy d-flex align-items-center gap-2 shadow-sm">
+            <i class="bi bi-cart-plus"></i>
+            <span>Bill New Sale</span>
+        </a>
+    </div>
+</div>
+
+<!-- Customer Profile Overview Card -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-md-4">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-body p-4">
+                <div class="d-flex align-items-center gap-3 mb-3">
+                    <div class="rounded-circle bg-primary bg-opacity-10 text-primary d-flex align-items-center justify-content-center fw-bold fs-4" style="width: 52px; height: 52px;">
+                        {{ customer.customer_name[:1] }}
+                    </div>
+                    <div>
+                        <h5 class="fw-bold text-dark mb-0">{{ customer.customer_name }}</h5>
+                        <span class="badge bg-light text-secondary border">Active Customer</span>
+                    </div>
+                </div>
+
+                <div class="border-top pt-3 small">
+                    <div class="mb-2">
+                        <span class="text-muted d-block">Phone Number:</span>
+                        <strong class="text-dark"><i class="bi bi-telephone me-1 text-primary"></i>{{ customer.phone }}</strong>
+                    </div>
+                    <div class="mb-2">
+                        <span class="text-muted d-block">Email Address:</span>
+                        <strong class="text-dark"><i class="bi bi-envelope me-1 text-primary"></i>{{ customer.email or 'Not provided' }}</strong>
+                    </div>
+                    <div class="mb-0">
+                        <span class="text-muted d-block">Address:</span>
+                        <span class="text-secondary">{{ customer.address or 'No address on record' }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-md-8">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-header bg-white border-0 fw-bold pt-4 px-4">
+                <i class="bi bi-shield-check text-success me-2"></i>Active Device Warranties for this Customer
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-4">Device / Product</th>
+                                <th>Serial Number</th>
+                                <th>Invoice</th>
+                                <th class="pe-4">Expiry Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for w in warranties %}
+                            <tr>
+                                <td class="ps-4">
+                                    <div class="fw-bold text-dark">{{ w.product_name }}</div>
+                                    <small class="text-muted">{{ w.brand }} &bull; <code>{{ w.product_code }}</code></small>
+                                </td>
+                                <td><code>{{ w.serial_number or 'N/A' }}</code></td>
+                                <td>
+                                    <a href="{{ url_for('invoice_view', sale_id=w.sale_id) }}" class="text-decoration-none font-monospace small">
+                                        {{ w.invoice_number }}
+                                    </a>
+                                </td>
+                                <td class="pe-4">
+                                    <span class="badge bg-light text-dark border">{{ w.warranty_expiry_date|date_in }}</span>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="4" class="text-center py-4 text-muted small">
+                                    No registered warranties on record for this customer.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Past Invoices / Purchase History -->
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="card-header bg-white border-0 fw-bold d-flex justify-content-between align-items-center pt-4 px-4">
+        <span><i class="bi bi-clock-history text-primary me-2"></i>Invoice History ({{ purchases|length }} Orders)</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">Invoice #</th>
+                        <th>Purchase Date</th>
+                        <th>Cashier / Staff</th>
+                        <th>Items Count</th>
+                        <th>Payment Mode</th>
+                        <th>Status</th>
+                        <th>Grand Total</th>
+                        <th class="text-end pe-4">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in purchases %}
+                    <tr>
+                        <td class="ps-4">
+                            <a href="{{ url_for('invoice_view', sale_id=p.sale_id) }}" class="fw-bold text-primary font-monospace text-decoration-none">
+                                {{ p.invoice_number }}
+                            </a>
+                        </td>
+                        <td>{{ p.sale_date|date_in }}</td>
+                        <td><span class="badge bg-light text-secondary border">{{ p.staff_name }}</span></td>
+                        <td>{{ p.item_count }} item(s)</td>
+                        <td><span class="badge bg-light text-dark border">{{ p.payment_method }}</span></td>
+                        <td><span class="badge bg-success-subtle text-success border border-success-subtle">{{ p.payment_status }}</span></td>
+                        <td class="fw-bold text-dark">{{ p.grand_total|inr }}</td>
+                        <td class="text-end pe-4">
+                            <a href="{{ url_for('invoice_view', sale_id=p.sale_id) }}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-printer"></i> View Invoice
+                            </a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="text-center py-4 text-muted">
+                            No purchases recorded yet for this customer.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

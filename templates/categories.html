@@ -1,0 +1,206 @@
+{% extends 'base.html' %}
+
+{% block title %}Category Management - Electrodesk{% endblock %}
+
+{% block content %}
+<div class="page-header-container">
+    <div>
+        <h1 class="page-title-h1">Categories & Departments</h1>
+        <p class="page-subtitle-muted">Organize electronics product hierarchy, catalog codes, and inventory valuation</p>
+    </div>
+    {% if current_user.role in ['System Administrator', 'Admin', 'Shop Owner', 'Shop Manager', 'Manager'] %}
+    <div>
+        <button type="button" class="btn btn-navy d-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#addCategoryModal">
+            <i class="bi bi-folder-plus"></i>
+            <span>Add Category</span>
+        </button>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Category Cards in 2-Column Grid -->
+<div class="row row-cols-1 row-cols-md-2 g-4 mb-4">
+    {% for c in categories %}
+    <div class="col">
+        <div class="category-card">
+            <div class="category-card-body">
+                <div class="category-card-header">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="category-icon-box">
+                            <i class="bi {{ c.icon or 'bi-box-seam' }}"></i>
+                        </div>
+                        <div>
+                            <div class="d-flex align-items-center gap-2 mb-1">
+                                <span class="category-code-badge">{{ c.category_code }}</span>
+                                <h5 class="fw-bold text-dark mb-0">{{ c.category_name }}</h5>
+                            </div>
+                            <small class="text-muted">Department ID #{{ c.category_id }} &bull; Active</small>
+                        </div>
+                    </div>
+                    {% if current_user.role in ['System Administrator', 'Admin', 'Shop Owner', 'Shop Manager', 'Manager'] %}
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-light border-0" type="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-three-dots-vertical"></i>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                            <li>
+                                <button type="button" class="dropdown-item py-2" data-bs-toggle="modal" data-bs-target="#editCatModal{{ c.category_id }}">
+                                    <i class="bi bi-pencil-square me-2 text-primary"></i> Edit Category
+                                </button>
+                            </li>
+                            <li>
+                                <button type="button" class="dropdown-item py-2 text-danger" data-bs-toggle="modal" data-bs-target="#deleteCatModal{{ c.category_id }}">
+                                    <i class="bi bi-trash me-2"></i> Delete
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <p class="text-secondary small mb-0" style="min-height: 40px;">
+                    {{ c.description or 'Consumer and commercial electronic devices and accessories.' }}
+                </p>
+            </div>
+
+            <!-- Footer with Products / Units / Value -->
+            <div class="category-card-footer">
+                <div class="category-stat-item">
+                    <span class="stat-label">Products</span>
+                    <span class="stat-val text-primary">{{ c.product_count }} SKUs</span>
+                </div>
+                <div class="category-stat-item">
+                    <span class="stat-label">Units</span>
+                    <span class="stat-val text-dark">{{ c.units_count }} in stock</span>
+                </div>
+                <div class="category-stat-item text-end">
+                    <span class="stat-label">Value</span>
+                    <span class="stat-val text-success">{{ c.stock_value|inr }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Edit Category Modal -->
+        <div class="modal fade text-start" id="editCatModal{{ c.category_id }}" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content" style="border-radius: 16px;">
+                    <form method="POST" action="{{ url_for('category_edit', category_id=c.category_id) }}">
+                        <div class="modal-header">
+                            <h5 class="modal-title fw-bold">Edit Category: {{ c.category_name }}</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label fw-semibold small">Code *</label>
+                                    <input type="text" name="category_code" class="form-control" value="{{ c.category_code }}" required>
+                                </div>
+                                <div class="col-md-8">
+                                    <label class="form-label fw-semibold small">Category Name *</label>
+                                    <input type="text" name="category_name" class="form-control" value="{{ c.category_name }}" required>
+                                </div>
+                                <div class="col-md-12">
+                                    <label class="form-label fw-semibold small">Icon (Bootstrap Icon)</label>
+                                    <select name="icon" class="form-select">
+                                        <option value="bi-phone-fill" {% if c.icon == 'bi-phone-fill' %}selected{% endif %}>Phone (bi-phone-fill)</option>
+                                        <option value="bi-laptop-fill" {% if c.icon == 'bi-laptop-fill' %}selected{% endif %}>Laptop (bi-laptop-fill)</option>
+                                        <option value="bi-headphones" {% if c.icon == 'bi-headphones' %}selected{% endif %}>Headphones (bi-headphones)</option>
+                                        <option value="bi-tv-fill" {% if c.icon == 'bi-tv-fill' %}selected{% endif %}>Television (bi-tv-fill)</option>
+                                        <option value="bi-smartwatch" {% if c.icon == 'bi-smartwatch' %}selected{% endif %}>Smartwatch (bi-smartwatch)</option>
+                                        <option value="bi-controller" {% if c.icon == 'bi-controller' %}selected{% endif %}>Gaming Controller (bi-controller)</option>
+                                        <option value="bi-box-seam" {% if c.icon == 'bi-box-seam' %}selected{% endif %}>Box / Package (bi-box-seam)</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-12">
+                                    <label class="form-label fw-semibold small">Description</label>
+                                    <textarea name="description" class="form-control" rows="2">{{ c.description or '' }}</textarea>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary rounded-pill" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-navy rounded-pill">Save Changes</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Delete Category Modal -->
+        <div class="modal fade text-start" id="deleteCatModal{{ c.category_id }}" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content" style="border-radius: 16px;">
+                    <form method="POST" action="{{ url_for('category_delete', category_id=c.category_id) }}">
+                        <div class="modal-header">
+                            <h5 class="modal-title fw-bold text-danger"><i class="bi bi-trash me-2"></i>Delete Category</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p>Are you sure you want to delete category <strong>{{ c.category_name }}</strong> (<code>{{ c.category_code }}</code>)?</p>
+                            {% if c.product_count > 0 %}
+                            <div class="alert alert-warning small mb-0 rounded-3">
+                                <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                                This category contains <strong>{{ c.product_count }}</strong> assigned products. You must reassign or remove them first.
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary rounded-pill" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-danger rounded-pill" {% if c.product_count > 0 %}disabled{% endif %}>Confirm Delete</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Add Category Modal -->
+{% if current_user.role in ['System Administrator', 'Admin', 'Shop Owner', 'Shop Manager', 'Manager'] %}
+<div class="modal fade" id="addCategoryModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content" style="border-radius: 16px;">
+            <form method="POST" action="{{ url_for('category_add') }}">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-folder-plus text-primary me-2"></i>Create Category</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold small">Code (e.g. CAT-07) *</label>
+                            <input type="text" name="category_code" class="form-control" placeholder="CAT-07">
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label fw-semibold small">Category Name *</label>
+                            <input type="text" name="category_name" class="form-control" placeholder="e.g. Home Automation & IoT" required>
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label fw-semibold small">Icon</label>
+                            <select name="icon" class="form-select">
+                                <option value="bi-box-seam" selected>Box / Package (bi-box-seam)</option>
+                                <option value="bi-phone-fill">Phone (bi-phone-fill)</option>
+                                <option value="bi-laptop-fill">Laptop (bi-laptop-fill)</option>
+                                <option value="bi-headphones">Headphones (bi-headphones)</option>
+                                <option value="bi-tv-fill">Television (bi-tv-fill)</option>
+                                <option value="bi-smartwatch">Smartwatch (bi-smartwatch)</option>
+                                <option value="bi-controller">Gaming Controller (bi-controller)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label fw-semibold small">Description</label>
+                            <textarea name="description" class="form-control" rows="2" placeholder="Brief department description"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary rounded-pill" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-navy rounded-pill">Create Category</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
