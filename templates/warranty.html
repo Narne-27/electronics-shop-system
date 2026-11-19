@@ -342,9 +342,15 @@
                                 <button type="button" class="btn btn-outline-primary" data-action="view" data-target-modal="#viewModal{{ w.item_id }}" title="View Certificate">
                                     <i class="bi bi-eye"></i> View
                                 </button>
+                                {% if w.status == 'Expired' %}
+                                <button type="button" class="btn btn-outline-secondary opacity-50 disabled" disabled title="Warranty Expired - Claims Inactive">
+                                    <i class="bi bi-tools"></i> Claim
+                                </button>
+                                {% else %}
                                 <button type="button" class="btn btn-outline-warning text-dark" data-action="claim" data-target-modal="#claimModal{{ w.item_id }}" title="Register Claim">
                                     <i class="bi bi-tools"></i> Claim
                                 </button>
+                                {% endif %}
                                 {% if w.claim_id %}
                                 <button type="button" class="btn btn-outline-info" data-action="review" data-target-modal="#reviewClaimModal{{ w.claim_id }}" title="Review Claim ({{ w.claim_status }})">
                                     <i class="bi bi-clipboard-check"></i> Review
@@ -631,27 +637,42 @@
 {% block scripts %}
 <script>
 // ========================================================
-// FIX 2: Single Master Modal Lifecycle & Delegation
+// FIX 2: Warranty Modal Lifecycle, Stacking & Delegation
 // ========================================================
 
 let activeModalEl = null;
 
+// Move modals directly under <body> to break out of .main-wrapper stacking context
+function moveModalsToBody() {
+    document.querySelectorAll('.modal').forEach(function(m) {
+        if (m.parentElement !== document.body) {
+            document.body.appendChild(m);
+        }
+    });
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', moveModalsToBody);
+} else {
+    moveModalsToBody();
+}
+
 function closeModal(targetModal) {
     try {
-        const modalToClose = targetModal || activeModalEl || document.querySelector('.modal.show');
-        if (modalToClose) {
+        const modalsToClose = targetModal ? [targetModal] : document.querySelectorAll('.modal.show');
+        modalsToClose.forEach(m => {
             if (window.bootstrap && bootstrap.Modal) {
-                const instance = bootstrap.Modal.getInstance(modalToClose);
+                const instance = bootstrap.Modal.getInstance(m);
                 if (instance) {
                     try { instance.hide(); } catch (e) {}
                 }
             }
-            modalToClose.classList.remove('show');
-            modalToClose.style.display = 'none';
-            modalToClose.style.pointerEvents = 'none';
-            modalToClose.setAttribute('aria-hidden', 'true');
-            modalToClose.removeAttribute('aria-modal');
-        }
+            m.classList.remove('show');
+            m.style.display = 'none';
+            m.style.pointerEvents = 'none';
+            m.setAttribute('aria-hidden', 'true');
+            m.removeAttribute('aria-modal');
+        });
     } catch (err) {
         console.warn('Error during closeModal:', err);
     } finally {
@@ -687,14 +708,24 @@ function closeModal(targetModal) {
 
 function openModal(selectorOrId) {
     try {
-        // Always cleanly close any existing modal first
-        closeModal();
-
         const selector = selectorOrId.startsWith('#') ? selectorOrId : '#' + selectorOrId;
         const modalEl = document.querySelector(selector);
         if (!modalEl) {
             console.warn('Target modal not found:', selectorOrId);
             return;
+        }
+
+        // Rapid/double-click debounce: already showing this modal
+        if (activeModalEl === modalEl && modalEl.classList.contains('show')) {
+            return;
+        }
+
+        // Close any other active modal first
+        closeModal();
+
+        // Move to body if needed to ensure highest stacking order
+        if (modalEl.parentElement !== document.body) {
+            document.body.appendChild(modalEl);
         }
 
         activeModalEl = modalEl;
@@ -725,6 +756,13 @@ document.addEventListener('click', function(e) {
     // 1. Action buttons: View, Claim, Renew, Review
     const actionBtn = e.target.closest('[data-action]');
     if (actionBtn) {
+        // Disabled buttons must not trigger actions
+        if (actionBtn.disabled || actionBtn.classList.contains('disabled') || actionBtn.getAttribute('aria-disabled') === 'true') {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+        }
+
         const targetModal = actionBtn.getAttribute('data-target-modal') || actionBtn.getAttribute('data-bs-target');
         if (targetModal) {
             e.preventDefault();
@@ -764,6 +802,11 @@ document.addEventListener('keydown', function(e) {
             closeModal(openModalEl);
         }
     }
+});
+
+// Back/Forward navigation cache cleanup
+window.addEventListener('pageshow', function() {
+    closeModal();
 });
 
 // Bootstrap hidden.bs.modal listener as backup
