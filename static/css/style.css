@@ -841,9 +841,61 @@ html, body {
 
 .content-body,
 .container,
-.container-fluid,
-.page-header-container {
+.container-fluid {
     background: transparent !important;
+}
+
+/* 1. Header legibility scrim & text styling */
+.page-header-container {
+    background: linear-gradient(180deg, rgba(5, 1, 15, 0.65) 0%, rgba(5, 1, 15, 0) 100%) !important;
+    padding: 1.25rem 1.5rem 1.75rem 1.5rem !important;
+    margin: -1.75rem -2rem 1.5rem -2rem !important;
+    border-radius: 0 0 16px 16px !important;
+}
+
+.page-header-container h1,
+.page-title-h1 {
+    color: #f4fbff !important;
+    text-shadow: 0 2px 18px rgba(5, 1, 15, 0.8) !important;
+    font-size: 1.75rem !important;
+    font-weight: 800 !important;
+}
+
+.page-subtitle-muted {
+    color: rgba(232, 246, 255, 0.8) !important;
+    text-shadow: 0 1px 10px rgba(5, 1, 15, 0.7) !important;
+}
+
+.page-subtitle-muted strong,
+.page-subtitle-muted .text-dark {
+    color: #f4fbff !important;
+}
+
+.page-subtitle-muted .badge {
+    background-color: rgba(43, 240, 255, 0.18) !important;
+    color: #2bf0ff !important;
+    border: 1px solid rgba(43, 240, 255, 0.35) !important;
+}
+
+/* 4. Secondary outline button (Products button, etc.) */
+.page-header-container .btn-outline-secondary,
+.btn-glass-outline {
+    border: 1px solid rgba(143, 230, 255, 0.35) !important;
+    background: rgba(10, 5, 36, 0.55) !important;
+    color: #e8f6ff !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    font-weight: 500 !important;
+    border-radius: 8px !important;
+    transition: all 0.2s ease !important;
+}
+
+.page-header-container .btn-outline-secondary:hover,
+.btn-glass-outline:hover {
+    border-color: rgba(43, 240, 255, 0.8) !important;
+    background: rgba(43, 240, 255, 0.15) !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 12px rgba(43, 240, 255, 0.25) !important;
 }
 
 /* Sidebar and top bar: solid dark navy */
@@ -860,6 +912,33 @@ html, body {
     border-top: 1px solid rgba(143, 230, 255, 0.12) !important;
 }
 
+/* 3. Sidebar badges */
+.app-sidebar .sidebar-item .badge {
+    color: #FFFFFF !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    min-width: 20px !important;
+    height: 19px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0 6px !important;
+    border-radius: 9999px !important;
+    line-height: 1 !important;
+    margin-left: auto !important;
+}
+
+.app-sidebar .sidebar-item .badge.bg-danger {
+    background-color: #EF4444 !important;
+    color: #FFFFFF !important;
+}
+
+.app-sidebar .sidebar-item .badge.bg-warning {
+    background-color: #F59E0B !important;
+    color: #000000 !important;
+}
+
+/* Top Navigation Bar */
 .top-navbar {
     background: #0B1B3A !important;
     border-bottom: 1px solid rgba(143, 230, 255, 0.15) !important;
@@ -876,6 +955,94 @@ html, body {
 
 .topbar-user-chip .text-dark {
     color: #e8f6ff !important;
+}
+
+/* 2. Top-bar elements */
+.topbar-kbd {
+    background: rgba(255, 255, 255, 0.08) !important;
+    color: rgba(232, 246, 255, 0.7) !important;
+    border: 1px solid rgba(143, 230, 255, 0.2) !important;
+    padding: 0.15rem 0.45rem !important;
+    border-radius: 6px !important;
+    font-size: 0.7rem !important;
+    font-family: inherit !important;
+    box-shadow: none !important;
+}
+
+.topbar-bell-btn {
+    position: relative !important;
+    width: 32px !important;
+    height: 32px !important;
+    border-radius: 50% !important;
+    border: 1px solid rgba(143, 230, 255, 0.25) !important;
+    background: rgba(10, 5, 36, 0.65) !important;
+    color: #e8f6ff !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 0.95rem !important;
+    transition: all 0.2s ease !important;
+    text-decoration: none !important;
+    padding: 0 !important;
+}
+
+.topbar-bell-btn:hover {
+    background: rgba(43, 240, 255, 0.15) !important;
+    border-color: rgba(43, 240, 255, 0.5) !important;
+    color: #2bf0ff !important;
+}
+
+.topbar-bell-btn i {
+    font-size: 0.95rem !important;
+}
+
+.topbar-bell-badge {
+    position: absolute !important;
+    top: -5px !important;
+    right: -5px !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    min-width: 17px !important;
+    height: 17px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0 4px !important;
+    border-radius: 9999px !important;
+    line-height: 1 !important;
+    border: 1px solid rgba(10, 5, 36, 0.9) !important;
+}
+
+.topbar-bell-badge.bg-danger {
+    background-color: #EF4444 !important;
+    color: #FFFFFF !important;
+}
+
+.topbar-bell-badge.bg-warning {
+    background-color: #F59E0B !important;
+    color: #000000 !important;
+}
+
+/* New Sale button in top bar: filled primary navy/cyan-gradient */
+.top-navbar .btn-navy,
+.top-navbar a[href*="pos"] {
+    background: linear-gradient(135deg, #0F2147 0%, #1d4ed8 50%, #0F2147 100%) !important;
+    border: 1px solid rgba(43, 240, 255, 0.5) !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 10px rgba(43, 240, 255, 0.25) !important;
+    font-weight: 600 !important;
+    padding: 0.35rem 0.85rem !important;
+    border-radius: 8px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.35rem !important;
+}
+
+.top-navbar .btn-navy:hover,
+.top-navbar a[href*="pos"]:hover {
+    border-color: #2bf0ff !important;
+    box-shadow: 0 4px 16px rgba(43, 240, 255, 0.45) !important;
+    color: #ffffff !important;
 }
 
 /* 2. Dark glass cards, tables, alert banners */
@@ -910,8 +1077,6 @@ html, body {
 }
 
 /* Text inside: primary #e8f6ff, secondary rgba(232, 246, 255, 0.65) */
-.page-header-container h1,
-.page-title-h1,
 h1, h2, h3, h4, h5, h6,
 .card-header,
 .card-title,
@@ -921,7 +1086,6 @@ h1, h2, h3, h4, h5, h6,
     color: #e8f6ff !important;
 }
 
-.page-subtitle-muted,
 .text-muted,
 .text-secondary,
 .small.text-muted,
@@ -930,7 +1094,7 @@ h1, h2, h3, h4, h5, h6,
     color: rgba(232, 246, 255, 0.65) !important;
 }
 
-/* Tables */
+/* 5. Table readability & Action Required table rows */
 .table {
     --bs-table-bg: transparent !important;
     --bs-table-color: #e8f6ff !important;
@@ -939,20 +1103,36 @@ h1, h2, h3, h4, h5, h6,
 }
 
 .table th {
-    background-color: rgba(10, 5, 36, 0.75) !important;
+    background-color: rgba(10, 5, 36, 0.8) !important;
     color: rgba(232, 246, 255, 0.85) !important;
-    border-bottom: 1px solid rgba(143, 230, 255, 0.18) !important;
+    border-bottom: 1px solid rgba(143, 230, 255, 0.2) !important;
+    font-size: 0.74rem !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.06em !important;
+}
+
+.table tbody tr {
+    background-color: rgba(10, 5, 36, 0.7) !important;
 }
 
 .table td {
     background-color: transparent !important;
     color: #e8f6ff !important;
-    border-bottom: 1px solid rgba(143, 230, 255, 0.08) !important;
+    border-bottom: 1px solid rgba(143, 230, 255, 0.1) !important;
 }
 
 .table-hover tbody tr:hover td {
-    background-color: rgba(143, 230, 255, 0.08) !important;
+    background-color: rgba(143, 230, 255, 0.12) !important;
     color: #ffffff !important;
+}
+
+.table td code {
+    color: #2bf0ff !important;
+    background: rgba(43, 240, 255, 0.12) !important;
+    padding: 2px 6px !important;
+    border-radius: 4px !important;
+    border: 1px solid rgba(43, 240, 255, 0.2) !important;
 }
 
 /* Brightened status badges on dark glass */
@@ -980,8 +1160,7 @@ h1, h2, h3, h4, h5, h6,
 }
 
 .badge.bg-warning,
-.text-warning,
-.topbar-bell-badge {
+.text-warning {
     color: #ffbe3b !important;
 }
 
@@ -1051,6 +1230,55 @@ h1, h2, h3, h4, h5, h6,
     border-color: rgba(143, 230, 255, 0.15) !important;
 }
 
+/* 6. Universal Dark Glass Overrides (Remove any white box/panel leaks) */
+.bg-white,
+.card-header.bg-white,
+.card-body.bg-white,
+.card-footer.bg-white,
+.card.bg-white,
+div.bg-white {
+    background-color: transparent !important;
+}
+
+.input-group-text.bg-white {
+    background-color: rgba(10, 5, 36, 0.75) !important;
+    border-color: rgba(143, 230, 255, 0.2) !important;
+    color: rgba(232, 246, 255, 0.7) !important;
+}
+
+@media screen {
+    .invoice-container.bg-white,
+    .thermal-receipt-container.bg-white {
+        background-color: rgba(10, 5, 36, 0.75) !important;
+        backdrop-filter: blur(14px) !important;
+        -webkit-backdrop-filter: blur(14px) !important;
+        border: 1px solid rgba(143, 230, 255, 0.2) !important;
+        color: #e8f6ff !important;
+    }
+}
+
+/* KPI Card Icons */
+.kpi-tile-navy {
+    background: rgba(15, 33, 71, 0.9) !important;
+    border: 1px solid rgba(143, 230, 255, 0.25) !important;
+    color: #2bf0ff !important;
+}
+.kpi-tile-blue {
+    background: rgba(37, 99, 235, 0.3) !important;
+    border: 1px solid rgba(37, 99, 235, 0.5) !important;
+    color: #60a5fa !important;
+}
+.kpi-tile-green {
+    background: rgba(16, 185, 129, 0.25) !important;
+    border: 1px solid rgba(16, 185, 129, 0.45) !important;
+    color: #34d399 !important;
+}
+.kpi-tile-red {
+    background: rgba(239, 68, 68, 0.25) !important;
+    border: 1px solid rgba(239, 68, 68, 0.45) !important;
+    color: #f87171 !important;
+}
+
 /* POS Specific Cards on Dark Glass */
 .pos-cart-panel {
     background: rgba(10, 5, 36, 0.6) !important;
@@ -1065,4 +1293,18 @@ h1, h2, h3, h4, h5, h6,
 .pos-product-card:hover {
     border-color: #2bf0ff !important;
     box-shadow: 0 4px 20px rgba(43, 240, 255, 0.2) !important;
+}
+
+/* Light/Dark Mode toggle consistency */
+[data-theme="light"] body {
+    color: #e8f6ff !important;
+}
+
+[data-theme="light"] .card,
+[data-theme="light"] .kpi-card,
+[data-theme="light"] .category-card,
+[data-theme="light"] .list-group-item,
+[data-theme="light"] .modal-content {
+    background: rgba(10, 5, 36, 0.5) !important;
+    border: 1px solid rgba(143, 230, 255, 0.2) !important;
 }

@@ -126,7 +126,7 @@ function initTunnel() {
     uColHigh: { value: hexToVec3('#2bf0ff') },
     uOpacity: { value: 1.44 },
     uSize: { value: 3.5 },
-    uBrightness: { value: 0.4 },
+    uBrightness: { value: 0.3 },
     uSwirl: { value: 0.39 },
     uScale: { value: 0.17 },
     uCursor: { value: new THREE.Vector3() },
