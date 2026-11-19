@@ -3,6 +3,106 @@
 {% block title %}Invoice {{ sale.invoice_number }} - {{ store.name }}{% endblock %}
 
 {% block content %}
+<style>
+/* ========================================================
+   FIX 1: Scoped Contrast Fix for Invoice White Boxes
+   ======================================================== */
+.invoice-bill-to-box,
+.invoice-info-box,
+.invoice-totals-box {
+    background-color: #ffffff !important;
+    border-color: #e2e8f0 !important;
+    color: #1a1a2e !important;
+}
+
+.invoice-bill-to-box,
+.invoice-info-box,
+.invoice-totals-box,
+.invoice-bill-to-box p,
+.invoice-bill-to-box span,
+.invoice-bill-to-box div,
+.invoice-bill-to-box strong,
+.invoice-bill-to-box h1, .invoice-bill-to-box h2, .invoice-bill-to-box h3, .invoice-bill-to-box h4, .invoice-bill-to-box h5, .invoice-bill-to-box h6,
+.invoice-bill-to-box label,
+.invoice-bill-to-box td,
+.invoice-bill-to-box th,
+.invoice-info-box p,
+.invoice-info-box span,
+.invoice-info-box div,
+.invoice-info-box strong,
+.invoice-info-box h1, .invoice-info-box h2, .invoice-info-box h3, .invoice-info-box h4, .invoice-info-box h5, .invoice-info-box h6,
+.invoice-info-box label,
+.invoice-info-box td,
+.invoice-info-box th,
+.invoice-totals-box p,
+.invoice-totals-box span,
+.invoice-totals-box div,
+.invoice-totals-box strong,
+.invoice-totals-box h1, .invoice-totals-box h2, .invoice-totals-box h3, .invoice-totals-box h4, .invoice-totals-box h5, .invoice-totals-box h6,
+.invoice-totals-box label,
+.invoice-totals-box td,
+.invoice-totals-box th {
+    color: #1a1a2e !important;
+}
+
+/* Labels / Headings: muted dark gray #555 */
+.invoice-bill-to-box h6.text-secondary,
+.invoice-info-box h6.text-secondary,
+.invoice-bill-to-box .text-secondary,
+.invoice-info-box .text-secondary,
+.invoice-totals-box .text-secondary,
+.invoice-bill-to-box .text-muted,
+.invoice-info-box .text-muted,
+.invoice-totals-box .text-muted,
+.invoice-bill-to-box label,
+.invoice-info-box label,
+.invoice-totals-box label {
+    color: #555555 !important;
+}
+
+/* Values & Strong elements: #111 */
+.invoice-bill-to-box strong,
+.invoice-info-box strong,
+.invoice-totals-box strong,
+.invoice-bill-to-box h6.text-dark,
+.invoice-info-box h6.text-dark,
+.invoice-bill-to-box .text-dark,
+.invoice-info-box .text-dark,
+.invoice-totals-box .text-dark,
+.invoice-totals-box .fw-semibold {
+    color: #111111 !important;
+}
+
+/* Totals Box: Subtotal, GST, Grand Total */
+.invoice-totals-box span.text-secondary {
+    color: #555555 !important;
+}
+
+.invoice-totals-box span.fw-semibold,
+.invoice-totals-box span.fw-bold {
+    color: #111111 !important;
+}
+
+.invoice-totals-box .border-top {
+    border-color: #cbd5e1 !important;
+}
+
+/* Grand Total: dark, with Grand Total bold */
+.invoice-totals-box .fs-5 .fw-bold {
+    color: #111111 !important;
+    font-weight: 700 !important;
+}
+
+.invoice-totals-box .fs-5 .text-primary {
+    color: #0b1b3a !important;
+    font-weight: 700 !important;
+}
+
+.invoice-totals-box .text-danger,
+.invoice-totals-box .text-danger * {
+    color: #dc2626 !important;
+}
+</style>
 <!-- Action Bar (Hidden when printing) -->
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4 no-print">
     <div class="d-flex gap-2 align-items-center">
@@ -72,7 +172,7 @@
     <!-- Customer & Cashier Metadata -->
     <div class="row g-3 mb-4">
         <div class="col-md-6">
-            <div class="p-3 bg-light rounded-3 h-100 border">
+            <div class="p-3 bg-light rounded-3 h-100 border invoice-bill-to-box">
                 <h6 class="text-secondary fw-bold text-uppercase small mb-2"><i class="bi bi-person-fill text-primary me-1"></i> Billed To:</h6>
                 {% if sale.customer_name %}
                 <h6 class="fw-bold text-dark mb-1">{{ sale.customer_name }}</h6>
@@ -89,7 +189,7 @@
         </div>
 
         <div class="col-md-6">
-            <div class="p-3 bg-light rounded-3 h-100 border">
+            <div class="p-3 bg-light rounded-3 h-100 border invoice-info-box">
                 <h6 class="text-secondary fw-bold text-uppercase small mb-2"><i class="bi bi-shop text-primary me-1"></i> Sale Details:</h6>
                 <div class="text-muted small">
                     <div><strong>Sold By:</strong> {{ sale.staff_name }} ({{ sale.staff_role }})</div>
@@ -187,7 +287,7 @@
         </div>
 
         <div class="col-md-6 col-lg-5">
-            <div class="p-3 bg-light rounded-3 border">
+            <div class="p-3 bg-light rounded-3 border invoice-totals-box">
                 <div class="d-flex justify-content-between text-secondary mb-2">
                     <span>Taxable Subtotal</span>
                     <span class="fw-semibold text-dark">{{ sale.subtotal|inr }}</span>

@@ -1309,9 +1309,14 @@ div.bg-white {
     border: 1px solid rgba(143, 230, 255, 0.2) !important;
 }
 
-/* Modal and Backdrop Stacking Insurance */
+/* Modal and Backdrop Stacking & Click-Through Prevention */
 .modal {
     z-index: 1065 !important;
+}
+
+.modal:not(.show) {
+    display: none !important;
+    pointer-events: none !important;
 }
 
 .modal-backdrop {
@@ -1320,4 +1325,13 @@ div.bg-white {
 
 .modal-backdrop.show {
     opacity: 0.65 !important;
+}
+
+.modal-backdrop:not(.show) {
+    display: none !important;
+    pointer-events: none !important;
+}
+
+body:not(.modal-open) {
+    pointer-events: auto !important;
 }

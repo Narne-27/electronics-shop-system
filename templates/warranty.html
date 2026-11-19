@@ -17,7 +17,7 @@
             <i class="bi bi-clipboard-check"></i>
             <span>Review Claims</span>
         </a>
-        <button type="button" class="btn btn-navy d-flex align-items-center gap-2 shadow-sm" data-bs-toggle="modal" data-bs-target="#claimModalGeneric">
+        <button type="button" class="btn btn-navy d-flex align-items-center gap-2 shadow-sm" data-action="claim" data-target-modal="#claimModalGeneric">
             <i class="bi bi-shield-plus"></i>
             <span>Register Claim</span>
         </button>
@@ -175,7 +175,7 @@
 <div class="card border-0 shadow-sm rounded-4">
     <div class="card-header bg-transparent py-3 d-flex justify-content-between align-items-center">
         <h5 class="mb-0 fw-bold"><i class="bi bi-tools text-primary me-2"></i>Service Claims & Diagnostic Review</h5>
-        <button type="button" class="btn btn-navy btn-sm d-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#claimModalGeneric">
+        <button type="button" class="btn btn-navy btn-sm d-flex align-items-center gap-1" data-action="claim" data-target-modal="#claimModalGeneric">
             <i class="bi bi-plus-circle"></i> New Claim
         </button>
     </div>
@@ -247,7 +247,7 @@
                             {% endif %}
                         </td>
                         <td class="text-end pe-4">
-                            <button type="button" class="btn btn-sm btn-outline-info d-flex align-items-center gap-1 ms-auto" data-bs-toggle="modal" data-bs-target="#reviewClaimModal{{ c.claim_id }}" title="Review Claim">
+                            <button type="button" class="btn btn-sm btn-outline-info d-flex align-items-center gap-1 ms-auto" data-action="review" data-target-modal="#reviewClaimModal{{ c.claim_id }}" title="Review Claim">
                                 <i class="bi bi-pencil-square"></i> Review
                             </button>
                         </td>
@@ -339,18 +339,18 @@
                         </td>
                         <td class="text-end pe-4">
                             <div class="btn-group btn-group-sm">
-                                <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#viewModal{{ w.item_id }}" title="View Certificate">
+                                <button type="button" class="btn btn-outline-primary" data-action="view" data-target-modal="#viewModal{{ w.item_id }}" title="View Certificate">
                                     <i class="bi bi-eye"></i> View
                                 </button>
-                                <button type="button" class="btn btn-outline-warning text-dark" data-bs-toggle="modal" data-bs-target="#claimModal{{ w.item_id }}" title="Register Claim">
+                                <button type="button" class="btn btn-outline-warning text-dark" data-action="claim" data-target-modal="#claimModal{{ w.item_id }}" title="Register Claim">
                                     <i class="bi bi-tools"></i> Claim
                                 </button>
                                 {% if w.claim_id %}
-                                <button type="button" class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#reviewClaimModal{{ w.claim_id }}" title="Review Claim ({{ w.claim_status }})">
+                                <button type="button" class="btn btn-outline-info" data-action="review" data-target-modal="#reviewClaimModal{{ w.claim_id }}" title="Review Claim ({{ w.claim_status }})">
                                     <i class="bi bi-clipboard-check"></i> Review
                                 </button>
                                 {% endif %}
-                                <button type="button" class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#renewModal{{ w.item_id }}" title="Renew Coverage">
+                                <button type="button" class="btn btn-outline-success" data-action="renew" data-target-modal="#renewModal{{ w.item_id }}" title="Renew Coverage">
                                     <i class="bi bi-arrow-repeat"></i> Renew
                                 </button>
                             </div>
@@ -626,4 +626,149 @@
 </div>
 {% endfor %}
 
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ========================================================
+// FIX 2: Single Master Modal Lifecycle & Delegation
+// ========================================================
+
+let activeModalEl = null;
+
+function closeModal(targetModal) {
+    try {
+        const modalToClose = targetModal || activeModalEl || document.querySelector('.modal.show');
+        if (modalToClose) {
+            if (window.bootstrap && bootstrap.Modal) {
+                const instance = bootstrap.Modal.getInstance(modalToClose);
+                if (instance) {
+                    try { instance.hide(); } catch (e) {}
+                }
+            }
+            modalToClose.classList.remove('show');
+            modalToClose.style.display = 'none';
+            modalToClose.style.pointerEvents = 'none';
+            modalToClose.setAttribute('aria-hidden', 'true');
+            modalToClose.removeAttribute('aria-modal');
+        }
+    } catch (err) {
+        console.warn('Error during closeModal:', err);
+    } finally {
+        // 1. Remove all lingering backdrop elements from DOM
+        document.querySelectorAll('.modal-backdrop').forEach(el => {
+            el.classList.remove('show');
+            el.style.pointerEvents = 'none';
+            el.remove();
+        });
+
+        // 2. Clear all locked body & html styles/classes
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('padding-right');
+        document.body.style.removeProperty('pointer-events');
+
+        if (document.documentElement) {
+            document.documentElement.classList.remove('modal-open');
+            document.documentElement.style.removeProperty('overflow');
+            document.documentElement.style.removeProperty('pointer-events');
+        }
+
+        // 3. Ensure any modal without .show is strictly hidden and non-blocking
+        document.querySelectorAll('.modal:not(.show)').forEach(m => {
+            m.style.display = 'none';
+            m.style.pointerEvents = 'none';
+            m.setAttribute('aria-hidden', 'true');
+        });
+
+        activeModalEl = null;
+    }
+}
+
+function openModal(selectorOrId) {
+    try {
+        // Always cleanly close any existing modal first
+        closeModal();
+
+        const selector = selectorOrId.startsWith('#') ? selectorOrId : '#' + selectorOrId;
+        const modalEl = document.querySelector(selector);
+        if (!modalEl) {
+            console.warn('Target modal not found:', selectorOrId);
+            return;
+        }
+
+        activeModalEl = modalEl;
+        modalEl.style.display = 'block';
+        modalEl.style.pointerEvents = 'auto';
+
+        if (window.bootstrap && bootstrap.Modal) {
+            const instance = bootstrap.Modal.getOrCreateInstance(modalEl, {
+                backdrop: true,
+                keyboard: true,
+                focus: true
+            });
+            instance.show();
+        } else {
+            modalEl.classList.add('show');
+            modalEl.removeAttribute('aria-hidden');
+            modalEl.setAttribute('aria-modal', 'true');
+            document.body.classList.add('modal-open');
+        }
+    } catch (err) {
+        console.error('Error opening modal:', err);
+        closeModal();
+    }
+}
+
+// Delegated event listener on document for View / Claim / Renew / Review
+document.addEventListener('click', function(e) {
+    // 1. Action buttons: View, Claim, Renew, Review
+    const actionBtn = e.target.closest('[data-action]');
+    if (actionBtn) {
+        const targetModal = actionBtn.getAttribute('data-target-modal') || actionBtn.getAttribute('data-bs-target');
+        if (targetModal) {
+            e.preventDefault();
+            e.stopPropagation();
+            openModal(targetModal);
+            return;
+        }
+    }
+
+    // 2. Dismiss buttons: Close, Cancel, X
+    const dismissBtn = e.target.closest('[data-bs-dismiss="modal"], .btn-close');
+    if (dismissBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        closeModal();
+        return;
+    }
+
+    // 3. Direct click on modal background backdrop
+    if (e.target.classList.contains('modal') && e.target.classList.contains('show')) {
+        closeModal(e.target);
+        return;
+    }
+
+    // 4. "View Invoice" link inside certificate modal: clean up before leaving
+    const viewInvoiceBtn = e.target.closest('a[href*="/invoice/"]');
+    if (viewInvoiceBtn && viewInvoiceBtn.closest('.modal')) {
+        closeModal();
+    }
+});
+
+// Escape key listener for modal exit
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' || e.key === 'Esc') {
+        const openModalEl = document.querySelector('.modal.show');
+        if (openModalEl) {
+            closeModal(openModalEl);
+        }
+    }
+});
+
+// Bootstrap hidden.bs.modal listener as backup
+document.addEventListener('hidden.bs.modal', function(e) {
+    closeModal(e.target);
+});
+</script>
 {% endblock %}
