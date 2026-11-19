@@ -68,10 +68,6 @@
                 <span class="badge bg-warning text-dark rounded-pill ms-auto" style="font-size: 0.65rem;" title="{{ expiring_warranties_count }} expiring soon">{{ expiring_warranties_count }}</span>
                 {% endif %}
             </a>
-            <a href="{{ url_for('barcode_labels') }}" class="sidebar-item {% if request.endpoint == 'barcode_labels' %}active{% endif %}">
-                <i class="bi bi-upc-scan"></i>
-                <span data-i18n="barcodes">Barcodes</span>
-            </a>
 
             <!-- SALES -->
             <div class="nav-group-header" data-i18n="sales">Sales</div>
@@ -105,10 +101,6 @@
 
             <!-- OPERATIONS -->
             <div class="nav-group-header" data-i18n="operations">Operations</div>
-            <a href="{{ url_for('purchase_orders') }}" class="sidebar-item {% if request.endpoint == 'purchase_orders' %}active{% endif %}">
-                <i class="bi bi-truck"></i>
-                <span data-i18n="purchase_orders">Suppliers & POs</span>
-            </a>
             <a href="{{ url_for('repair_tickets') }}" class="sidebar-item {% if request.endpoint == 'repair_tickets' %}active{% endif %}">
                 <i class="bi bi-tools"></i>
                 <span data-i18n="repair_tickets">Repair Tickets</span>
@@ -302,7 +294,6 @@
                 <a href="{{ url_for('customer_dues') }}" class="sidebar-item">Customer Dues</a>
 
                 <div class="nav-group-header">Operations</div>
-                <a href="{{ url_for('purchase_orders') }}" class="sidebar-item">Suppliers & POs</a>
                 <a href="{{ url_for('repair_tickets') }}" class="sidebar-item">Repair Tickets</a>
 
                 {% if current_user.role in ['System Administrator', 'Admin', 'Shop Owner', 'Shop Manager', 'Manager'] %}

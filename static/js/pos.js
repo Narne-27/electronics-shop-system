@@ -9,15 +9,20 @@ let appliedCoupon = null;
 let ownerApproved = false;
 let ownerApprovalPin = '';
 
-const inrFormatter = new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    maximumFractionDigits: 0
-});
+// Shared inrFormatter and formatINR are loaded from main.js; define fallback if loaded standalone
+if (typeof inrFormatter === 'undefined') {
+    var inrFormatter = new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: 'INR',
+        maximumFractionDigits: 0
+    });
+}
 
-function formatINR(val) {
-    if (val === null || val === undefined || isNaN(val)) return '₹0';
-    return inrFormatter.format(Math.round(val));
+if (typeof formatINR === 'undefined') {
+    var formatINR = function(val) {
+        if (val === null || val === undefined || isNaN(val)) return '₹0';
+        return inrFormatter.format(Math.round(val));
+    };
 }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -474,7 +479,7 @@ async function processCheckout() {
         })),
         customer_id: customerId,
         payment_method: paymentMethod,
-        payment_status: paymentMethod === 'Pay Later' ? 'Pending' : 'Paid',
+        payment_status: (paymentMethod === 'Pay Later' || paymentMethod === 'Credit') ? 'Pending' : 'Paid',
         tax_rate: taxRate,
         discount_amount: discount,
         discount_type: appliedCoupon ? appliedCoupon.code : 'manual',

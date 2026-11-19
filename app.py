@@ -1199,7 +1199,7 @@ def pos_checkout():
         emi_monthly = round(emi_grand / emi_months, 2)
 
     # Payment ledger calculations
-    if payment_method == 'Pay Later':
+    if payment_method in ['Pay Later', 'Credit']:
         payment_status = 'Pending'
         amount_paid = 0.0
         balance_due = grand_total
@@ -1723,106 +1723,6 @@ def customer_dues_pay():
         flash(f"Error recording payment: {str(e)}", 'danger')
 
     return redirect(url_for('customer_dues'))
-
-
-# ==========================================================
-# STEP 4: OPERATIONS - SUPPLIERS & PURCHASE ORDERS
-# ==========================================================
-
-@app.route('/purchase-orders')
-@login_required
-def purchase_orders():
-    pos = db.query("""
-        SELECT po.*, s.supplier_name, s.phone,
-               (SELECT COUNT(*) FROM PURCHASE_ORDER_ITEM poi WHERE poi.po_id = po.po_id) as item_count
-        FROM PURCHASE_ORDER po
-        JOIN SUPPLIER s ON po.supplier_id = s.supplier_id
-        ORDER BY po.po_id DESC
-    """)
-    suppliers = db.query("SELECT * FROM SUPPLIER ORDER BY supplier_name ASC")
-
-    # Reorder suggestions: items at or below reorder level
-    reorder_items = db.query("""
-        SELECT p.*, c.category_name 
-        FROM PRODUCT p
-        JOIN CATEGORY c ON p.category_id = c.category_id
-        WHERE p.stock_quantity <= p.reorder_level
-        ORDER BY p.stock_quantity ASC
-    """)
-
-    return render_template('operations/purchase_orders.html',
-                           purchase_orders=pos,
-                           suppliers=suppliers,
-                           reorder_items=reorder_items)
-
-
-@app.route('/purchase-orders/create-auto-po', methods=['POST'])
-@login_required
-@roles_required('Admin', 'Manager', 'Shop Owner')
-def create_auto_reorder_po():
-    """Generates draft purchase orders for all low stock items in 1 click."""
-    today = get_app_today()
-    low_items = db.query("SELECT * FROM PRODUCT WHERE stock_quantity <= reorder_level")
-    if not low_items:
-        flash('All inventory levels are optimal. No restock orders needed.', 'info')
-        return redirect(url_for('purchase_orders'))
-
-    supplier = db.query_one("SELECT supplier_id FROM SUPPLIER LIMIT 1")
-    sid = supplier['supplier_id'] if supplier else 1
-
-    po_seq = db.query_one("SELECT COUNT(*) as c FROM PURCHASE_ORDER")['c'] + 1
-    po_num = f"PO-{today.year}-{po_seq:04d}"
-
-    total_est = sum(p['cost_price'] * (p['reorder_level'] * 2) for p in low_items)
-
-    try:
-        db.execute("""
-            INSERT INTO PURCHASE_ORDER (po_number, supplier_id, order_date, expected_date, status, total_amount, notes)
-            VALUES (%s, %s, %s, %s, 'Draft', %s, '1-Click Auto Reorder for Low Stock SKUs')
-        """, (po_num, sid, today.strftime('%Y-%m-%d'), (today + datetime.timedelta(days=7)).strftime('%Y-%m-%d'), total_est))
-
-        po_id = db.query_one("SELECT po_id FROM PURCHASE_ORDER WHERE po_number = %s", (po_num,))['po_id']
-        for p in low_items:
-            reorder_qty = max(5, p['reorder_level'] * 2)
-            db.execute("""
-                INSERT INTO PURCHASE_ORDER_ITEM (po_id, product_id, quantity_ordered, unit_cost, total_cost)
-                VALUES (%s, %s, %s, %s, %s)
-            """, (po_id, p['product_id'], reorder_qty, p['cost_price'], p['cost_price'] * reorder_qty))
-
-        log_audit('AUTO_PO', 'Operations', f"Generated draft PO {po_num} for {len(low_items)} low-stock SKUs")
-        flash(f"Draft purchase order {po_num} created for {len(low_items)} products (Total: ₹{total_est:,.2f}).", 'success')
-    except Exception as e:
-        flash(f"Error creating restock PO: {str(e)}", 'danger')
-
-    return redirect(url_for('purchase_orders'))
-
-
-@app.route('/purchase-orders/receive/<int:po_id>', methods=['POST'])
-@login_required
-@roles_required('Admin', 'Manager', 'Shop Owner')
-def purchase_order_receive(po_id):
-    po = db.query_one("SELECT * FROM PURCHASE_ORDER WHERE po_id = %s", (po_id,))
-    if not po or po['status'] == 'Received':
-        flash('Invalid PO or goods already received.', 'warning')
-        return redirect(url_for('purchase_orders'))
-
-    items = db.query("SELECT * FROM PURCHASE_ORDER_ITEM WHERE po_id = %s", (po_id,))
-    try:
-        for it in items:
-            db.execute("UPDATE PRODUCT SET stock_quantity = stock_quantity + %s WHERE product_id = %s", (it['quantity_ordered'], it['product_id']))
-            db.execute("""
-                INSERT INTO STOCK_MOVEMENT (product_id, movement_type, quantity, reason, reference_id, notes)
-                VALUES (%s, 'IN', %s, 'Supplier PO Receipt', %s, 'Restock delivery receipt')
-            """, (it['product_id'], it['quantity_ordered'], po['po_number']))
-            db.execute("UPDATE PURCHASE_ORDER_ITEM SET quantity_received = %s WHERE po_item_id = %s", (it['quantity_ordered'], it['po_item_id']))
-
-        db.execute("UPDATE PURCHASE_ORDER SET status = 'Received' WHERE po_id = %s", (po_id,))
-        log_audit('PO_RECEIVED', 'Operations', f"Received goods against PO {po['po_number']}")
-        flash(f"Goods against {po['po_number']} received. Stock levels updated successfully.", 'success')
-    except Exception as e:
-        flash(f"Error receiving PO: {str(e)}", 'danger')
-
-    return redirect(url_for('purchase_orders'))
 
 
 # ==========================================================
@@ -2673,18 +2573,6 @@ def settings_restore_json():
     return redirect(url_for('settings'))
 
 
-@app.route('/products/barcode-labels')
-@login_required
-def barcode_labels():
-    products = db.query("""
-        SELECT p.*, c.category_name 
-        FROM PRODUCT p
-        JOIN CATEGORY c ON p.category_id = c.category_id
-        ORDER BY p.product_code ASC
-    """)
-    return render_template('system/barcode_labels.html', products=products)
-
-
 @app.route('/api/global-search')
 @login_required
 def api_global_search():
@@ -2767,7 +2655,7 @@ def users():
         {'module': 'Inventory Restock', 'desc': 'Manual stock in/out and adjustments', 'roles': {'Shop Owner': True, 'System Administrator': True, 'Shop Manager': True, 'Sales Staff': False}},
         {'module': 'Warranty & Service', 'desc': 'Serial lookup and register warranty claims', 'roles': {'Shop Owner': True, 'System Administrator': True, 'Shop Manager': True, 'Sales Staff': True}},
         {'module': 'Customer CRM', 'desc': 'Customer directory, history and ledger', 'roles': {'Shop Owner': True, 'System Administrator': True, 'Shop Manager': True, 'Sales Staff': True}},
-        {'module': 'Suppliers & POs', 'desc': 'Purchase orders and receiving goods', 'roles': {'Shop Owner': True, 'System Administrator': True, 'Shop Manager': True, 'Sales Staff': False}},
+        {'module': 'Quotations & Returns', 'desc': 'Price estimates, credit notes and returns', 'roles': {'Shop Owner': True, 'System Administrator': True, 'Shop Manager': True, 'Sales Staff': False}},
         {'module': 'Financial Reports & P&L', 'desc': 'Sales reports, GST, expenses, P&L', 'roles': {'Shop Owner': True, 'System Administrator': True, 'Shop Manager': True, 'Sales Staff': False}},
         {'module': 'Settings & Audit Log', 'desc': 'Store settings, backup, date override', 'roles': {'Shop Owner': True, 'System Administrator': True, 'Shop Manager': False, 'Sales Staff': False}}
     ]
