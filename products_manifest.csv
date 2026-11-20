@@ -1,0 +1,32 @@
+name,brand,model,sku,category,status,current_image_url,source
+Samsung Galaxy S24 Ultra 512GB,Samsung,SM-S928B,ELEC-SMP-001,Smartphones & Tablets,real,/static/images/products/samsung-galaxy-s24-ultra-512gb.webp,wikimedia
+Apple iPhone 15 Pro Max 256GB,Apple,MU783HN/A,ELEC-SMP-002,Smartphones & Tablets,real,/static/images/products/apple-iphone-15-pro-max-256gb.webp,wikimedia
+Xiaomi Redmi Note 13 Pro+ 5G,Xiaomi,23090RA98I,ELEC-SMP-003,Smartphones & Tablets,real,/static/images/products/xiaomi-redmi-note-13-pro-5g.webp,wikimedia
+OnePlus 12 5G 256GB,OnePlus,CPH2581,ELEC-SMP-004,Smartphones & Tablets,real,/static/images/products/oneplus-12-5g-256gb.webp,wikimedia
+"Apple iPad Air 11"" M2 128GB",Apple,MUWC3HN/A,ELEC-SMP-005,Smartphones & Tablets,real,/static/images/products/apple-ipad-air-11-m2-128gb.webp,wikimedia
+HP Pavilion 15 Core i7 16GB,HP,15-eg3079TX,ELEC-LAP-001,Laptops & Computers,real,/static/images/products/hp-pavilion-15-core-i7-16gb.webp,generated
+Dell Inspiron 15 16GB SSD,Dell,IN3530-7718,ELEC-LAP-002,Laptops & Computers,real,/static/images/products/dell-inspiron-15-16gb-ssd.webp,generated
+"Apple MacBook Air 13"" M2",Apple,MLXW3HN/A,ELEC-LAP-003,Laptops & Computers,real,/static/images/products/apple-macbook-air-13-m2.webp,generated
+Asus ROG Zephyrus G16,Asus,GU605MY-QR052W,ELEC-LAP-004,Laptops & Computers,real,/static/images/products/asus-rog-zephyrus-g16.webp,generated
+"Lenovo IdeaPad Slim 3 15""",Lenovo,83ER0088IN,ELEC-LAP-005,Laptops & Computers,real,/static/images/products/lenovo-ideapad-slim-3-15.webp,wikimedia
+Logitech MX Keys Wireless Keyboard,Logitech,920-009295,ELEC-ACC-001,Laptops & Computers,real,/static/images/products/logitech-mx-keys-wireless-keyboard.webp,wikimedia
+SanDisk Extreme 1TB Portable SSD,SanDisk,SDSSDE61-1T00-G25,ELEC-ACC-002,Laptops & Computers,real,/static/images/products/sandisk-extreme-1tb-portable-ssd.webp,wikimedia
+boAt Airdopes 141 ANC Earbuds,boAt,Airdopes 141 ANC,ELEC-AUD-001,Audio & Sound,real,/static/images/products/boat-airdopes-141-anc-earbuds.webp,wikimedia
+JBL Flip 6 Waterproof Speaker,JBL,JBLFLIP6BLKIN,ELEC-AUD-002,Audio & Sound,real,/static/images/products/jbl-flip-6-waterproof-speaker.webp,wikimedia
+Sony WH-1000XM5 Headphones,Sony,WH1000XM5/B,ELEC-AUD-003,Audio & Sound,real,/static/images/products/sony-wh-1000xm5-headphones.webp,generated
+boAt Stone 1200 Bluetooth Speaker,boAt,Stone 1200 BK,ELEC-AUD-004,Audio & Sound,real,/static/images/products/boat-stone-1200-bluetooth-speaker.webp,wikimedia
+Marshall Stanmore III Speaker,Marshall,1006010,ELEC-AUD-005,Audio & Sound,real,/static/images/products/marshall-stanmore-iii-speaker.webp,wikimedia
+"Mi TV 43"" 4K Google TV",Xiaomi,L43M8-A2IN,ELEC-DIS-001,Smart TVs & Displays,real,/static/images/products/mi-tv-43-4k-google-tv.webp,wikimedia
+"LG 55"" OLED 4K Smart Cinema TV",LG,OLED55B4PSA,ELEC-DIS-002,Smart TVs & Displays,real,/static/images/products/lg-55-oled-4k-smart-cinema-tv.webp,wikimedia
+"Samsung 65"" Neo QLED 4K TV",Samsung,QA65QN85DAULXL,ELEC-DIS-003,Smart TVs & Displays,real,/static/images/products/samsung-65-neo-qled-4k-tv.webp,wikimedia
+"Sony Bravia 55"" 4K Google TV",Sony,KD-55X74L,ELEC-DIS-004,Smart TVs & Displays,real,/static/images/products/sony-bravia-55-4k-google-tv.webp,wikimedia
+Amazon Echo Dot 5th Gen Clock,Amazon,B09B8W5FW7,ELEC-IOT-001,Smart Home & IoT,real,/static/images/products/amazon-echo-dot-5th-gen-clock.webp,wikimedia
+Dyson V12 Detect Slim Vacuum,Dyson,368340-01,ELEC-IOT-002,Smart Home & IoT,real,/static/images/products/dyson-v12-detect-slim-vacuum.webp,wikimedia
+TP-Link Archer AX73 WiFi 6,TP-Link,Archer AX73,ELEC-IOT-003,Smart Home & IoT,real,/static/images/products/tp-link-archer-ax73-wifi-6.webp,wikimedia
+Wipro 16A Smart WiFi Plug,Wipro,DS22000,ELEC-IOT-004,Smart Home & IoT,real,/static/images/products/wipro-16a-smart-wifi-plug.webp,wikimedia
+Anker 65W GaN Fast Charger,Anker,A2663111,ELEC-ACC-003,Smart Home & IoT,real,/static/images/products/anker-65w-gan-fast-charger.webp,wikimedia
+Sony PlayStation 5 Slim 1TB,Sony,CFI-2008A01X,ELEC-GAM-001,Gaming & Consoles,real,/static/images/products/sony-playstation-5-slim-1tb.webp,wikimedia
+Microsoft Xbox Series X 1TB,Microsoft,RRT-00021,ELEC-GAM-002,Gaming & Consoles,real,/static/images/products/microsoft-xbox-series-x-1tb.webp,generated
+Nintendo Switch OLED Model,Nintendo,HEG-S-KABAA,ELEC-GAM-003,Gaming & Consoles,real,/static/images/products/nintendo-switch-oled-model.webp,wikimedia
+Apple Watch Series 9 GPS 45mm,Apple,MR9A3HN/A,ELEC-WRB-001,Wearables & Fitness,real,/static/images/products/apple-watch-series-9-gps-45mm.webp,wikimedia
+Noise ColorFit Pro 5 Smartwatch,Noise,WPB-012,ELEC-WRB-002,Wearables & Fitness,real,/static/images/products/noise-colorfit-pro-5-smartwatch.webp,wikimedia

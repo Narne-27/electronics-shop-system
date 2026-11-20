@@ -1580,3 +1580,105 @@ div.bg-white {
 body:not(.modal-open) {
     pointer-events: auto !important;
 }
+
+/* ========================================================
+   Part A2: Dark-Glass Toolbar Buttons & Scrim (Invoice & Similar)
+   ======================================================== */
+.invoice-toolbar-scrim,
+.toolbar-scrim {
+    background: rgba(10, 5, 36, 0.72) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    border: 1px solid rgba(143, 230, 255, 0.25) !important;
+    border-radius: 16px !important;
+    padding: 12px 18px !important;
+    box-shadow: 0 8px 32px rgba(5, 1, 15, 0.45) !important;
+}
+
+.invoice-toolbar-btn,
+.dark-glass-btn,
+.invoice-toolbar-scrim .btn {
+    background: rgba(10, 5, 36, 0.7) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    border: 1px solid rgba(143, 230, 255, 0.3) !important;
+    color: #e8f6ff !important;
+    font-weight: 600 !important;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.invoice-toolbar-btn:hover,
+.dark-glass-btn:hover,
+.invoice-toolbar-scrim .btn:hover {
+    border-color: rgba(143, 230, 255, 0.6) !important;
+    color: #ffffff !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 4px 14px rgba(43, 240, 255, 0.25) !important;
+}
+
+.invoice-toolbar-btn.active,
+.invoice-toolbar-btn:active,
+.dark-glass-btn.active,
+.invoice-toolbar-scrim .btn.active {
+    background: linear-gradient(135deg, #0b1b3a 0%, #00b4d8 100%) !important;
+    border-color: rgba(143, 230, 255, 0.8) !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 16px rgba(43, 240, 255, 0.4) !important;
+}
+
+/* Fix WhatsApp button: keep green accent, brighter text */
+.invoice-btn-whatsapp,
+.invoice-toolbar-scrim .btn-outline-success {
+    background: rgba(10, 5, 36, 0.7) !important;
+    border-color: rgba(37, 211, 102, 0.6) !important;
+    color: #25d366 !important;
+}
+
+.invoice-btn-whatsapp:hover,
+.invoice-toolbar-scrim .btn-outline-success:hover {
+    border-color: #25d366 !important;
+    color: #4ade80 !important;
+    box-shadow: 0 4px 14px rgba(37, 211, 102, 0.35) !important;
+}
+
+/* Primary / Print / Save PDF / New Sale */
+.invoice-btn-primary,
+.invoice-toolbar-scrim .btn-navy {
+    background: linear-gradient(135deg, #0f2147 0%, #1e40af 100%) !important;
+    border-color: rgba(143, 230, 255, 0.4) !important;
+    color: #ffffff !important;
+}
+
+.invoice-btn-primary:hover,
+.invoice-toolbar-scrim .btn-navy:hover {
+    border-color: rgba(143, 230, 255, 0.8) !important;
+    box-shadow: 0 4px 16px rgba(43, 240, 255, 0.35) !important;
+}
+
+/* ========================================================
+   Part A3: Dashboard Header Text & Shop Owner Pill
+   ======================================================== */
+[data-bg-intensity="hero"] .page-title-h1,
+.dashboard-hero-title {
+    text-shadow: 0 2px 14px rgba(5, 1, 15, 0.8) !important;
+}
+
+[data-bg-intensity="hero"] .page-subtitle-muted,
+.dashboard-hero-subtitle {
+    text-shadow: 0 2px 14px rgba(5, 1, 15, 0.8) !important;
+    color: rgba(232, 246, 255, 0.85) !important;
+}
+
+[data-bg-intensity="hero"] .page-subtitle-muted strong {
+    color: #ffffff !important;
+}
+
+.role-pill-shop-owner,
+[data-bg-intensity="hero"] .page-header-container .badge {
+    background: rgba(10, 5, 36, 0.7) !important;
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+    color: #8fe6ff !important;
+    border: 1px solid rgba(143, 230, 255, 0.3) !important;
+    font-weight: 600 !important;
+}

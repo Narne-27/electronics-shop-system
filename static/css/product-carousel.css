@@ -364,3 +364,75 @@
         margin-top: 12px;
     }
 }
+
+/* ========================================================
+   Part B4: Radial Glow & Readable Product Image Enhancements
+   ======================================================== */
+.pc-card--dark .pc-card-image-wrap::before {
+    content: '';
+    position: absolute;
+    width: 220px;
+    height: 220px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(43, 240, 255, 0.16) 0%, rgba(122, 60, 255, 0.08) 50%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* POS product card centered ~96px thumb with radial glow on dark cards */
+.pos-thumb-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 96px;
+    width: 100%;
+}
+
+.pos-thumb-wrap::before {
+    content: '';
+    position: absolute;
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(143, 230, 255, 0.15) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+.pos-product-image {
+    width: 96px;
+    height: 96px;
+    max-width: 96px;
+    max-height: 96px;
+    object-fit: contain;
+    position: relative;
+    z-index: 1;
+    filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.3));
+    transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.pos-product-card:hover .pos-product-image {
+    transform: scale(1.06);
+}
+
+/* Table and inventory rows thumbnails */
+.table-product-thumb {
+    width: 44px;
+    height: 44px;
+    object-fit: contain;
+    background: rgba(10, 5, 36, 0.6);
+    border: 1px solid rgba(143, 230, 255, 0.25);
+    border-radius: 8px;
+    padding: 2px;
+}
+
+.inventory-product-thumb {
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+    background: rgba(10, 5, 36, 0.6);
+    border: 1px solid rgba(143, 230, 255, 0.25);
+    border-radius: 8px;
+    padding: 2px;
+}

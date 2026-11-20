@@ -264,14 +264,92 @@ function initTunnel() {
   torusComposer.renderToScreen = false;
   torusComposer.addPass(renderScene);
   torusComposer.addPass(new ShaderPass(GammaCorrectionShader));
-  torusComposer.addPass(new UnrealBloomPass(new THREE.Vector2(w, h), 0.22, 0.2, 0));
+  const torusBloomPass = new UnrealBloomPass(new THREE.Vector2(w, h), 0.22, 0.2, 0);
+  torusComposer.addPass(torusBloomPass);
   torusComposer.addPass(new ShaderPass(CopyShader));
 
   const bloomComposer = new EffectComposer(renderer);
   bloomComposer.renderToScreen = false;
   bloomComposer.addPass(renderScene);
-  bloomComposer.addPass(new UnrealBloomPass(new THREE.Vector2(w, h), 0.7, 0.6, 0));
+  const mainBloomPass = new UnrealBloomPass(new THREE.Vector2(w, h), 0.7, 0.6, 0);
+  bloomComposer.addPass(mainBloomPass);
   bloomComposer.addPass(new ShaderPass(GammaCorrectionShader));
+
+  // Intensity Modes: hero (Dashboard) vs calm (inner pages)
+  const INTENSITIES = {
+    hero: {
+      uBrightness: 0.3,
+      uOpacity: 1.0,
+      uSize: 3.5,
+      overlay: 0.0,
+      bloom1: 0.7,
+      bloom2: 0.22
+    },
+    calm: {
+      uBrightness: 0.15,
+      uOpacity: 0.6,
+      uSize: 2.5,
+      overlay: 0.45,
+      bloom1: 0.35,
+      bloom2: 0.12
+    }
+  };
+
+  const overlayEl = document.getElementById('tunnel-overlay');
+  let currentIntensityMode = (document.body && document.body.dataset.bgIntensity === 'hero') ? 'hero' : 'calm';
+  let targetIntensity = INTENSITIES[currentIntensityMode] || INTENSITIES.calm;
+  const currentIntensityVals = {
+    uBrightness: targetIntensity.uBrightness,
+    uOpacity: targetIntensity.uOpacity,
+    uSize: targetIntensity.uSize,
+    overlay: targetIntensity.overlay,
+    bloom1: targetIntensity.bloom1,
+    bloom2: targetIntensity.bloom2
+  };
+
+  // Apply initial settings immediately
+  uniforms.uBrightness.value = currentIntensityVals.uBrightness;
+  uniforms.uOpacity.value = currentIntensityVals.uOpacity;
+  uniforms.uSize.value = currentIntensityVals.uSize;
+  mainBloomPass.strength = currentIntensityVals.bloom1;
+  torusBloomPass.strength = currentIntensityVals.bloom2;
+  if (overlayEl) overlayEl.style.opacity = currentIntensityVals.overlay;
+
+  function setIntensity(mode) {
+    if (!INTENSITIES[mode]) mode = 'calm';
+    currentIntensityMode = mode;
+    targetIntensity = INTENSITIES[mode];
+    if (isReducedMotion) {
+      currentIntensityVals.uBrightness = targetIntensity.uBrightness;
+      currentIntensityVals.uOpacity = targetIntensity.uOpacity;
+      currentIntensityVals.uSize = targetIntensity.uSize;
+      currentIntensityVals.overlay = targetIntensity.overlay;
+      currentIntensityVals.bloom1 = targetIntensity.bloom1;
+      currentIntensityVals.bloom2 = targetIntensity.bloom2;
+
+      uniforms.uBrightness.value = currentIntensityVals.uBrightness;
+      uniforms.uOpacity.value = currentIntensityVals.uOpacity;
+      uniforms.uSize.value = currentIntensityVals.uSize;
+      mainBloomPass.strength = currentIntensityVals.bloom1;
+      torusBloomPass.strength = currentIntensityVals.bloom2;
+      if (overlayEl) overlayEl.style.opacity = currentIntensityVals.overlay;
+    }
+  }
+
+  // Observe data-bg-intensity changes on body (AJAX/SPA navigation support)
+  const bodyIntensityObserver = new MutationObserver(() => {
+    const mode = (document.body && document.body.dataset.bgIntensity === 'hero') ? 'hero' : 'calm';
+    if (mode !== currentIntensityMode) {
+      setIntensity(mode);
+    }
+  });
+  if (document.body) {
+    bodyIntensityObserver.observe(document.body, { attributes: true, attributeFilter: ['data-bg-intensity'] });
+  }
+
+  window.setIntensity = setIntensity;
+  window.setTunnelIntensity = setIntensity;
+  window.Tunnel = { setIntensity };
 
   const finalPass = new ShaderPass(FinalPass);
   finalPass.uniforms.bloomTexture.value = bloomComposer.renderTarget1.texture;
@@ -440,6 +518,22 @@ function initTunnel() {
       scrollCurrent = Lerp(scrollCurrent, scrollSmooth, 0.06);
       mouse.x = Lerp(mouse.x, mouseTarget.x, 0.06);
       mouse.y = Lerp(mouse.y, mouseTarget.y, 0.06);
+
+      // Smooth lerp intensity (~0.6s at 60fps)
+      const kInt = 0.08;
+      currentIntensityVals.uBrightness = Lerp(currentIntensityVals.uBrightness, targetIntensity.uBrightness, kInt);
+      currentIntensityVals.uOpacity = Lerp(currentIntensityVals.uOpacity, targetIntensity.uOpacity, kInt);
+      currentIntensityVals.uSize = Lerp(currentIntensityVals.uSize, targetIntensity.uSize, kInt);
+      currentIntensityVals.overlay = Lerp(currentIntensityVals.overlay, targetIntensity.overlay, kInt);
+      currentIntensityVals.bloom1 = Lerp(currentIntensityVals.bloom1, targetIntensity.bloom1, kInt);
+      currentIntensityVals.bloom2 = Lerp(currentIntensityVals.bloom2, targetIntensity.bloom2, kInt);
+
+      uniforms.uBrightness.value = currentIntensityVals.uBrightness;
+      uniforms.uOpacity.value = currentIntensityVals.uOpacity;
+      uniforms.uSize.value = currentIntensityVals.uSize;
+      mainBloomPass.strength = currentIntensityVals.bloom1;
+      torusBloomPass.strength = currentIntensityVals.bloom2;
+      if (overlayEl) overlayEl.style.opacity = currentIntensityVals.overlay.toFixed(3);
     }
 
     sceneObj.render(scrollCurrent, mouse);
@@ -465,6 +559,7 @@ function initTunnel() {
     window.removeEventListener('mouseout', onPointerLeave);
     document.removeEventListener('visibilitychange', onVisibilityChange);
     motionQuery.removeEventListener('change', onMotionChange);
+    if (bodyIntensityObserver) bodyIntensityObserver.disconnect();
 
     tunnelGeo.dispose();
     tunnelMat.dispose();

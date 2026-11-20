@@ -104,30 +104,30 @@
 }
 </style>
 <!-- Action Bar (Hidden when printing) -->
-<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4 no-print">
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4 no-print invoice-toolbar-scrim">
     <div class="d-flex gap-2 align-items-center">
-        <a href="{{ url_for('invoices') }}" class="btn btn-outline-secondary btn-sm">
+        <a href="{{ url_for('invoices') }}" class="btn invoice-toolbar-btn btn-sm">
             <i class="bi bi-arrow-left"></i> All Invoices
         </a>
         <div class="btn-group btn-group-sm" role="group">
-            <button type="button" class="btn btn-navy active" id="btnViewA4" onclick="switchView('a4')">
+            <button type="button" class="btn invoice-toolbar-btn active" id="btnViewA4" onclick="switchView('a4')">
                 <i class="bi bi-file-earmark-text me-1"></i> A4 Tax Invoice
             </button>
-            <button type="button" class="btn btn-outline-navy" id="btnViewThermal" onclick="switchView('thermal')">
+            <button type="button" class="btn invoice-toolbar-btn" id="btnViewThermal" onclick="switchView('thermal')">
                 <i class="bi bi-receipt me-1"></i> 80mm Thermal Receipt
             </button>
         </div>
     </div>
     <div class="d-flex gap-2 align-items-center">
         {% set wa_text = "Dear " ~ (sale.customer_name or "Customer") ~ ", thank you for shopping at Electrodesk! Your Tax Invoice #" ~ sale.invoice_number ~ " for " ~ (sale.grand_total|inr) ~ " is generated. Devices are covered under manufacturer warranty. Link: " ~ request.url %}
-        <a href="https://wa.me/{% if sale.customer_phone %}91{{ sale.customer_phone }}{% endif %}?text={{ wa_text|urlencode }}" target="_blank" class="btn btn-outline-success btn-sm d-flex align-items-center gap-1 shadow-sm" title="Share Invoice on WhatsApp">
+        <a href="https://wa.me/{% if sale.customer_phone %}91{{ sale.customer_phone }}{% endif %}?text={{ wa_text|urlencode }}" target="_blank" class="btn invoice-toolbar-btn invoice-btn-whatsapp btn-sm d-flex align-items-center gap-1 shadow-sm" title="Share Invoice on WhatsApp">
             <i class="bi bi-whatsapp"></i>
             <span class="d-none d-sm-inline">WhatsApp</span>
         </a>
-        <a href="{{ url_for('pos') }}" class="btn btn-outline-primary btn-sm">
+        <a href="{{ url_for('pos') }}" class="btn invoice-toolbar-btn btn-sm">
             <i class="bi bi-plus-circle"></i> New Sale
         </a>
-        <button type="button" class="btn btn-navy btn-sm d-flex align-items-center gap-2 shadow-sm" onclick="window.print()">
+        <button type="button" class="btn invoice-toolbar-btn invoice-btn-primary btn-sm d-flex align-items-center gap-2 shadow-sm" onclick="window.print()">
             <i class="bi bi-printer-fill fs-6"></i>
             <span class="fw-semibold">Print / Save PDF</span>
         </button>
@@ -437,17 +437,13 @@ function switchView(view) {
     if (view === 'thermal') {
         a4.classList.add('d-none');
         thermal.classList.remove('d-none');
-        btnThermal.classList.add('btn-navy', 'active');
-        btnThermal.classList.remove('btn-outline-navy');
-        btnA4.classList.remove('btn-navy', 'active');
-        btnA4.classList.add('btn-outline-navy');
+        btnThermal.classList.add('active');
+        btnA4.classList.remove('active');
     } else {
         thermal.classList.add('d-none');
         a4.classList.remove('d-none');
-        btnA4.classList.add('btn-navy', 'active');
-        btnA4.classList.remove('btn-outline-navy');
-        btnThermal.classList.remove('btn-navy', 'active');
-        btnThermal.classList.add('btn-outline-navy');
+        btnA4.classList.add('active');
+        btnThermal.classList.remove('active');
     }
 }
 </script>
