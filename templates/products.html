@@ -2,6 +2,10 @@
 
 {% block title %}Products Catalog{% endblock %}
 
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/product-carousel.css') }}">
+{% endblock %}
+
 {% block content %}
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
     <div>
@@ -25,6 +29,9 @@
     </div>
     {% endif %}
 </div>
+
+<!-- Apple-Store-Style "What's New" Carousel Partial -->
+{% include '_product_carousel.html' %}
 
 <!-- Search & Filtering Bar -->
 <div class="card border-0 shadow-sm rounded-4 mb-4">
@@ -90,16 +97,26 @@
                             <code class="fw-bold text-dark">{{ p.product_code }}</code>
                         </td>
                         <td>
-                            <div class="fw-semibold text-dark">
-                                {{ p.product_name }}
-                                {% if p.is_new %}
-                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1" style="font-size: 0.65rem;">NEW</span>
-                                {% endif %}
+                            <div class="d-flex align-items-center gap-3">
+                                <img src="{{ p.image_url or '/static/images/logo.svg' }}" 
+                                     alt="{{ p.product_name }}" 
+                                     class="rounded-3 border bg-white p-1 flex-shrink-0" 
+                                     style="width: 44px; height: 44px; object-fit: contain;" 
+                                     loading="lazy" 
+                                     onerror="this.onerror=null; this.src='/static/images/logo.svg';">
+                                <div>
+                                    <div class="fw-semibold text-dark">
+                                        {{ p.product_name }}
+                                        {% if p.is_new %}
+                                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1" style="font-size: 0.65rem;">NEW</span>
+                                        {% endif %}
+                                    </div>
+                                    <small class="text-muted">
+                                        {% if p.hsn_code %}HSN: {{ p.hsn_code }} &bull; {% endif %}{{ p.brand }} &bull; {{ p.model or '' }}
+                                        {% if p.tagline %}&bull; <span class="fst-italic text-secondary">{{ p.tagline }}</span>{% endif %}
+                                    </small>
+                                </div>
                             </div>
-                            <small class="text-muted">
-                                {% if p.hsn_code %}HSN: {{ p.hsn_code }} &bull; {% endif %}{{ p.brand }} &bull; {{ p.model or '' }}
-                                {% if p.tagline %}&bull; <span class="fst-italic text-secondary">{{ p.tagline }}</span>{% endif %}
-                            </small>
                         </td>
                         <td><span class="badge bg-light text-secondary border">{{ p.category_name }}</span></td>
                         <td>{{ p.cost_price|inr }}</td>
@@ -337,4 +354,8 @@
     </div>
 </div>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/product-carousel.js') }}"></script>
 {% endblock %}

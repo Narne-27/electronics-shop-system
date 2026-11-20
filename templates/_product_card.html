@@ -1,0 +1,38 @@
+{# Reusable Apple-Store-Style Product Card Partial #}
+{% set card_idx = (loop.index0 if loop is defined else index|default(0)) %}
+{% set theme_mod = card_idx % 3 %}
+{% if theme_mod == 0 %}
+    {% set theme_class = 'pc-card--dark' %}
+{% elif theme_mod == 1 %}
+    {% set theme_class = 'pc-card--light' %}
+{% else %}
+    {% set theme_class = 'pc-card--grey' %}
+{% endif %}
+
+<article class="pc-card {{ theme_class }}" tabindex="0" aria-label="{{ product.product_name }}">
+    <div class="pc-card-header-stack">
+        {% if product.is_new %}
+        <span class="pc-card-eyebrow">NEW</span>
+        {% else %}
+        <span class="pc-card-eyebrow" style="visibility: hidden;">&nbsp;</span>
+        {% endif %}
+        <h3 class="pc-card-name" title="{{ product.product_name }}">{{ product.product_name }}</h3>
+        <p class="pc-card-tagline">{{ product.tagline or (product.description[:60] ~ '...') }}</p>
+        <div class="pc-card-price">From {{ product.selling_price|inr }}</div>
+    </div>
+
+    <div class="pc-card-image-wrap">
+        <img src="{{ product.image_url or '/static/images/logo.svg' }}" 
+             alt="{{ product.product_name }} studio render" 
+             class="pc-card-image" 
+             loading="lazy" 
+             onerror="this.onerror=null; this.src='/static/images/logo.svg'; this.classList.add('pc-card-image-fallback');">
+    </div>
+
+    <a href="{{ url_for('products', search=product.product_code) }}" 
+       class="pc-card-btn" 
+       aria-label="View details for {{ product.product_name }}"
+       title="Explore {{ product.product_name }}">
+        <i class="bi bi-chevron-right"></i>
+    </a>
+</article>

@@ -406,6 +406,43 @@ def seed_database(cursor, is_mysql=False):
             VALUES ({p}, {p}, {p}, {p}, {p}, {p}, {p}, {p}, {p}, {p}, {p}, {p}, {p}, {p}, {p})
         """, products)
 
+        # Map matching studio product images
+        slug_map = {
+            'ELEC-SMP-001': '/static/images/products/samsung-galaxy-s24-ultra-512gb.webp',
+            'ELEC-SMP-002': '/static/images/products/apple-iphone-15-pro-max-256gb.webp',
+            'ELEC-SMP-003': '/static/images/products/xiaomi-redmi-note-13-pro-5g.webp',
+            'ELEC-SMP-004': '/static/images/products/oneplus-12-5g-256gb.webp',
+            'ELEC-SMP-005': '/static/images/products/apple-ipad-air-11-m2-128gb.webp',
+            'ELEC-LAP-001': '/static/images/products/hp-pavilion-15-core-i7-16gb.webp',
+            'ELEC-LAP-002': '/static/images/products/dell-inspiron-15-16gb-ssd.webp',
+            'ELEC-LAP-003': '/static/images/products/apple-macbook-air-13-m2.webp',
+            'ELEC-LAP-004': '/static/images/products/asus-rog-zephyrus-g16.webp',
+            'ELEC-LAP-005': '/static/images/products/lenovo-ideapad-slim-3-15.webp',
+            'ELEC-ACC-001': '/static/images/products/logitech-mx-keys-wireless-keyboard.webp',
+            'ELEC-ACC-002': '/static/images/products/sandisk-extreme-1tb-portable-ssd.webp',
+            'ELEC-AUD-001': '/static/images/products/boat-airdopes-141-anc-earbuds.webp',
+            'ELEC-AUD-002': '/static/images/products/jbl-flip-6-waterproof-speaker.webp',
+            'ELEC-AUD-003': '/static/images/products/sony-wh-1000xm5-headphones.webp',
+            'ELEC-AUD-004': '/static/images/products/boat-stone-1200-bluetooth-speaker.webp',
+            'ELEC-AUD-005': '/static/images/products/marshall-stanmore-iii-speaker.webp',
+            'ELEC-DIS-001': '/static/images/products/mi-tv-43-4k-google-tv.webp',
+            'ELEC-DIS-002': '/static/images/products/lg-55-oled-4k-smart-cinema-tv.webp',
+            'ELEC-DIS-003': '/static/images/products/samsung-65-neo-qled-4k-tv.webp',
+            'ELEC-DIS-004': '/static/images/products/sony-bravia-55-4k-google-tv.webp',
+            'ELEC-IOT-001': '/static/images/products/amazon-echo-dot-5th-gen-clock.webp',
+            'ELEC-IOT-002': '/static/images/products/dyson-v12-detect-slim-vacuum.webp',
+            'ELEC-IOT-003': '/static/images/products/tp-link-archer-ax73-wifi-6.webp',
+            'ELEC-IOT-004': '/static/images/products/wipro-16a-smart-wifi-plug.webp',
+            'ELEC-ACC-003': '/static/images/products/anker-65w-gan-fast-charger.webp',
+            'ELEC-GAM-001': '/static/images/products/sony-playstation-5-slim-1tb.webp',
+            'ELEC-GAM-002': '/static/images/products/microsoft-xbox-series-x-1tb.webp',
+            'ELEC-GAM-003': '/static/images/products/nintendo-switch-oled-model.webp',
+            'ELEC-WRB-001': '/static/images/products/apple-watch-series-9-gps-45mm.webp',
+            'ELEC-WRB-002': '/static/images/products/noise-colorfit-pro-5-smartwatch.webp',
+        }
+        for code, img_url in slug_map.items():
+            cursor.execute(f"UPDATE PRODUCT SET image_url = {p} WHERE product_code = {p}", (img_url, code))
+
     # 4. CUSTOMERS (10 Indian customers across major cities)
     cursor.execute("SELECT COUNT(*) FROM CUSTOMER")
     if cursor.fetchone()[0] == 0:

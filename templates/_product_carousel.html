@@ -1,0 +1,37 @@
+{# Reusable Apple-Store-Style "What's New" Product Carousel Partial #}
+{% set items = carousel_products|default(products|default([])) %}
+{% if items %}
+<section class="pc-carousel-section" aria-roledescription="carousel" aria-label="What's New Products Carousel">
+    <div class="pc-header">
+        <div>
+            <div class="pc-header-eyebrow">WHAT'S NEW</div>
+            <h2 class="pc-header-title">The latest. Take a look at what’s new right now.</h2>
+            <p class="pc-header-subtitle">Cutting-edge flagships, studio audio, next-gen silicon, and smart gear.</p>
+        </div>
+    </div>
+
+    <div class="pc-track-container">
+        <div class="pc-track" role="region" aria-label="Product Cards Carousel Track" tabindex="0">
+            {% for product in items %}
+                {% include '_product_card.html' %}
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="pc-controls" aria-label="Carousel Navigation Controls">
+        <button type="button" 
+                class="pc-control-btn pc-prev-btn" 
+                aria-label="Previous products" 
+                title="Scroll previous"
+                disabled>
+            <i class="bi bi-chevron-left"></i>
+        </button>
+        <button type="button" 
+                class="pc-control-btn pc-next-btn" 
+                aria-label="Next products" 
+                title="Scroll next">
+            <i class="bi bi-chevron-right"></i>
+        </button>
+    </div>
+</section>
+{% endif %}

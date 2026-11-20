@@ -129,7 +129,17 @@
                     {% for item in low_stock_products %}
                     <tr>
                         <td><code>{{ item.product_code }}</code></td>
-                        <td class="fw-semibold text-dark">{{ item.product_name }}</td>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                <img src="{{ item.image_url or '/static/images/logo.svg' }}" 
+                                     alt="{{ item.product_name }}" 
+                                     class="rounded-2 border bg-white p-1 flex-shrink-0" 
+                                     style="width: 36px; height: 36px; object-fit: contain;" 
+                                     loading="lazy" 
+                                     onerror="this.onerror=null; this.src='/static/images/logo.svg';">
+                                <span class="fw-semibold text-dark">{{ item.product_name }}</span>
+                            </div>
+                        </td>
                         <td><span class="badge bg-light text-secondary border">{{ item.category_name }}</span></td>
                         <td>
                             <span class="fw-bold {% if item.stock_quantity == 0 %}text-danger{% else %}text-warning text-dark{% endif %}">

@@ -55,6 +55,13 @@
                             <span class="category-code-badge">{{ p.product_code }}</span>
                             <span class="badge bg-primary-subtle text-primary border border-primary-subtle small"><i class="bi bi-shield-check"></i> {{ p.warranty_months }}M Wty</span>
                         </div>
+                        <div class="text-center my-2 py-1" style="height: 90px;">
+                            <img src="{{ p.image_url or '/static/images/logo.svg' }}" 
+                                 alt="{{ p.product_name }}" 
+                                 style="max-height: 100%; max-width: 100%; object-fit: contain; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.12));" 
+                                 loading="lazy" 
+                                 onerror="this.onerror=null; this.src='/static/images/logo.svg';">
+                        </div>
                         <h6 class="fw-bold text-dark mb-1 text-truncate" title="{{ p.product_name }}">{{ p.product_name }}</h6>
                         <div class="small text-muted mb-1">{{ p.brand }} &bull; {{ p.model or 'Standard' }}</div>
                         {% if p.tagline %}

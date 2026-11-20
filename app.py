@@ -515,9 +515,18 @@ def products():
 
     products_list = db.query(query, tuple(params) if params else None)
     categories = db.query("SELECT * FROM CATEGORY ORDER BY category_code ASC")
+    carousel_products = db.query("""
+        SELECT p.*, c.category_name 
+        FROM PRODUCT p
+        JOIN CATEGORY c ON p.category_id = c.category_id
+        WHERE p.is_new = 1 OR p.stock_quantity > 0
+        ORDER BY p.is_new DESC, p.product_id ASC
+        LIMIT 10
+    """)
 
     return render_template('products.html',
                            products=products_list,
+                           carousel_products=carousel_products,
                            categories=categories,
                            search=search,
                            selected_category=category_id,
