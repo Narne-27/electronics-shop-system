@@ -12,8 +12,8 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'electrodesk-secure-secret-key-2026-pr
 DEBUG = os.environ.get('FLASK_DEBUG', 'True').lower() in ('true', '1', 'yes')
 
 # Global Date Constant: APP_TODAY (can be overridden dynamically in Settings)
-# Default is the current operational reference date 2026-11-19
-APP_TODAY = datetime.date(2026, 11, 19)
+# Defaults dynamically to the current operational reference calendar date
+APP_TODAY = datetime.date.today()
 
 # Store Branding & Details for Invoices & Receipts
 STORE_NAME = os.environ.get('STORE_NAME', 'Electrodesk')

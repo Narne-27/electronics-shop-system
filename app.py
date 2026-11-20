@@ -30,17 +30,20 @@ with app.app_context():
 
 def get_app_today():
     """
-    Returns the dynamic APP_TODAY anchor.
-    Can be overridden at runtime via STORE_SETTING 'app_today'.
-    Defaults to config.APP_TODAY (2026-11-19).
+    Returns the dynamic operational reference date.
+    If 'app_today_mode' in STORE_SETTING is 'manual', returns the manual 'app_today' date.
+    Otherwise defaults dynamically to the current calendar date (datetime.date.today()).
     """
     try:
-        row = db.query_one("SELECT setting_value FROM STORE_SETTING WHERE setting_key = 'app_today'")
-        if row and row['setting_value']:
-            return datetime.datetime.strptime(row['setting_value'][:10], '%Y-%m-%d').date()
+        mode_row = db.query_one("SELECT setting_value FROM STORE_SETTING WHERE setting_key = 'app_today_mode'")
+        mode = mode_row['setting_value'] if mode_row else 'auto'
+        if mode == 'manual':
+            row = db.query_one("SELECT setting_value FROM STORE_SETTING WHERE setting_key = 'app_today'")
+            if row and row['setting_value']:
+                return datetime.datetime.strptime(row['setting_value'][:10], '%Y-%m-%d').date()
     except Exception:
         pass
-    return getattr(config, 'APP_TODAY', datetime.date(2026, 11, 19))
+    return getattr(config, 'APP_TODAY', datetime.date.today()) or datetime.date.today()
 
 
 # ==========================================================
@@ -2947,6 +2950,7 @@ def settings():
         action = request.form.get('action')
 
         if action == 'update_settings':
+            app_today_mode = request.form.get('app_today_mode', 'auto')
             app_today_str = request.form.get('app_today')
             banner = request.form.get('offers_banner')
             emi_3 = request.form.get('emi_rate_3m', '0.0')
@@ -2954,15 +2958,21 @@ def settings():
             emi_9 = request.form.get('emi_rate_9m', '14.0')
 
             try:
-                if app_today_str:
+                db.execute("INSERT OR REPLACE INTO STORE_SETTING (setting_key, setting_value) VALUES ('app_today_mode', %s)", (app_today_mode,))
+                if app_today_mode == 'manual' and app_today_str:
                     db.execute("INSERT OR REPLACE INTO STORE_SETTING (setting_key, setting_value) VALUES ('app_today', %s)", (app_today_str,))
+                    audit_detail = f"Manual override set to {app_today_str}"
+                else:
+                    db.execute("INSERT OR REPLACE INTO STORE_SETTING (setting_key, setting_value) VALUES ('app_today', %s)", (datetime.date.today().strftime('%Y-%m-%d'),))
+                    audit_detail = "Live system date mode enabled"
+
                 if banner:
                     db.execute("INSERT OR REPLACE INTO STORE_SETTING (setting_key, setting_value) VALUES ('offers_banner', %s)", (banner,))
                 db.execute("INSERT OR REPLACE INTO STORE_SETTING (setting_key, setting_value) VALUES ('emi_rate_3m', %s)", (emi_3,))
                 db.execute("INSERT OR REPLACE INTO STORE_SETTING (setting_key, setting_value) VALUES ('emi_rate_6m', %s)", (emi_6,))
                 db.execute("INSERT OR REPLACE INTO STORE_SETTING (setting_key, setting_value) VALUES ('emi_rate_9m', %s)", (emi_9,))
 
-                log_audit('UPDATE_SETTINGS', 'Settings', f"Updated store settings, APP_TODAY={app_today_str}")
+                log_audit('UPDATE_SETTINGS', 'Settings', f"Updated store settings ({audit_detail})")
                 flash('Settings updated successfully.', 'success')
             except Exception as e:
                 flash(f"Error saving settings: {str(e)}", 'danger')

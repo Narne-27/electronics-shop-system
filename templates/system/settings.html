@@ -27,22 +27,37 @@
                 <form method="POST" action="{{ url_for('settings') }}">
                     <input type="hidden" name="action" value="update_settings">
 
-                    <!-- Global APP_TODAY Date Override -->
+                    <!-- Global Operational Reference Date (Live vs Manual) -->
                     <div class="mb-4 p-3 bg-light rounded-3 border">
                         <label class="form-label fw-bold text-dark d-flex align-items-center gap-2">
                             <i class="bi bi-calendar-event text-primary"></i>
-                            <span>Global Operational Reference Date (APP_TODAY)</span>
+                            <span>Operational Reference Date (Calendar Tracking)</span>
                         </label>
-                        <p class="text-muted small mb-2">
-                            All warranties, stock movements, and invoice dates anchor to this reference date without becoming stale.
+                        <p class="text-muted small mb-3">
+                            Controls the active reference date used for invoice generation, daily register closing, warranty tracking, and analytics.
                         </p>
-                        <div class="row g-2 align-items-center">
-                            <div class="col-12 col-sm-6">
-                                <input type="date" name="app_today" class="form-control" value="{{ current_app_today.strftime('%Y-%m-%d') }}" required>
+                        <div class="row g-3">
+                            <div class="col-12 col-md-6">
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="radio" name="app_today_mode" id="modeLive" value="auto" {% if settings.get('app_today_mode', 'auto') != 'manual' %}checked{% endif %} onchange="toggleDateInput(false)">
+                                    <label class="form-check-label fw-semibold text-dark" for="modeLive">
+                                        <i class="bi bi-broadcast text-success me-1"></i> Live System Date (Auto-updates daily)
+                                    </label>
+                                    <div class="text-muted small">Automatically tracks the current calendar day (changes naturally at midnight).</div>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="app_today_mode" id="modeManual" value="manual" {% if settings.get('app_today_mode') == 'manual' %}checked{% endif %} onchange="toggleDateInput(true)">
+                                    <label class="form-check-label fw-semibold text-dark" for="modeManual">
+                                        <i class="bi bi-pin-angle-fill text-warning me-1"></i> Manual Date Override
+                                    </label>
+                                    <div class="text-muted small">Lock to a fixed custom date for back-dated auditing or testing.</div>
+                                </div>
                             </div>
-                            <div class="col-12 col-sm-6">
+                            <div class="col-12 col-md-6">
+                                <label class="form-label small fw-semibold text-muted">Active Reference Date</label>
+                                <input type="date" name="app_today" id="appTodayInput" class="form-control mb-2" value="{{ current_app_today.strftime('%Y-%m-%d') }}" {% if settings.get('app_today_mode', 'auto') != 'manual' %}disabled{% endif %} required>
                                 <span class="badge bg-primary-subtle text-primary border border-primary-subtle p-2">
-                                    Current Active: {{ current_app_today.strftime('%d %b %Y') }}
+                                    Active Now: {{ current_app_today.strftime('%d %b %Y') }}
                                 </span>
                             </div>
                         </div>
@@ -137,4 +152,20 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleDateInput(isManual) {
+    const input = document.getElementById('appTodayInput');
+    if (input) {
+        input.disabled = !isManual;
+        if (!isManual) {
+            // Reset to today's date
+            const todayStr = new Date().toISOString().split('T')[0];
+            input.value = todayStr;
+        }
+    }
+}
+</script>
 {% endblock %}

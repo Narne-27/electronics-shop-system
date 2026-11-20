@@ -317,7 +317,7 @@ CREATE TABLE IF NOT EXISTS STORE_SETTING (
 def seed_database(cursor, is_mysql=False):
     """Seed comprehensive relational demo data anchored to config.APP_TODAY."""
     p = '%s' if is_mysql else '?'
-    today = getattr(config, 'APP_TODAY', datetime.date(2026, 11, 19))
+    today = getattr(config, 'APP_TODAY', datetime.date.today()) or datetime.date.today()
     if isinstance(today, str):
         today = datetime.datetime.strptime(today, '%Y-%m-%d').date()
 
@@ -666,6 +666,7 @@ def seed_database(cursor, is_mysql=False):
     cursor.execute("SELECT COUNT(*) FROM STORE_SETTING")
     if cursor.fetchone()[0] == 0:
         settings = [
+            ('app_today_mode', 'auto'),
             ('app_today', today.strftime('%Y-%m-%d')),
             ('store_name', config.STORE_NAME),
             ('store_tagline', config.STORE_TAGLINE),
