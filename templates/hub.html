@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+
+{% block title %}Mirror Hall &bull; 3D Section Hub - Electrodesk{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/mirror-hall.css') }}">
+<style>
+  /* Give Mirror Hall full-bleed width and viewport fitting */
+  .content-body:has(#mirror-hall-container),
+  body:has(#mirror-hall-container) .content-body {
+    padding: 0 !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    background: transparent !important;
+  }
+  .mirror-hall-wrapper {
+    position: relative;
+    width: 100%;
+    min-height: calc(100vh - 60px);
+    overflow: hidden;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="mirror-hall-wrapper">
+    <!-- Accessible hidden navigation list for screen readers and search indexing -->
+    <nav aria-label="Mirror Hall Shop Directory" class="visually-hidden">
+        <p>Interactive 3D navigation hub for Electrodesk shop management system. Select any department below to navigate:</p>
+        <ul role="listbox" aria-label="Available Sections">
+            {% for s in sections %}
+            <li role="option" aria-selected="{% if loop.first %}true{% else %}false{% endif %}">
+                <a href="{{ s.route }}">
+                    <strong>{{ s.name }}</strong> ({{ s.code }}) - Live Metric: {{ s.metric }}
+                    {% if s.badge %}- Notice: {{ s.badge }}{% endif %}
+                    {% if s.locked %}- Restricted (Role permission required){% endif %}
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+    </nav>
+
+    <!-- 3D WebGL Mirror Hall Viewport Container -->
+    <div id="mirror-hall-container" role="region" aria-label="Mirror Hall 3D Section Carousel" tabindex="0">
+        <!-- Live region for screen-reader announcements -->
+        <div id="mh-aria-live" class="visually-hidden" aria-live="polite" aria-atomic="true"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="module">
+import { MirrorHall } from "{{ url_for('static', filename='js/mirror-hall/MirrorHall.js') }}";
+
+document.addEventListener('DOMContentLoaded', () => {
+    const container = document.getElementById('mirror-hall-container');
+    if (!container) return;
+
+    const sections = {{ sections|tojson }};
+
+    // Instantiate and initialize 3D Mirror Hall Hub
+    const hub = new MirrorHall();
+    hub.init(container, sections);
+
+    // Expose for inspection/debugging
+    window.electrodeskMirrorHall = hub;
+
+    // Proper WebGL and resource cleanup on navigation
+    window.addEventListener('beforeunload', () => {
+        hub.dispose();
+    });
+});
+</script>
+{% endblock %}

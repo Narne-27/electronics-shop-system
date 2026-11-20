@@ -355,6 +355,172 @@ def logout():
 
 
 # ==========================================================
+# MIRROR HALL 3D SECTION HUB ROUTES & METRICS
+# ==========================================================
+
+def get_hub_sections_data(user_role):
+    today = get_app_today()
+    today_str = today.strftime('%Y-%m-%d')
+    exp_limit = (today + datetime.timedelta(days=30)).strftime('%Y-%m-%d')
+
+    today_rev = db.query_one("SELECT COALESCE(SUM(grand_total), 0.0) as rev FROM SALE WHERE DATE(sale_date) = %s", (today_str,))
+    today_sales_val = today_rev['rev'] if today_rev else 0.0
+
+    prod_cnt = db.query_one("SELECT COUNT(*) as cnt FROM PRODUCT")
+    total_products = prod_cnt['cnt'] if prod_cnt else 0
+
+    cat_cnt = db.query_one("SELECT COUNT(*) as cnt FROM CATEGORY")
+    total_categories = cat_cnt['cnt'] if cat_cnt else 0
+
+    stock_sum = db.query_one("SELECT COALESCE(SUM(stock_quantity), 0) as units FROM PRODUCT")
+    total_units = stock_sum['units'] if stock_sum else 0
+
+    low_stock = db.query_one("SELECT COUNT(*) as cnt FROM PRODUCT WHERE stock_quantity <= reorder_level")
+    low_stock_cnt = low_stock['cnt'] if low_stock else 0
+
+    exp_wty = db.query_one("SELECT COUNT(*) as cnt FROM SALE_ITEM WHERE warranty_expiry_date >= %s AND warranty_expiry_date <= %s", (today_str, exp_limit))
+    exp_wty_cnt = exp_wty['cnt'] if exp_wty else 0
+
+    cust_cnt = db.query_one("SELECT COUNT(*) as cnt FROM CUSTOMER")
+    total_cust = cust_cnt['cnt'] if cust_cnt else 0
+
+    dues_data = db.query_one("SELECT COALESCE(SUM(grand_total), 0.0) as amt, COUNT(*) as cnt FROM SALE WHERE payment_status = 'Pending'")
+    pending_dues_amt = dues_data['amt'] if dues_data else 0.0
+    pending_dues_cnt = dues_data['cnt'] if dues_data else 0
+
+    quote_cnt = db.query_one("SELECT COUNT(*) as cnt FROM QUOTATION")
+    total_quotes = quote_cnt['cnt'] if quote_cnt else 0
+
+    sections = [
+        {
+            'id': 'dashboard',
+            'name': 'Dashboard',
+            'code': 'DASH',
+            'eyebrow': 'SHOP OVERVIEW',
+            'icon': 'bi-grid-1x2-fill',
+            'route': '/',
+            'metric': f"₹{today_sales_val:,.0f} Today" if today_sales_val > 0 else "Active Today",
+            'badge': None,
+            'accent': '#2bf0ff',
+            'warm_accent': '#38bdf8',
+            'allowed_roles': ['Shop Owner', 'System Administrator', 'Shop Manager', 'Sales Staff']
+        },
+        {
+            'id': 'products',
+            'name': 'Products',
+            'code': 'PROD',
+            'eyebrow': 'CATALOG',
+            'icon': 'bi-box-seam-fill',
+            'route': '/products',
+            'metric': f"{total_products} Items Listed",
+            'badge': None,
+            'accent': '#7a3cff',
+            'warm_accent': '#c084fc',
+            'allowed_roles': ['Shop Owner', 'System Administrator', 'Shop Manager', 'Sales Staff']
+        },
+        {
+            'id': 'categories',
+            'name': 'Categories',
+            'code': 'DEPT',
+            'eyebrow': 'DEPARTMENTS',
+            'icon': 'bi-tags-fill',
+            'route': '/categories',
+            'metric': f"{total_categories} Categories",
+            'badge': None,
+            'accent': '#f59e0b',
+            'warm_accent': '#fbbf24',
+            'allowed_roles': ['Shop Owner', 'System Administrator', 'Shop Manager', 'Sales Staff']
+        },
+        {
+            'id': 'inventory',
+            'name': 'Stock Inventory',
+            'code': 'STCK',
+            'eyebrow': 'WAREHOUSE',
+            'icon': 'bi-boxes',
+            'route': '/inventory',
+            'metric': f"{total_units} Units On Hand",
+            'badge': f"{low_stock_cnt} Low" if low_stock_cnt > 0 else None,
+            'accent': '#10b981',
+            'warm_accent': '#34d399',
+            'allowed_roles': ['Shop Owner', 'System Administrator', 'Shop Manager', 'Sales Staff']
+        },
+        {
+            'id': 'warranty',
+            'name': 'Warranty Hub',
+            'code': 'WRTY',
+            'eyebrow': 'PROTECTION',
+            'icon': 'bi-shield-check',
+            'route': '/warranty',
+            'metric': f"{exp_wty_cnt} Expiring Soon" if exp_wty_cnt > 0 else "All Active",
+            'badge': f"{exp_wty_cnt} Soon" if exp_wty_cnt > 0 else None,
+            'accent': '#f43f5e',
+            'warm_accent': '#fb7185',
+            'allowed_roles': ['Shop Owner', 'System Administrator', 'Shop Manager', 'Sales Staff']
+        },
+        {
+            'id': 'customers',
+            'name': 'Customers',
+            'code': 'CUST',
+            'eyebrow': 'ACCOUNTS',
+            'icon': 'bi-people-fill',
+            'route': '/customers',
+            'metric': f"{total_cust} Accounts",
+            'badge': None,
+            'accent': '#06b6d4',
+            'warm_accent': '#22d3ee',
+            'allowed_roles': ['Shop Owner', 'System Administrator', 'Shop Manager', 'Sales Staff']
+        },
+        {
+            'id': 'customer_dues',
+            'name': 'Customer Dues',
+            'code': 'DUES',
+            'eyebrow': 'COLLECTIONS',
+            'icon': 'bi-wallet2',
+            'route': '/customer-dues',
+            'metric': f"₹{pending_dues_amt:,.0f} Pending" if pending_dues_amt > 0 else "All Settled",
+            'badge': f"{pending_dues_cnt} Due" if pending_dues_cnt > 0 else None,
+            'accent': '#f97316',
+            'warm_accent': '#fb923c',
+            'allowed_roles': ['Shop Owner', 'System Administrator', 'Shop Manager', 'Sales Staff']
+        },
+        {
+            'id': 'quotations',
+            'name': 'Quotations',
+            'code': 'QUOT',
+            'eyebrow': 'PROPOSALS',
+            'icon': 'bi-file-earmark-text-fill',
+            'route': '/quotations',
+            'metric': f"{total_quotes} Estimates",
+            'badge': None,
+            'accent': '#6366f1',
+            'warm_accent': '#818cf8',
+            'allowed_roles': ['Shop Owner', 'System Administrator', 'Shop Manager', 'Sales Staff']
+        }
+    ]
+
+    for s in sections:
+        s['locked'] = user_role not in s.get('allowed_roles', [])
+
+    return sections
+
+
+@app.route('/hub')
+@login_required
+def mirror_hall_hub():
+    role = session.get('role', '')
+    sections = get_hub_sections_data(role)
+    return render_template('hub.html', sections=sections)
+
+
+@app.route('/api/hub/metrics')
+@login_required
+def api_hub_metrics():
+    role = session.get('role', '')
+    sections = get_hub_sections_data(role)
+    return jsonify({'status': 'ok', 'sections': sections})
+
+
+# ==========================================================
 # DASHBOARD ROUTE (DERIVED NUMBERS & EXPIRING WIDGET)
 # ==========================================================
 

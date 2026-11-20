@@ -20,7 +20,7 @@
     <script type="importmap">
     {
       "imports": {
-        "three": "https://unpkg.com/three@0.143.0/build/three.module.js",
+        "three": "{{ url_for('static', filename='vendor/three/three.module.js') }}",
         "three/addons/": "https://unpkg.com/three@0.143.0/examples/jsm/"
       }
     }
@@ -55,6 +55,11 @@
             <a href="{{ url_for('dashboard') }}" class="sidebar-item {% if request.endpoint == 'dashboard' %}active{% endif %}">
                 <i class="bi bi-grid-1x2-fill"></i>
                 <span data-i18n="dashboard">Dashboard</span>
+            </a>
+            <a href="{{ url_for('mirror_hall_hub') }}" class="sidebar-item {% if request.endpoint == 'mirror_hall_hub' %}active{% endif %}" title="3D Section Navigation Hub">
+                <i class="bi bi-disc-fill text-info"></i>
+                <span style="color: #8fe6ff; font-weight: 500;">Mirror Hall</span>
+                <span class="badge rounded-pill ms-auto" style="background: rgba(43,240,255,0.18); color: #2bf0ff; font-size: 0.6rem; border: 1px solid rgba(43,240,255,0.35);">3D HUB</span>
             </a>
 
             <!-- INVENTORY -->
