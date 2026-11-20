@@ -36,11 +36,11 @@
 <div id="vignette-overlay" style="position:fixed; inset:0; width:100vw; height:100vh; z-index:0; pointer-events:none; background:radial-gradient(circle at center, transparent 40%, rgba(0,0,0,0.35) 100%);"></div>
 
 <div class="main-wrapper" style="position:relative; z-index:1;">
-    {% if current_user %}
+    {% if current_user and request.endpoint != 'mirror_hall_hub' %}
     <!-- Fixed Dark-Navy Sidebar (#0B1B3A - #0F2147) -->
     <aside class="app-sidebar no-print d-none d-lg-flex flex-column">
         <!-- Brand Block -->
-        <a href="{{ url_for('dashboard') }}" class="sidebar-brand-block">
+        <a href="{{ url_for('mirror_hall_hub') }}" class="sidebar-brand-block" title="Mirror Hall Hub">
             <div class="brand-icon-tile">
                 <i class="bi bi-lightning-charge-fill"></i>
             </div>
@@ -197,10 +197,21 @@
         <!-- Light Top Bar -->
         <nav class="top-navbar no-print d-flex align-items-center justify-content-between">
             <div class="d-flex align-items-center gap-2 gap-md-3">
+                {% if request.endpoint == 'mirror_hall_hub' %}
+                <!-- Brand logo on Mirror Hall Hub where sidebar is hidden -->
+                <a href="{{ url_for('mirror_hall_hub') }}" class="d-flex align-items-center gap-2 text-decoration-none me-2">
+                    <div class="brand-icon-tile" style="width: 32px; height: 32px; font-size: 1rem; border-radius: 8px;">
+                        <i class="bi bi-lightning-charge-fill"></i>
+                    </div>
+                    <span class="brand-title fs-5 mb-0" style="color: var(--dark-navy-start); font-weight: 700;">Electrodesk</span>
+                    <span class="badge rounded-pill ms-1 d-none d-sm-inline" style="background: rgba(43,240,255,0.18); color: #0284c7; font-size: 0.65rem; border: 1px solid rgba(43,240,255,0.35);">MIRROR HALL</span>
+                </a>
+                {% else %}
                 <!-- Mobile Sidebar Toggle -->
                 <button class="btn btn-sm btn-outline-secondary d-lg-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileSidebar">
                     <i class="bi bi-list fs-5"></i>
                 </button>
+                {% endif %}
 
                 <!-- Date Badge with APP_TODAY -->
                 <div class="topbar-date-badge" title="Active operational reference date (override in Settings)">
@@ -286,6 +297,7 @@
             </div>
         </nav>
 
+        {% if request.endpoint != 'mirror_hall_hub' %}
         <!-- Mobile Offcanvas Sidebar -->
         <div class="offcanvas offcanvas-start text-white" tabindex="-1" id="mobileSidebar" style="width: 280px; background: #0B1B3A;">
             <div class="offcanvas-header border-bottom border-secondary border-opacity-25">
@@ -337,6 +349,7 @@
                 </div>
             </div>
         </div>
+        {% endif %}
         {% endif %}
 
         <!-- Content Body Area (Light Grey-Blue #F0F4F8) -->

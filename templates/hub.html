@@ -1,74 +1,100 @@
 {% extends 'base.html' %}
 
-{% block title %}Mirror Hall &bull; 3D Section Hub - Electrodesk{% endblock %}
+{% block title %}Mirror Hall &bull; Department Hub - Electrodesk{% endblock %}
 
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/mirror-hall.css') }}">
 <style>
-  /* Give Mirror Hall full-bleed width and viewport fitting */
-  .content-body:has(#mirror-hall-container),
-  body:has(#mirror-hall-container) .content-body {
+  /* Give Mirror Hall full-bleed width and clean responsive vertical scrolling */
+  .content-body:has(.mirror-hall-page),
+  body:has(.mirror-hall-page) .content-body {
     padding: 0 !important;
     max-width: 100% !important;
     margin: 0 !important;
     background: transparent !important;
   }
-  .mirror-hall-wrapper {
+  .mirror-hall-page {
     position: relative;
     width: 100%;
     min-height: calc(100vh - 60px);
-    overflow: hidden;
+    padding: 2.25rem 2.5rem 4rem 2.5rem;
+    box-sizing: border-box;
+  }
+  @media (max-width: 768px) {
+    .mirror-hall-page {
+      padding: 1.25rem 1rem 2.5rem 1rem;
+    }
+  }
+  .mh-category-header {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #8fe6ff;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid rgba(143, 230, 255, 0.18);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+  }
+  .mh-fallback-card {
+    min-height: 180px;
   }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="mirror-hall-wrapper">
-    <!-- Accessible hidden navigation list for screen readers and search indexing -->
-    <nav aria-label="Mirror Hall Shop Directory" class="visually-hidden">
-        <p>Interactive 3D navigation hub for Electrodesk shop management system. Select any department below to navigate:</p>
-        <ul role="listbox" aria-label="Available Sections">
-            {% for s in sections %}
-            <li role="option" aria-selected="{% if loop.first %}true{% else %}false{% endif %}">
-                <a href="{{ s.route }}">
-                    <strong>{{ s.name }}</strong> ({{ s.code }}) - Live Metric: {{ s.metric }}
-                    {% if s.badge %}- Notice: {{ s.badge }}{% endif %}
-                    {% if s.locked %}- Restricted (Role permission required){% endif %}
-                </a>
-            </li>
-            {% endfor %}
-        </ul>
-    </nav>
+<div class="mirror-hall-page">
+    <div class="mh-fallback-grid">
+        <!-- Hub Header -->
+        <div class="text-center mb-4">
+            <span class="mh-hud-eyebrow">ELECTRODESK &bull; DEPARTMENT HUB</span>
+            <h1 class="mh-hud-title fs-2 mt-2">Mirror Hall</h1>
+            <p class="mh-hud-subtitle">Select any department below to navigate directly</p>
+        </div>
 
-    <!-- 3D WebGL Mirror Hall Viewport Container -->
-    <div id="mirror-hall-container" role="region" aria-label="Mirror Hall 3D Section Carousel" tabindex="0">
-        <!-- Live region for screen-reader announcements -->
-        <div id="mh-aria-live" class="visually-hidden" aria-live="polite" aria-atomic="true"></div>
+        {% set categories = [
+            ('Overview', 'bi-grid-1x2-fill'),
+            ('Inventory', 'bi-box-seam-fill'),
+            ('Sales', 'bi-cart-check-fill'),
+            ('Operations', 'bi-tools'),
+            ('Finance & Reports', 'bi-pie-chart-fill'),
+            ('Administration', 'bi-shield-lock-fill')
+        ] %}
+
+        {% for cat_name, cat_icon in categories %}
+            {% set cat_sections = sections | selectattr('category', 'equalto', cat_name) | list %}
+            {% if cat_sections %}
+            <div class="row mb-3 mt-4">
+                <div class="col-12">
+                    <div class="mh-category-header">
+                        <i class="bi {{ cat_icon }}"></i>
+                        <span>{{ cat_name }}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="row g-3 g-md-4 mb-2">
+                {% for s in cat_sections %}
+                <div class="col-12 col-sm-6 col-lg-3 col-xl-3">
+                    <a href="{{ s.route }}" class="mh-fallback-card text-decoration-none d-flex flex-column p-4 rounded-4 h-100" style="border-top: 3px solid {{ s.accent }};">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <span class="badge" style="background: rgba(43,240,255,0.15); color: #8fe6ff; font-weight: 600; letter-spacing: 0.5px;">{{ s.code }}</span>
+                            {% if s.badge %}
+                            <span class="badge bg-danger rounded-pill">{{ s.badge }}</span>
+                            {% endif %}
+                        </div>
+                        <h3 class="h5 fw-bold text-white mb-2">{{ s.name }}</h3>
+                        <div class="text-info small fw-semibold mb-3">{{ s.metric }}</div>
+                        <div class="d-flex align-items-center text-muted small gap-1 mt-auto">
+                            <span>Enter department</span>
+                            <i class="bi bi-chevron-right"></i>
+                        </div>
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        {% endfor %}
     </div>
 </div>
-{% endblock %}
-
-{% block scripts %}
-<script type="module">
-import { MirrorHall } from "{{ url_for('static', filename='js/mirror-hall/MirrorHall.js') }}";
-
-document.addEventListener('DOMContentLoaded', () => {
-    const container = document.getElementById('mirror-hall-container');
-    if (!container) return;
-
-    const sections = {{ sections|tojson }};
-
-    // Instantiate and initialize 3D Mirror Hall Hub
-    const hub = new MirrorHall();
-    hub.init(container, sections);
-
-    // Expose for inspection/debugging
-    window.electrodeskMirrorHall = hub;
-
-    // Proper WebGL and resource cleanup on navigation
-    window.addEventListener('beforeunload', () => {
-        hub.dispose();
-    });
-});
-</script>
 {% endblock %}

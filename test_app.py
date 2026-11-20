@@ -42,7 +42,7 @@ class TestElectrodeskSystem(unittest.TestCase):
         # 1. Ram (admin) - System Administrator
         resp = self.login('admin', 'admin123')
         self.assertEqual(resp.status_code, 200)
-        self.assertIn(b'Overview Dashboard', resp.data)
+        self.assertIn(b'Mirror Hall', resp.data)
         self.assertIn(b'Ram', resp.data)
         self.assertIn(b'RA', resp.data)
         self.logout()

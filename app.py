@@ -317,7 +317,7 @@ def inject_global_context():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if 'user_id' in session:
-        return redirect(url_for('dashboard'))
+        return redirect(url_for('mirror_hall_hub'))
 
     if request.method == 'POST':
         username = request.form.get('username', '').strip().lower()
@@ -339,7 +339,7 @@ def login():
             log_audit('LOGIN', 'Auth', f"User {user['full_name']} logged in successfully")
             flash(f"Welcome back, {user['full_name']}!", 'success')
             next_page = request.args.get('next')
-            return redirect(next_page if next_page else url_for('dashboard'))
+            return redirect(next_page if next_page else url_for('mirror_hall_hub'))
         else:
             flash('Invalid username or password. Please try again.', 'danger')
 
@@ -358,22 +358,21 @@ def logout():
 # MIRROR HALL 3D SECTION HUB ROUTES & METRICS
 # ==========================================================
 
+ROLES_FINANCE = ['System Administrator', 'Admin', 'Shop Owner', 'Shop Manager', 'Manager']
+ROLES_ADMIN = ['System Administrator', 'Admin', 'Shop Owner']
+
 def get_hub_sections_data(user_role):
     today = get_app_today()
     today_str = today.strftime('%Y-%m-%d')
     exp_limit = (today + datetime.timedelta(days=30)).strftime('%Y-%m-%d')
 
-    today_rev = db.query_one("SELECT COALESCE(SUM(grand_total), 0.0) as rev FROM SALE WHERE DATE(sale_date) = %s", (today_str,))
-    today_sales_val = today_rev['rev'] if today_rev else 0.0
-
-    prod_cnt = db.query_one("SELECT COUNT(*) as cnt FROM PRODUCT")
-    total_products = prod_cnt['cnt'] if prod_cnt else 0
+    # Single source of truth for inventory metrics (matches Dashboard, Categories, Stock & Reports)
+    inv_totals = get_inventory_derived_totals()
+    total_units = inv_totals['total_units']
+    total_products = inv_totals['total_products']
 
     cat_cnt = db.query_one("SELECT COUNT(*) as cnt FROM CATEGORY")
     total_categories = cat_cnt['cnt'] if cat_cnt else 0
-
-    stock_sum = db.query_one("SELECT COALESCE(SUM(stock_quantity), 0) as units FROM PRODUCT")
-    total_units = stock_sum['units'] if stock_sum else 0
 
     low_stock = db.query_one("SELECT COUNT(*) as cnt FROM PRODUCT WHERE stock_quantity <= reorder_level")
     low_stock_cnt = low_stock['cnt'] if low_stock else 0
@@ -391,24 +390,53 @@ def get_hub_sections_data(user_role):
     quote_cnt = db.query_one("SELECT COUNT(*) as cnt FROM QUOTATION")
     total_quotes = quote_cnt['cnt'] if quote_cnt else 0
 
+    today_rev = db.query_one("SELECT COALESCE(SUM(grand_total), 0.0) as rev, COUNT(*) as cnt FROM SALE WHERE DATE(sale_date) = %s", (today_str,))
+    today_sales_val = today_rev['rev'] if today_rev else 0.0
+    today_orders_cnt = today_rev['cnt'] if today_rev else 0
+
+    sale_cnt = db.query_one("SELECT COUNT(*) as cnt FROM SALE")
+    total_sales_cnt = sale_cnt['cnt'] if sale_cnt else 0
+
+    ret_cnt = db.query_one("SELECT COUNT(*) as cnt FROM CREDIT_NOTE")
+    total_returns_cnt = ret_cnt['cnt'] if ret_cnt else 0
+
+    rep_cnt = db.query_one("SELECT COUNT(*) as cnt FROM REPAIR_TICKET WHERE status != 'Delivered'")
+    total_repairs_cnt = rep_cnt['cnt'] if rep_cnt else 0
+
+    exp_data = db.query_one("SELECT COALESCE(SUM(amount), 0.0) as total FROM EXPENSE")
+    total_expenses = exp_data['total'] if exp_data else 0.0
+
+    audit_cnt = db.query_one("SELECT COUNT(*) as cnt FROM AUDIT_LOG")
+    total_audit_cnt = audit_cnt['cnt'] if audit_cnt else 0
+
+    user_cnt = db.query_one("SELECT COUNT(*) as cnt FROM USER")
+    total_users_cnt = user_cnt['cnt'] if user_cnt else 0
+
+    total_notifs = low_stock_cnt + exp_wty_cnt + pending_dues_cnt
+
     sections = [
+        # 1. OVERVIEW
         {
             'id': 'dashboard',
             'name': 'Dashboard',
             'code': 'DASH',
+            'category': 'Overview',
             'eyebrow': 'SHOP OVERVIEW',
             'icon': 'bi-grid-1x2-fill',
-            'route': '/',
+            'route': '/dashboard',
             'metric': f"₹{today_sales_val:,.0f} Today" if today_sales_val > 0 else "Active Today",
             'badge': None,
             'accent': '#2bf0ff',
             'warm_accent': '#38bdf8',
-            'allowed_roles': ['Shop Owner', 'System Administrator', 'Shop Manager', 'Sales Staff']
+            'allowed_roles': None
         },
+
+        # 2. INVENTORY
         {
             'id': 'products',
             'name': 'Products',
             'code': 'PROD',
+            'category': 'Inventory',
             'eyebrow': 'CATALOG',
             'icon': 'bi-box-seam-fill',
             'route': '/products',
@@ -416,12 +444,13 @@ def get_hub_sections_data(user_role):
             'badge': None,
             'accent': '#7a3cff',
             'warm_accent': '#c084fc',
-            'allowed_roles': ['Shop Owner', 'System Administrator', 'Shop Manager', 'Sales Staff']
+            'allowed_roles': None
         },
         {
             'id': 'categories',
             'name': 'Categories',
             'code': 'DEPT',
+            'category': 'Inventory',
             'eyebrow': 'DEPARTMENTS',
             'icon': 'bi-tags-fill',
             'route': '/categories',
@@ -429,12 +458,13 @@ def get_hub_sections_data(user_role):
             'badge': None,
             'accent': '#f59e0b',
             'warm_accent': '#fbbf24',
-            'allowed_roles': ['Shop Owner', 'System Administrator', 'Shop Manager', 'Sales Staff']
+            'allowed_roles': None
         },
         {
             'id': 'inventory',
             'name': 'Stock Inventory',
             'code': 'STCK',
+            'category': 'Inventory',
             'eyebrow': 'WAREHOUSE',
             'icon': 'bi-boxes',
             'route': '/inventory',
@@ -442,12 +472,13 @@ def get_hub_sections_data(user_role):
             'badge': f"{low_stock_cnt} Low" if low_stock_cnt > 0 else None,
             'accent': '#10b981',
             'warm_accent': '#34d399',
-            'allowed_roles': ['Shop Owner', 'System Administrator', 'Shop Manager', 'Sales Staff']
+            'allowed_roles': None
         },
         {
             'id': 'warranty',
-            'name': 'Warranty Hub',
+            'name': 'Warranty',
             'code': 'WRTY',
+            'category': 'Inventory',
             'eyebrow': 'PROTECTION',
             'icon': 'bi-shield-check',
             'route': '/warranty',
@@ -455,12 +486,15 @@ def get_hub_sections_data(user_role):
             'badge': f"{exp_wty_cnt} Soon" if exp_wty_cnt > 0 else None,
             'accent': '#f43f5e',
             'warm_accent': '#fb7185',
-            'allowed_roles': ['Shop Owner', 'System Administrator', 'Shop Manager', 'Sales Staff']
+            'allowed_roles': None
         },
+
+        # 3. SALES
         {
             'id': 'customers',
             'name': 'Customers',
             'code': 'CUST',
+            'category': 'Sales',
             'eyebrow': 'ACCOUNTS',
             'icon': 'bi-people-fill',
             'route': '/customers',
@@ -468,12 +502,13 @@ def get_hub_sections_data(user_role):
             'badge': None,
             'accent': '#06b6d4',
             'warm_accent': '#22d3ee',
-            'allowed_roles': ['Shop Owner', 'System Administrator', 'Shop Manager', 'Sales Staff']
+            'allowed_roles': None
         },
         {
             'id': 'customer_dues',
             'name': 'Customer Dues',
             'code': 'DUES',
+            'category': 'Sales',
             'eyebrow': 'COLLECTIONS',
             'icon': 'bi-wallet2',
             'route': '/customer-dues',
@@ -481,12 +516,13 @@ def get_hub_sections_data(user_role):
             'badge': f"{pending_dues_cnt} Due" if pending_dues_cnt > 0 else None,
             'accent': '#f97316',
             'warm_accent': '#fb923c',
-            'allowed_roles': ['Shop Owner', 'System Administrator', 'Shop Manager', 'Sales Staff']
+            'allowed_roles': None
         },
         {
             'id': 'quotations',
             'name': 'Quotations',
             'code': 'QUOT',
+            'category': 'Sales',
             'eyebrow': 'PROPOSALS',
             'icon': 'bi-file-earmark-text-fill',
             'route': '/quotations',
@@ -494,14 +530,204 @@ def get_hub_sections_data(user_role):
             'badge': None,
             'accent': '#6366f1',
             'warm_accent': '#818cf8',
-            'allowed_roles': ['Shop Owner', 'System Administrator', 'Shop Manager', 'Sales Staff']
+            'allowed_roles': None
+        },
+        {
+            'id': 'pos',
+            'name': 'New Sale',
+            'code': 'POS',
+            'category': 'Sales',
+            'eyebrow': 'CHECKOUT',
+            'icon': 'bi-cart-check-fill',
+            'route': '/pos',
+            'metric': f"{today_orders_cnt} Today" if today_orders_cnt > 0 else "Quick POS Checkout",
+            'badge': None,
+            'accent': '#eab308',
+            'warm_accent': '#fde047',
+            'allowed_roles': None
+        },
+        {
+            'id': 'invoices',
+            'name': 'Billing & Invoices',
+            'code': 'BILL',
+            'category': 'Sales',
+            'eyebrow': 'TRANSACTIONS',
+            'icon': 'bi-receipt',
+            'route': '/invoices',
+            'metric': f"{total_sales_cnt} Invoices Issued",
+            'badge': None,
+            'accent': '#38bdf8',
+            'warm_accent': '#7dd3fc',
+            'allowed_roles': None
+        },
+        {
+            'id': 'returns',
+            'name': 'Returns & Credit',
+            'code': 'RETN',
+            'category': 'Sales',
+            'eyebrow': 'REFUNDS',
+            'icon': 'bi-arrow-return-left',
+            'route': '/returns',
+            'metric': f"{total_returns_cnt} Credit Notes",
+            'badge': None,
+            'accent': '#ec4899',
+            'warm_accent': '#f472b6',
+            'allowed_roles': None
+        },
+
+        # 4. OPERATIONS
+        {
+            'id': 'repair_tickets',
+            'name': 'Repair Tickets',
+            'code': 'REP',
+            'category': 'Operations',
+            'eyebrow': 'SERVICE',
+            'icon': 'bi-tools',
+            'route': '/repair-tickets',
+            'metric': f"{total_repairs_cnt} Active Tickets" if total_repairs_cnt > 0 else "No Open Tickets",
+            'badge': f"{total_repairs_cnt}" if total_repairs_cnt > 0 else None,
+            'accent': '#14b8a6',
+            'warm_accent': '#2dd4bf',
+            'allowed_roles': None
+        },
+
+        # 5. FINANCE & REPORTS (Restricted by sidebar role rule)
+        {
+            'id': 'reports_profit_loss',
+            'name': 'Profit & Loss',
+            'code': 'PNL',
+            'category': 'Finance & Reports',
+            'eyebrow': 'FINANCIALS',
+            'icon': 'bi-pie-chart-fill',
+            'route': '/reports/profit-loss',
+            'metric': f"₹{today_sales_val:,.0f} Rev Today" if today_sales_val > 0 else "Net P&L Reports",
+            'badge': None,
+            'accent': '#8b5cf6',
+            'warm_accent': '#a78bfa',
+            'allowed_roles': ROLES_FINANCE
+        },
+        {
+            'id': 'expenses',
+            'name': 'Expenses',
+            'code': 'EXP',
+            'category': 'Finance & Reports',
+            'eyebrow': 'OUTFLOWS',
+            'icon': 'bi-cash-coin',
+            'route': '/expenses',
+            'metric': f"₹{total_expenses:,.0f} Recorded",
+            'badge': None,
+            'accent': '#f43f5e',
+            'warm_accent': '#fb7185',
+            'allowed_roles': ROLES_FINANCE
+        },
+        {
+            'id': 'reports_gst',
+            'name': 'GST Summary',
+            'code': 'GST',
+            'category': 'Finance & Reports',
+            'eyebrow': 'TAXATION',
+            'icon': 'bi-file-earmark-ruled',
+            'route': '/reports/gst',
+            'metric': "Tax Invoices & Filing",
+            'badge': None,
+            'accent': '#0ea5e9',
+            'warm_accent': '#38bdf8',
+            'allowed_roles': ROLES_FINANCE
+        },
+        {
+            'id': 'daily_closing',
+            'name': 'Daily Closing',
+            'code': 'CLOS',
+            'category': 'Finance & Reports',
+            'eyebrow': 'RECONCILIATION',
+            'icon': 'bi-calendar2-check-fill',
+            'route': '/daily-closing',
+            'metric': "Day-end Cash Drawer",
+            'badge': None,
+            'accent': '#10b981',
+            'warm_accent': '#34d399',
+            'allowed_roles': ROLES_FINANCE
+        },
+        {
+            'id': 'reports',
+            'name': 'Analytics Reports',
+            'code': 'ANLY',
+            'category': 'Finance & Reports',
+            'eyebrow': 'INSIGHTS',
+            'icon': 'bi-graph-up-arrow',
+            'route': '/reports',
+            'metric': "Trends & Performance",
+            'badge': None,
+            'accent': '#a855f7',
+            'warm_accent': '#c084fc',
+            'allowed_roles': ROLES_FINANCE
+        },
+
+        # 6. ADMINISTRATION
+        {
+            'id': 'notifications',
+            'name': 'Alerts & Notices',
+            'code': 'ALRT',
+            'category': 'Administration',
+            'eyebrow': 'NOTIFICATIONS',
+            'icon': 'bi-bell-fill',
+            'route': '/notifications',
+            'metric': f"{total_notifs} System Notices" if total_notifs > 0 else "All Clear",
+            'badge': f"{total_notifs}" if total_notifs > 0 else None,
+            'accent': '#ef4444',
+            'warm_accent': '#f87171',
+            'allowed_roles': None
+        },
+        {
+            'id': 'audit_log',
+            'name': 'Audit Trail',
+            'code': 'AUDT',
+            'category': 'Administration',
+            'eyebrow': 'SECURITY',
+            'icon': 'bi-journal-text',
+            'route': '/audit-log',
+            'metric': f"{total_audit_cnt} Logged Events",
+            'badge': None,
+            'accent': '#64748b',
+            'warm_accent': '#94a3b8',
+            'allowed_roles': ROLES_ADMIN
+        },
+        {
+            'id': 'users',
+            'name': 'Users & Roles',
+            'code': 'USER',
+            'category': 'Administration',
+            'eyebrow': 'ACCESS CONTROL',
+            'icon': 'bi-shield-lock-fill',
+            'route': '/users',
+            'metric': f"{total_users_cnt} Active Accounts",
+            'badge': None,
+            'accent': '#3b82f6',
+            'warm_accent': '#60a5fa',
+            'allowed_roles': ROLES_ADMIN
+        },
+        {
+            'id': 'settings',
+            'name': 'Settings',
+            'code': 'SETT',
+            'category': 'Administration',
+            'eyebrow': 'CONFIGURATION',
+            'icon': 'bi-gear-fill',
+            'route': '/settings',
+            'metric': "Shop Profile & Config",
+            'badge': None,
+            'accent': '#8b5cf6',
+            'warm_accent': '#a78bfa',
+            'allowed_roles': ROLES_ADMIN
         }
     ]
 
-    for s in sections:
-        s['locked'] = user_role not in s.get('allowed_roles', [])
-
-    return sections
+    # Strictly reuse sidebar role conditions: filter out restricted cards
+    visible_sections = [
+        s for s in sections 
+        if not s.get('allowed_roles') or user_role in s['allowed_roles']
+    ]
+    return visible_sections
 
 
 @app.route('/hub')
@@ -525,6 +751,12 @@ def api_hub_metrics():
 # ==========================================================
 
 @app.route('/')
+def index():
+    if 'user_id' in session:
+        return redirect(url_for('mirror_hall_hub'))
+    return redirect(url_for('login'))
+
+
 @app.route('/dashboard')
 @login_required
 def dashboard():
