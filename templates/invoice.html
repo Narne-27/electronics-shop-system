@@ -2,10 +2,55 @@
 
 {% block title %}Invoice {{ sale.invoice_number }} - {{ store.name }}{% endblock %}
 
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/print.css') }}" media="print">
+<style>
+@page {
+    size: A4;
+    margin: 12mm;
+}
+
+@media print {
+    /* Critical print isolation */
+    :root,
+    [data-theme="dark"],
+    [data-theme="light"],
+    html,
+    body {
+        --body-bg: #ffffff !important;
+        --card-bg: #ffffff !important;
+        --card-border: #cccccc !important;
+        --text-primary: #111111 !important;
+        --text-muted: #555555 !important;
+        --bs-body-bg: #ffffff !important;
+        --bs-body-color: #111111 !important;
+        background: #ffffff !important;
+        background-color: #ffffff !important;
+        color: #111111 !important;
+    }
+
+    #a4InvoiceView {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: none !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        -webkit-box-shadow: none !important;
+        background: #ffffff !important;
+        background-color: #ffffff !important;
+        color: #111111 !important;
+    }
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <style>
+@media screen {
 /* ========================================================
-   FIX 1: Scoped Contrast Fix for Invoice White Boxes
+   FIX 1: Scoped Contrast Fix for Invoice White Boxes (Screen)
    ======================================================== */
 .invoice-bill-to-box,
 .invoice-info-box,
@@ -101,6 +146,7 @@
 .invoice-totals-box .text-danger,
 .invoice-totals-box .text-danger * {
     color: #dc2626 !important;
+}
 }
 </style>
 <!-- Action Bar (Hidden when printing) -->
@@ -320,7 +366,7 @@
     </div>
 
     <!-- Terms & Warranty Conditions -->
-    <div class="border-top pt-3 text-muted" style="font-size: 0.78rem;">
+    <div class="border-top pt-3 text-muted invoice-terms-policy" style="font-size: 0.78rem;">
         <h6 class="fw-bold text-dark small text-uppercase mb-1"><i class="bi bi-shield-check text-success me-1"></i> Warranty & Service Policy:</h6>
         <ul class="ps-3 mb-3">
             <li>Electronic items are covered by standard manufacturer brand warranty against manufacturing defects for the period specified above from invoice date.</li>
@@ -329,7 +375,7 @@
             <li>Goods once sold can be returned within 7 days in original sealed condition with original packaging.</li>
         </ul>
 
-        <div class="row pt-4 mt-2">
+        <div class="row pt-4 mt-2 signature-container">
             <div class="col-6 text-center">
                 <div class="border-top border-secondary border-opacity-50 pt-2 w-75 mx-auto">
                     <small class="fw-semibold text-dark">Customer's Signature</small>

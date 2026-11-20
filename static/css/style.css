@@ -910,8 +910,9 @@ body {
 
 
 /* ==========================================================
-   Dark Mode Palette & Controls
+   Dark Mode Palette & Controls (Screen Only)
    ========================================================== */
+@media screen {
 [data-theme="dark"] {
     --body-bg: #0B1120;
     --card-bg: #1E293B;
@@ -986,6 +987,7 @@ body {
 [data-theme="dark"] .text-dark {
     color: #F1F5F9 !important;
 }
+}
 
 /* ==========================================================
    Days Left Badges & Color Coding
@@ -1048,8 +1050,9 @@ body {
 }
 
 /* ==========================================================
-   Three.js Wormhole Tunnel Background Layer & Dark Glass Theme
+   Three.js Wormhole Tunnel Background Layer & Dark Glass Theme (Screen Only)
    ========================================================== */
+@media screen {
 
 /* 4. Canvas layering */
 #scene {
@@ -1552,6 +1555,7 @@ div.bg-white {
 [data-theme="light"] .modal-content {
     background: rgba(10, 5, 36, 0.5) !important;
     border: 1px solid rgba(143, 230, 255, 0.2) !important;
+}
 }
 
 /* Modal and Backdrop Stacking & Click-Through Prevention */
