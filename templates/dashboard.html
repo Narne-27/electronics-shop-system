@@ -166,38 +166,6 @@
                             <button type="button" class="btn btn-sm btn-navy rounded-pill" data-bs-toggle="modal" data-bs-target="#restockModal{{ item.product_id }}">
                                 <i class="bi bi-plus-circle me-1"></i> Quick Restock
                             </button>
-
-                            <!-- Restock Modal -->
-                            <div class="modal fade text-start" id="restockModal{{ item.product_id }}" tabindex="-1">
-                                <div class="modal-dialog">
-                                    <div class="modal-content" style="border-radius: 16px;">
-                                        <form method="POST" action="{{ url_for('inventory_adjust') }}">
-                                            <input type="hidden" name="product_id" value="{{ item.product_id }}">
-                                            <input type="hidden" name="type" value="add">
-                                            <div class="modal-header">
-                                                <h5 class="modal-title fw-bold">Restock Product</h5>
-                                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                            </div>
-                                            <div class="modal-body">
-                                                <p class="mb-1"><strong>{{ item.product_name }}</strong> ({{ item.product_code }})</p>
-                                                <p class="text-muted small">Current Stock: <strong>{{ item.stock_quantity }}</strong> | Reorder Alert Level: <strong>{{ item.reorder_level }}</strong></p>
-                                                <div class="mb-3">
-                                                    <label class="form-label fw-semibold">Quantity to Add (Units) *</label>
-                                                    <input type="number" name="quantity" class="form-control" min="1" value="10" required>
-                                                </div>
-                                                <div class="mb-3">
-                                                    <label class="form-label fw-semibold">Supplier Batch / Notes</label>
-                                                    <input type="text" name="notes" class="form-control" placeholder="e.g. Hyderabad warehouse intake PO #982">
-                                                </div>
-                                            </div>
-                                            <div class="modal-footer">
-                                                <button type="button" class="btn btn-secondary rounded-pill" data-bs-dismiss="modal">Cancel</button>
-                                                <button type="submit" class="btn btn-navy rounded-pill">Confirm Restock</button>
-                                            </div>
-                                        </form>
-                                    </div>
-                                </div>
-                            </div>
                         </td>
                     </tr>
                     {% endfor %}
@@ -206,6 +174,40 @@
         </div>
     </div>
 </div>
+
+<!-- Restock Modals for Low Stock Items -->
+{% for item in low_stock_items %}
+<div class="modal fade text-start" id="restockModal{{ item.product_id }}" tabindex="-1" aria-labelledby="restockModalLabel{{ item.product_id }}" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content" style="border-radius: 16px;">
+            <form method="POST" action="{{ url_for('inventory_adjust') }}">
+                <input type="hidden" name="product_id" value="{{ item.product_id }}">
+                <input type="hidden" name="type" value="add">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold" id="restockModalLabel{{ item.product_id }}">Restock Product</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-1"><strong>{{ item.product_name }}</strong> ({{ item.product_code }})</p>
+                    <p class="text-muted small">Current Stock: <strong>{{ item.stock_quantity }}</strong> | Reorder Alert Level: <strong>{{ item.reorder_level }}</strong></p>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Quantity to Add (Units) *</label>
+                        <input type="number" name="quantity" class="form-control" min="1" value="10" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Supplier Batch / Notes</label>
+                        <input type="text" name="notes" class="form-control" placeholder="e.g. Hyderabad warehouse intake PO #982">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary rounded-pill" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-navy rounded-pill">Confirm Restock</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
 {% endif %}
 
 <!-- Warranties Expiring Soon Widget -->

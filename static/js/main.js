@@ -184,4 +184,32 @@ document.addEventListener('DOMContentLoaded', function() {
         Chart.defaults.color = 'rgba(232, 246, 255, 0.75)';
         Chart.defaults.borderColor = 'rgba(143, 230, 255, 0.12)';
     }
+
+    // 6. Global Modal Stacking & Restock Freezing Prevention
+    function moveModalsToBody() {
+        document.querySelectorAll('.modal').forEach(function(m) {
+            if (m.parentElement !== document.body) {
+                document.body.appendChild(m);
+            }
+        });
+    }
+
+    moveModalsToBody();
+
+    document.addEventListener('show.bs.modal', function(e) {
+        if (e.target && e.target.parentElement !== document.body) {
+            document.body.appendChild(e.target);
+        }
+    });
+
+    document.addEventListener('hidden.bs.modal', function() {
+        if (!document.querySelector('.modal.show')) {
+            document.querySelectorAll('.modal-backdrop').forEach(function(b) {
+                b.remove();
+            });
+            document.body.classList.remove('modal-open');
+            document.body.style.removeProperty('overflow');
+            document.body.style.removeProperty('padding-right');
+        }
+    });
 });

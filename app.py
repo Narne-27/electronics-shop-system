@@ -1040,13 +1040,24 @@ def inventory():
 def inventory_adjust():
     product_id = request.form.get('product_id')
     adj_type = request.form.get('type')  # 'add', 'deduct', 'set'
-    quantity = int(request.form.get('quantity', 0))
-    notes = request.form.get('notes', 'Physical Audit Adjustment').strip()
+
+    try:
+        quantity = int(request.form.get('quantity', 0))
+    except (ValueError, TypeError):
+        quantity = 0
+
+    notes = request.form.get('notes', '').strip()
+    if not notes:
+        notes = 'Restock Inventory' if adj_type == 'add' else 'Physical Audit Adjustment'
+
+    if quantity <= 0:
+        flash('Please enter a valid quantity greater than zero.', 'warning')
+        return redirect(request.referrer or url_for('inventory'))
 
     product = db.query_one("SELECT * FROM PRODUCT WHERE product_id = %s", (product_id,))
     if not product:
         flash('Product not found.', 'danger')
-        return redirect(url_for('inventory'))
+        return redirect(request.referrer or url_for('inventory'))
 
     current_stock = product['stock_quantity']
 
@@ -1057,14 +1068,14 @@ def inventory_adjust():
     elif adj_type == 'deduct':
         new_stock = max(0, current_stock - quantity)
         m_type = 'OUT'
-        diff = quantity
+        diff = min(quantity, current_stock)
     elif adj_type == 'set':
         diff = abs(quantity - current_stock)
         m_type = 'IN' if quantity >= current_stock else 'OUT'
         new_stock = max(0, quantity)
     else:
         flash('Invalid adjustment type.', 'danger')
-        return redirect(url_for('inventory'))
+        return redirect(request.referrer or url_for('inventory'))
 
     try:
         db.execute("UPDATE PRODUCT SET stock_quantity = %s WHERE product_id = %s", (new_stock, product_id))
@@ -1078,7 +1089,7 @@ def inventory_adjust():
     except Exception as e:
         flash(f'Error adjusting stock: {str(e)}', 'danger')
 
-    return redirect(url_for('inventory'))
+    return redirect(request.referrer or url_for('inventory'))
 
 
 # ==========================================================
