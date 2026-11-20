@@ -252,3 +252,4 @@ Run the complete test suite:
 ```powershell
 python test_app.py
 ```
+"# electronics-shop-system" 
