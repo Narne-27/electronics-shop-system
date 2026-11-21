@@ -1,0 +1,397 @@
+/* ========================================================
+   Electrodesk - Curved 3D "What's New" Product Carousel
+   Everything carousel-related is scoped under .curve-carousel
+   (the thumbnail helpers at the very bottom are shared with
+   POS / table / inventory pages and are unchanged).
+   Only transform + opacity are ever animated.
+   ======================================================== */
+
+.curve-carousel {
+    /* Tunables (JS reads --cc-card-w, so keep card sizing here) */
+    --cc-card-w: 300px;
+    --cc-card-h: 440px;
+    --cc-dur: 600ms;
+    --cc-ease: cubic-bezier(.22, .8, .2, 1);
+
+    background: #f5f5f7 !important;
+    border-radius: 28px;
+    padding: 36px 32px 28px 32px;
+    margin-bottom: 2rem;
+    position: relative;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+}
+
+/* ---------- Header (text unchanged) ---------- */
+.curve-carousel .cc-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 8px;
+    padding: 0 4px;
+}
+
+.curve-carousel .cc-eyebrow {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #6e6e73 !important;
+    margin-bottom: 4px;
+}
+
+/* style.css forces h1-h6 to a light colour with !important, so out-specify it here */
+.curve-carousel .cc-title {
+    font-size: 32px;
+    font-weight: 700;
+    color: #1d1d1f !important;
+    letter-spacing: -0.02em;
+    margin: 0;
+    line-height: 1.15;
+}
+
+.curve-carousel .cc-subtitle {
+    font-size: 16px;
+    color: #6e6e73 !important;
+    margin: 6px 0 0 0;
+}
+
+/* ---------- Stage: viewport clips, stage gives perspective, rail holds 3D ---------- */
+.curve-carousel .cc-viewport {
+    overflow: hidden;              /* clips side cards at the panel edge; sits ABOVE the 3D context */
+    touch-action: pan-y;           /* vertical scroll stays native, horizontal drag is ours */
+    cursor: grab;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.curve-carousel .cc-viewport.is-dragging {
+    cursor: grabbing;
+}
+
+.curve-carousel .cc-stage {
+    position: relative;
+    height: calc(var(--cc-card-h) + 64px);
+    perspective: 1200px;
+    perspective-origin: 50% 45%;
+}
+
+.curve-carousel .cc-rail {
+    position: absolute;
+    inset: 0;
+    transform-style: preserve-3d;
+}
+
+/* ---------- Card ---------- */
+.curve-carousel .cc-card {
+    position: absolute;
+    top: 28px;
+    left: 50%;
+    width: var(--cc-card-w);
+    height: var(--cc-card-h);
+    margin-left: calc(var(--cc-card-w) / -2);
+    padding: 26px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    border-radius: 24px;
+    overflow: hidden;
+    text-decoration: none;
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
+    backface-visibility: hidden;
+    will-change: transform, opacity;
+    transition:
+        transform var(--cc-dur) var(--cc-ease),
+        opacity var(--cc-dur) var(--cc-ease);
+}
+
+/* Before JS runs (or if it fails) show just the first card, centred and clickable */
+.curve-carousel:not(.is-ready) .cc-card:not(:first-child) {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.curve-carousel .cc-card.is-hidden {
+    pointer-events: none;
+}
+
+.curve-carousel .cc-card:not(.is-active) {
+    cursor: pointer;
+}
+
+.curve-carousel .cc-card:focus-visible {
+    outline: 3px solid #0071e3;
+    outline-offset: -3px;
+}
+
+/* No animation while the window is resized */
+.curve-carousel.is-resizing .cc-card {
+    transition: none;
+}
+
+/* ---------- Card themes (cycle dark / light / grey, soft gradients) ---------- */
+.curve-carousel .cc-card--dark {
+    background: linear-gradient(160deg, #26262b 0%, #000000 72%) !important;
+    color: #ffffff !important;
+}
+
+.curve-carousel .cc-card--light {
+    background: linear-gradient(160deg, #ffffff 0%, #e9ecf1 100%) !important;
+    color: #1d1d1f !important;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.curve-carousel .cc-card--grey {
+    background: linear-gradient(160deg, #d6dbde 0%, #b4bbbf 100%) !important;
+    color: #1d1d1f !important;
+}
+
+.curve-carousel .cc-card--dark .cc-name { color: #ffffff !important; }
+.curve-carousel .cc-card--dark .cc-tagline { color: rgba(255, 255, 255, 0.82) !important; }
+.curve-carousel .cc-card--dark .cc-price { color: rgba(255, 255, 255, 0.72) !important; }
+.curve-carousel .cc-card--dark .cc-chevron { background: #0071e3; color: #ffffff; }
+
+.curve-carousel .cc-card--light .cc-name { color: #1d1d1f !important; }
+.curve-carousel .cc-card--light .cc-tagline { color: #424245 !important; }
+.curve-carousel .cc-card--light .cc-price { color: #6e6e73 !important; }
+.curve-carousel .cc-card--light .cc-chevron { background: #0071e3; color: #ffffff; }
+
+.curve-carousel .cc-card--grey .cc-name { color: #1d1d1f !important; }
+.curve-carousel .cc-card--grey .cc-tagline { color: #333336 !important; }
+.curve-carousel .cc-card--grey .cc-price { color: #424245 !important; }
+.curve-carousel .cc-card--grey .cc-chevron { background: #1d1d1f; color: #ffffff; }
+
+/* ---------- Card content ---------- */
+.curve-carousel .cc-card-head {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.curve-carousel .cc-badge {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    line-height: 1;
+    text-transform: uppercase;
+    padding: 5px 10px;
+    margin-bottom: 8px;
+    border-radius: 999px;
+    background: #c2410c;
+    color: #ffffff;
+}
+
+/* Keeps names aligned across cards that have no NEW badge */
+.curve-carousel .cc-badge--spacer {
+    visibility: hidden;
+}
+
+.curve-carousel .cc-name {
+    font-size: 26px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    line-height: 1.15;
+    margin: 0 0 6px 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.curve-carousel .cc-tagline {
+    font-size: 17px;
+    font-weight: 600;
+    line-height: 1.25;
+    margin: 0 0 6px 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.curve-carousel .cc-price {
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 1.2;
+}
+
+/* Fixed-height media box so every product image gets the same footprint */
+.curve-carousel .cc-media {
+    position: relative;
+    height: 190px;
+    flex: none;
+    margin-top: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.curve-carousel .cc-card--dark .cc-media::before {
+    content: '';
+    position: absolute;
+    width: 220px;
+    height: 220px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(43, 240, 255, 0.16) 0%, rgba(122, 60, 255, 0.08) 50%, transparent 70%);
+    pointer-events: none;
+}
+
+.curve-carousel .cc-image {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    -webkit-user-drag: none;
+    filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.22));
+}
+
+.curve-carousel .cc-image--fallback {
+    width: 60%;
+    height: 60%;
+    filter: grayscale(1) opacity(0.5);
+}
+
+.curve-carousel .cc-chevron {
+    position: absolute;
+    right: 22px;
+    bottom: 22px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* ---------- Controls ---------- */
+.curve-carousel .cc-controls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    margin-top: 4px;
+}
+
+.curve-carousel .cc-btn {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background-color: #e8e8ed !important;
+    color: #1d1d1f !important;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 18px;
+    transition: background-color 0.2s ease;
+}
+
+.curve-carousel .cc-btn:hover {
+    background-color: #d2d2d7 !important;
+}
+
+.curve-carousel .cc-btn:focus-visible {
+    outline: 2px solid #0071e3;
+    outline-offset: 2px;
+}
+
+.curve-carousel .cc-btn[hidden] {
+    display: none;
+}
+
+/* ---------- Mobile: 3 cards, gentler rotation (JS picks the numbers, CSS the size) ---------- */
+@media (max-width: 768px) {
+    .curve-carousel {
+        --cc-card-w: min(260px, 66vw);
+        --cc-card-h: 400px;
+        padding: 24px 12px 18px 12px;
+        border-radius: 20px;
+    }
+
+    .curve-carousel .cc-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+    }
+
+    .curve-carousel .cc-title { font-size: 26px; }
+
+    .curve-carousel .cc-card { padding: 20px; }
+    .curve-carousel .cc-name { font-size: 22px; }
+    .curve-carousel .cc-tagline { font-size: 15px; }
+    .curve-carousel .cc-media { height: 170px; }
+    .curve-carousel .cc-chevron { right: 18px; bottom: 18px; }
+}
+
+/* ---------- Reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+    .curve-carousel .cc-card {
+        transition: none;
+    }
+}
+
+/* ========================================================
+   Shared thumbnail helpers (NOT part of the carousel)
+   Used by POS cards, product table rows and inventory rows.
+   ======================================================== */
+
+/* POS product card centered ~96px thumb with radial glow on dark cards */
+.pos-thumb-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 96px;
+    width: 100%;
+}
+
+.pos-thumb-wrap::before {
+    content: '';
+    position: absolute;
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(143, 230, 255, 0.15) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+.pos-product-image {
+    width: 96px;
+    height: 96px;
+    max-width: 96px;
+    max-height: 96px;
+    object-fit: contain;
+    position: relative;
+    z-index: 1;
+    filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.3));
+    transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.pos-product-card:hover .pos-product-image {
+    transform: scale(1.06);
+}
+
+/* Table and inventory rows thumbnails */
+.table-product-thumb {
+    width: 44px;
+    height: 44px;
+    object-fit: contain;
+    background: rgba(10, 5, 36, 0.6);
+    border: 1px solid rgba(143, 230, 255, 0.25);
+    border-radius: 8px;
+    padding: 2px;
+}
+
+.inventory-product-thumb {
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+    background: rgba(10, 5, 36, 0.6);
+    border: 1px solid rgba(143, 230, 255, 0.25);
+    border-radius: 8px;
+    padding: 2px;
+}

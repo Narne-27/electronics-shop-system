@@ -1,0 +1,31 @@
+{# Curved 3D carousel card. Included once per product from _product_carousel.html.
+   The whole card is a link: on a side card the JS moves it to the centre,
+   on the centre card the link opens the product (change the href below to point elsewhere). #}
+{# card_idx is passed in by _product_carousel.html (0-based position in the carousel) #}
+{% set theme = ['dark', 'light', 'grey'][(card_idx|default(0)) % 3] %}
+
+<a class="cc-card cc-card--{{ theme }}"
+   href="{{ url_for('products', search=product.product_code) }}"
+   draggable="false">
+    <div class="cc-card-head">
+        {% if product.is_new %}
+        <span class="cc-badge">New</span>
+        {% else %}
+        <span class="cc-badge cc-badge--spacer" aria-hidden="true">New</span>
+        {% endif %}
+        <h3 class="cc-name" title="{{ product.product_name }}">{{ product.product_name }}</h3>
+        <p class="cc-tagline">{{ product.tagline or ((product.description or product.brand or '')|truncate(60)) }}</p>
+        <div class="cc-price">From {{ product.selling_price|inr }}</div>
+    </div>
+
+    <div class="cc-media">
+        <img src="{{ product.image_url or '/static/images/logo.svg' }}"
+             alt="{{ product.product_name }}"
+             class="cc-image"
+             loading="lazy"
+             draggable="false"
+             onerror="this.onerror=null; this.src='/static/images/logo.svg'; this.classList.add('cc-image--fallback');">
+    </div>
+
+    <span class="cc-chevron" aria-hidden="true"><i class="bi bi-chevron-right"></i></span>
+</a>

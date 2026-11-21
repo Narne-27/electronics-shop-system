@@ -1,0 +1,43 @@
+{# Curved 3D "What's New" Product Carousel Partial
+   Data: expects `carousel_products` (falls back to `products`), as passed by the /products route.
+   Styles:  static/css/product-carousel.css   (scoped under .curve-carousel)
+   Script:  static/js/product-carousel.js     (IIFE, no globals) #}
+{% set items = carousel_products|default(products|default([])) %}
+{% if items %}
+<section class="curve-carousel" aria-roledescription="carousel" aria-label="What's New Products Carousel">
+    <div class="cc-header">
+        <div>
+            <div class="cc-eyebrow">WHAT'S NEW</div>
+            <h2 class="cc-title">The latest. Take a look at what’s new right now.</h2>
+            <p class="cc-subtitle">Cutting-edge flagships, studio audio, next-gen silicon, and smart gear.</p>
+        </div>
+    </div>
+
+    <div class="cc-viewport">
+        <div class="cc-stage">
+            <div class="cc-rail">
+                {% for product in items %}
+                    {# pass the index explicitly: `loop` is not visible inside an included partial #}
+                    {% with card_idx = loop.index0 %}{% include '_product_card.html' %}{% endwith %}
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    {% if items|length > 1 %}
+    <div class="cc-controls" aria-label="Carousel Navigation Controls">
+        <button type="button" class="cc-btn cc-prev" aria-label="Previous product" title="Previous">
+            <i class="bi bi-chevron-left" aria-hidden="true"></i>
+        </button>
+        <button type="button" class="cc-btn cc-toggle" aria-label="Pause automatic rotation" title="Pause" aria-pressed="false">
+            <i class="bi bi-pause-fill" aria-hidden="true"></i>
+        </button>
+        <button type="button" class="cc-btn cc-next" aria-label="Next product" title="Next">
+            <i class="bi bi-chevron-right" aria-hidden="true"></i>
+        </button>
+    </div>
+    {% endif %}
+
+    <div class="cc-live visually-hidden" aria-live="polite" aria-atomic="true"></div>
+</section>
+{% endif %}
