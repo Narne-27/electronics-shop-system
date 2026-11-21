@@ -535,6 +535,12 @@ def get_hub_sections_data(user_role):
     rep_cnt = db.query_one("SELECT COUNT(*) as cnt FROM REPAIR_TICKET WHERE status != 'Delivered'")
     total_repairs_cnt = rep_cnt['cnt'] if rep_cnt else 0
 
+    deliv_active = db.query_one("SELECT COUNT(*) as cnt FROM DELIVERY_ORDER WHERE status IN ('Pending', 'Assigned', 'Out for Delivery')")
+    active_deliveries_cnt = deliv_active['cnt'] if deliv_active else 0
+
+    deliv_total = db.query_one("SELECT COUNT(*) as cnt FROM DELIVERY_ORDER")
+    total_deliveries_cnt = deliv_total['cnt'] if deliv_total else 0
+
     exp_data = db.query_one("SELECT COALESCE(SUM(amount), 0.0) as total FROM EXPENSE")
     total_expenses = exp_data['total'] if exp_data else 0.0
 
@@ -708,6 +714,20 @@ def get_hub_sections_data(user_role):
         },
 
         # 4. OPERATIONS
+        {
+            'id': 'deliveries',
+            'name': 'Delivery & Logistics',
+            'code': 'DLVR',
+            'category': 'Operations',
+            'eyebrow': 'LOGISTICS',
+            'icon': 'bi-truck',
+            'route': '/deliveries',
+            'metric': f"{active_deliveries_cnt} Active Dispatches" if active_deliveries_cnt > 0 else f"{total_deliveries_cnt} Orders" if total_deliveries_cnt > 0 else "Dispatch & Fleet",
+            'badge': f"{active_deliveries_cnt} Active" if active_deliveries_cnt > 0 else None,
+            'accent': '#06b6d4',
+            'warm_accent': '#38bdf8',
+            'allowed_roles': None
+        },
         {
             'id': 'repair_tickets',
             'name': 'Repair Tickets',

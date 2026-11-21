@@ -107,6 +107,22 @@ def test_delivery_workflow(client):
     res = client.post(f'/deliveries/{del_id}/assign', data={'assigned_to': '1'}, follow_redirects=True)
     assert b'Access denied' in res.data
 
+    # 10. Mirror Hall Hub integration
+    client.get('/logout')
+    client.post('/login', data={'username': 'admin', 'password': 'admin123'}, follow_redirects=True)
+    res_hub = client.get('/hub')
+    assert res_hub.status_code == 200
+    assert b'Delivery &amp; Logistics' in res_hub.data or b'Delivery & Logistics' in res_hub.data
+    assert b'DLVR' in res_hub.data
+
+    res_api = client.get('/api/hub/metrics')
+    assert res_api.status_code == 200
+    data = json.loads(res_api.data)
+    dlvr_section = next((s for s in data['sections'] if s['id'] == 'deliveries'), None)
+    assert dlvr_section is not None
+    assert dlvr_section['route'] == '/deliveries'
+    assert dlvr_section['category'] == 'Operations'
+
     # Cleanup test delivery
     db.execute("DELETE FROM DELIVERY_LOG WHERE delivery_id = %s", (del_id,))
     db.execute("DELETE FROM DELIVERY_ORDER WHERE delivery_id = %s", (del_id,))
