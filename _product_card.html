@@ -1,25 +1,48 @@
-{# Curved 3D carousel card. Included once per product from _product_carousel.html.
-   The whole card is a link: on a side card the JS moves it to the centre,
-   on the centre card the link opens the product (change the href below to point elsewhere). #}
-{# card_idx is passed in by _product_carousel.html (0-based position in the carousel) #}
-{% set theme = ['dark', 'light', 'grey'][(card_idx|default(0)) % 3] %}
+{# Curved 3D carousel card + its product-details window.
+   Included once per product from _product_carousel.html, which passes `card_idx` (0-based position).
 
-<a class="cc-card cc-card--{{ theme }}"
+   - The card is a link. A side card is moved to the centre by the JS; clicking the centre card
+     opens the details window below (without JS the link falls back to filtering the catalog).
+   - The details window (.cc-modal) sits next to the card in the markup, but the JS moves it to <body>
+     so it is not trapped inside the 3D stage or the page's stacking context. #}
+
+{% set themes = ['blue', 'orange', 'yellow', 'pink', 'teal', 'lavender'] %}
+{% set theme = themes[(card_idx|default(0)) % 6] %}
+
+{# ---- Product image -------------------------------------------------------------------------
+   Realistic renders live in static/images/products/. They are matched by product name below.
+   Products with no matching render keep the image_url from the database.
+   Set prefer_db_images to true to always use the database image when one exists. #}
+{% set prefer_db_images = false %}
+{% set pname = (product.product_name or '')|lower %}
+{% set rendered = none %}
+{% if 'iphone' in pname %}{% set rendered = 'apple-iphone-15-pro-max.svg' %}
+{% elif 'redmi' in pname %}{% set rendered = 'xiaomi-redmi-note-13-pro-plus.svg' %}
+{% elif 'oneplus' in pname %}{% set rendered = 'oneplus-12.svg' %}
+{% elif 'galaxy s' in pname %}{% set rendered = 'samsung-galaxy-s24-ultra.svg' %}
+{% endif %}
+{% if rendered and not (prefer_db_images and product.image_url) %}
+    {% set img_src = url_for('static', filename='images/products/' ~ rendered) %}
+{% else %}
+    {% set img_src = product.image_url or '/static/images/logo.svg' %}
+{% endif %}
+
+{% set mid = 'ccDetail' ~ (product.product_id if product.product_id is defined else (card_idx|default(0))) %}
+{% set qty = product.stock_quantity or 0 %}
+{% set reorder = product.reorder_level or 0 %}
+
+<a class="cc-card cc-t-{{ theme }}"
    href="{{ url_for('products', search=product.product_code) }}"
+   data-detail="{{ mid }}"
    draggable="false">
-    <div class="cc-card-head">
-        {% if product.is_new %}
-        <span class="cc-badge">New</span>
-        {% else %}
-        <span class="cc-badge cc-badge--spacer" aria-hidden="true">New</span>
-        {% endif %}
-        <h3 class="cc-name" title="{{ product.product_name }}">{{ product.product_name }}</h3>
-        <p class="cc-tagline">{{ product.tagline or ((product.description or product.brand or '')|truncate(60)) }}</p>
-        <div class="cc-price">From {{ product.selling_price|inr }}</div>
-    </div>
+    {% if product.is_new %}
+    <span class="cc-badge">New</span>
+    {% else %}
+    <span class="cc-badge cc-badge--spacer" aria-hidden="true">New</span>
+    {% endif %}
 
     <div class="cc-media">
-        <img src="{{ product.image_url or '/static/images/logo.svg' }}"
+        <img src="{{ img_src }}"
              alt="{{ product.product_name }}"
              class="cc-image"
              loading="lazy"
@@ -27,5 +50,58 @@
              onerror="this.onerror=null; this.src='/static/images/logo.svg'; this.classList.add('cc-image--fallback');">
     </div>
 
+    <div class="cc-card-foot">
+        <h3 class="cc-name" title="{{ product.product_name }}">{{ product.product_name }}</h3>
+        <div class="cc-price">From {{ product.selling_price|inr }}</div>
+    </div>
+
     <span class="cc-chevron" aria-hidden="true"><i class="bi bi-chevron-right"></i></span>
 </a>
+
+<!-- Product details window -->
+<div class="modal fade cc-modal cc-t-{{ theme }}" id="{{ mid }}" tabindex="-1" aria-labelledby="{{ mid }}Title" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <button type="button" class="btn-close cc-modal-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            <div class="cc-modal-grid">
+                <div class="cc-modal-media">
+                    <img src="{{ img_src }}" alt="{{ product.product_name }}" class="cc-modal-image"
+                         onerror="this.onerror=null; this.src='/static/images/logo.svg';">
+                </div>
+                <div class="cc-modal-body">
+                    {% if product.is_new %}<span class="cc-badge">New</span>{% endif %}
+                    <h2 class="cc-modal-title" id="{{ mid }}Title">{{ product.product_name }}</h2>
+                    {% if product.tagline %}<p class="cc-modal-tagline">{{ product.tagline }}</p>{% endif %}
+
+                    <div class="cc-modal-price"><span>From</span> {{ product.selling_price|inr }}</div>
+
+                    {% if qty == 0 %}
+                    <div class="cc-stock cc-stock--out">Out of stock</div>
+                    {% elif qty <= reorder %}
+                    <div class="cc-stock cc-stock--low">Low stock: {{ qty }} left</div>
+                    {% else %}
+                    <div class="cc-stock cc-stock--in">In stock: {{ qty }} units</div>
+                    {% endif %}
+
+                    <dl class="cc-specs">
+                        <div><dt>Brand</dt><dd>{{ product.brand or '-' }}</dd></div>
+                        <div><dt>Model</dt><dd>{{ product.model or '-' }}</dd></div>
+                        <div><dt>Category</dt><dd>{{ product.category_name or '-' }}</dd></div>
+                        <div><dt>SKU / Code</dt><dd>{{ product.product_code }}</dd></div>
+                        <div><dt>Warranty</dt><dd>{{ product.warranty_months }} months</dd></div>
+                        {% if product.hsn_code %}<div><dt>HSN</dt><dd>{{ product.hsn_code }}</dd></div>{% endif %}
+                    </dl>
+
+                    {% if product.description %}
+                    <p class="cc-modal-desc">{{ product.description }}</p>
+                    {% endif %}
+
+                    <div class="cc-modal-actions">
+                        <a class="cc-modal-btn cc-modal-btn--primary" href="{{ url_for('products', search=product.product_code) }}">Show in catalog</a>
+                        <button type="button" class="cc-modal-btn" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

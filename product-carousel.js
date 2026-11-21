@@ -28,6 +28,29 @@
     var cfg = null;
     var lastWidth = 0;
 
+    // Details windows: rendered next to each card, moved to <body> so they are not
+    // trapped inside the 3D stage or the page's stacking context.
+    var modalOpen = false;
+    var lastFocus = null;
+    Array.prototype.slice.call(rail.querySelectorAll('.cc-modal')).forEach(function (m) {
+        document.body.appendChild(m);
+        m.addEventListener('show.bs.modal', function () { modalOpen = true; schedule(); });
+        m.addEventListener('hidden.bs.modal', function () {
+            modalOpen = false;
+            schedule();
+            if (lastFocus && lastFocus.focus) lastFocus.focus();
+        });
+    });
+
+    function openDetails(card) {
+        var id = card.getAttribute('data-detail');
+        var el = id ? document.getElementById(id) : null;
+        if (!el || !window.bootstrap || !window.bootstrap.Modal) return false;
+        lastFocus = card;
+        window.bootstrap.Modal.getOrCreateInstance(el).show();
+        return true;
+    }
+
     /* ---------- Layout presets (index = distance from the centre card) ----------
        tx is a multiple of the card width, so presets follow the CSS card size. */
     var PRESETS = {
@@ -119,7 +142,7 @@
 
     function shouldPlay() {
         return n > 1 && !userPaused && !hovering && !touching && !focusInside &&
-            !offscreen && !document.hidden && !reduceMotion.matches;
+            !offscreen && !modalOpen && !document.hidden && !reduceMotion.matches;
     }
 
     function stop() {
@@ -150,10 +173,16 @@
         schedule();
     });
 
-    // Click: side card -> move to centre; centre card -> follow its link.
+    // Click: side card -> move to centre; centre card -> open its details window
+    // (modified clicks and a missing Bootstrap fall back to the plain link).
     rail.addEventListener('click', function (e) {
         var card = e.target.closest ? e.target.closest('.cc-card') : null;
-        if (!card || card.classList.contains('is-active')) return;
+        if (!card) return;
+        if (card.classList.contains('is-active')) {
+            if (e.ctrlKey || e.metaKey || e.shiftKey || e.button === 1) return;
+            if (openDetails(card)) e.preventDefault();
+            return;
+        }
         e.preventDefault();
         userGo(cards.indexOf(card));
     });
