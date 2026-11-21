@@ -5,6 +5,7 @@ Sets up the relational tables and seeds 4 users, 7 categories, 31 Indian product
 All dates derive from the central APP_TODAY anchor.
 """
 import os
+import re
 import sys
 import datetime
 import sqlite3
@@ -314,6 +315,16 @@ CREATE TABLE IF NOT EXISTS STORE_SETTING (
 """
 
 
+
+def _add_months(start, months):
+    """Calendar-accurate month addition (12 months = 1 year, not 360 days)."""
+    import calendar
+    months = int(months)
+    year = start.year + (start.month - 1 + months) // 12
+    month = (start.month - 1 + months) % 12 + 1
+    return datetime.date(year, month, min(start.day, calendar.monthrange(year, month)[1]))
+
+
 def seed_database(cursor, is_mysql=False):
     """Seed comprehensive relational demo data anchored to config.APP_TODAY."""
     p = '%s' if is_mysql else '?'
@@ -527,7 +538,7 @@ def seed_database(cursor, is_mysql=False):
             sale_id = cursor.lastrowid
 
             # Calculate warranty expiry
-            exp_date = sale_dt + datetime.timedelta(days=w_months * 30)
+            exp_date = _add_months(sale_dt, w_months)
             exp_str = exp_date.strftime('%Y-%m-%d')
 
             cursor.execute(f"""
@@ -704,6 +715,16 @@ def init_sqlite_db():
     print(f"SQLite database initialized and seeded at: {config.SQLITE_DB_PATH}")
 
 
+def _split_mysql_script(script):
+    """
+    Split a .sql script into executable statements.
+    Comment lines/trailing comments are removed FIRST - previously every chunk
+    that began with a '-- comment' (i.e. every CREATE TABLE) was skipped.
+    """
+    cleaned = re.sub(r'--[^\n]*', '', script)
+    return [stmt.strip() for stmt in cleaned.split(';') if stmt.strip()]
+
+
 def init_mysql_db():
     """Initializes and seeds MySQL database if available."""
     if not PYMYSQL_AVAILABLE:
@@ -724,11 +745,8 @@ def init_mysql_db():
         schema_path = os.path.join(config.BASE_DIR, 'schema_mysql.sql')
         if os.path.exists(schema_path):
             with open(schema_path, 'r', encoding='utf-8') as f:
-                sql_commands = f.read().split(';')
-                for cmd in sql_commands:
-                    cmd_clean = cmd.strip()
-                    if cmd_clean and not cmd_clean.startswith('--'):
-                        cursor.execute(cmd_clean)
+                for stmt in _split_mysql_script(f.read()):
+                    cursor.execute(stmt)
 
         seed_database(cursor, is_mysql=True)
         conn.commit()
@@ -736,12 +754,21 @@ def init_mysql_db():
         print(f"MySQL database '{config.MYSQL_DB}' successfully initialized and seeded.")
         return True
     except Exception as e:
-        print(f"MySQL initialization failed ({e}). Falling back to SQLite.")
+        print(f"MySQL initialization failed ({e}).")
         return False
 
 
 def ensure_db_initialized():
-    """Idempotent initialization check."""
+    """
+    Idempotent start-up initialisation for the ACTIVE engine (MySQL or SQLite).
+    Previously this always initialised SQLite, even in MySQL mode.
+    """
+    import db  # local import: db.py only depends on config
+    if db.ACTIVE_DB_TYPE == 'mysql':
+        if not init_mysql_db():
+            raise RuntimeError("MySQL is configured but could not be initialised. "
+                               "Check MYSQL_* settings or set DB_TYPE=sqlite.")
+        return
     init_sqlite_db()
 
 

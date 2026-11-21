@@ -39,7 +39,8 @@ Includes a comprehensive **Permission Matrix** (`10 Modules × 4 Roles`) display
 - **Automatic Billing**: Subtotal, CGST (9%), SGST (9%), discount deductions, and grand total.
 - **Multi-Payment Options**: UPI / QR Code, Cash, Credit/Debit Card, and Net Banking.
 - **Inline Customer Creation**: Add new customers directly from the register modal.
-- **Atomic Stock Deductions**: Automatic stock decrement upon successful checkout within a database transaction.
+- **Atomic Stock Deductions**: The whole checkout (sale, items, stock, movements) runs in ONE database transaction with a guarded stock update – no partial sales and no overselling.
+- **Server-side Pricing**: Tax, discounts, coupons and exchange value are recomputed on the server; values sent by the browser are never trusted.
 
 ### 5. Professional Tax Invoices & Printing
 - **A4 / Letter Print Layout**: Ready for thermal/laser printers or PDF export (`window.print()`).
@@ -69,7 +70,9 @@ Includes a comprehensive **Permission Matrix** (`10 Modules × 4 Roles`) display
 
 ---
 
-## 🗄️ Database Architecture (6-Table Structure)
+## 🗄️ Database Architecture (core ERD – 6 of the 20 tables)
+
+> The full schema has **20 tables** (see `schema_mysql.sql` / `init_db.py`): the 6 below plus STOCK_MOVEMENT, WARRANTY_CLAIM, CREDIT_NOTE, CUSTOMER_PAYMENT, SUPPLIER, PURCHASE_ORDER(+ITEM), QUOTATION(+ITEM), REPAIR_TICKET, EXPENSE, DAILY_CLOSING, AUDIT_LOG and STORE_SETTING.
 
 ```mermaid
 erDiagram
@@ -168,7 +171,7 @@ electronics_shop_system/
 ├── seed_data_mysql.sql        # Realistic Indian electronics seed data with INR pricing
 ├── electrodesk.db             # Local SQLite database pre-seeded with sample data
 ├── requirements.txt           # Python package dependencies
-├── test_app.py                # Automated test suite (13 unit & integration tests)
+├── test_app.py                # Automated regression suite (35 tests, uses a temporary database)
 ├── README.md                  # Comprehensive documentation and execution guide
 │
 ├── static/
@@ -208,7 +211,7 @@ electronics_shop_system/
 
 ### Step 1: Open PowerShell / Terminal
 ```powershell
-cd "C:\Users\narne\.gemini\antigravity\scratch\electronics_shop_system"
+cd "path\to\electronics_shop_system"
 ```
 
 ### Step 2: Install Python Dependencies
@@ -246,10 +249,25 @@ Open your browser and navigate to:
 
 ---
 
+## ⚙️ Configuration & Security Notes
+
+| Environment variable | Purpose | Default |
+| :--- | :--- | :--- |
+| `SECRET_KEY` | Flask session signing key | random key generated once and stored in `.secret_key` |
+| `FLASK_DEBUG` | Debug mode (never enable in production) | `False` |
+| `HOST` | Bind address (`0.0.0.0` to expose on the network) | `127.0.0.1` |
+| `OWNER_APPROVAL_PIN` | PIN for discounts above 10% | `9999` – **change it** |
+| `DB_TYPE` / `MYSQL_*` | `mysql` to use MySQL (`python init_db.py --mysql` first) | `sqlite` |
+
+* The login page still offers one-click demo logins and the seeded accounts use demo passwords – remove/rotate them before real use.
+* JSON backups contain password hashes: store them privately.
+* Restore replaces **all** data with the backup's contents (all-or-nothing); it no longer re-seeds demo data.
+
 ## 🧪 Running Automated Tests
 
 Run the complete test suite:
 ```powershell
 python test_app.py
 ```
-"# electronics-shop-system" 
+
+The tests cover checkout tampering, atomic rollback, returns, dues, quotations, backup/restore, daily closing, GST, user rules and the MySQL schema splitter.

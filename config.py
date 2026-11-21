@@ -8,11 +8,40 @@ import datetime
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
 # Flask settings
-SECRET_KEY = os.environ.get('SECRET_KEY', 'electrodesk-secure-secret-key-2026-prod')
-DEBUG = os.environ.get('FLASK_DEBUG', 'True').lower() in ('true', '1', 'yes')
+import secrets
 
-# Global Date Constant: APP_TODAY (can be overridden dynamically in Settings)
-# Defaults dynamically to the current operational reference calendar date
+
+def _load_secret_key():
+    """
+    SECRET_KEY comes from the environment; otherwise a random key is generated
+    once and persisted next to the app (never a hard-coded value in source).
+    """
+    env_key = os.environ.get('SECRET_KEY')
+    if env_key:
+        return env_key
+    key_path = os.path.join(BASE_DIR, '.secret_key')
+    try:
+        if os.path.exists(key_path):
+            with open(key_path, 'r', encoding='utf-8') as fh:
+                stored = fh.read().strip()
+                if stored:
+                    return stored
+        generated = secrets.token_hex(32)
+        with open(key_path, 'w', encoding='utf-8') as fh:
+            fh.write(generated)
+        return generated
+    except OSError:
+        return secrets.token_hex(32)
+
+
+SECRET_KEY = _load_secret_key()
+# Debug mode exposes an interactive debugger: it is OFF unless explicitly enabled.
+DEBUG = os.environ.get('FLASK_DEBUG', 'False').lower() in ('true', '1', 'yes')
+# Bind to localhost by default; set HOST=0.0.0.0 to expose on the network.
+HOST = os.environ.get('HOST', '127.0.0.1')
+
+# Global Date Constant fallback. NOTE: the application resolves "today" at
+# request time (see get_app_today in app.py) so this value is never stale.
 APP_TODAY = datetime.date.today()
 
 # Store Branding & Details for Invoices & Receipts
@@ -45,7 +74,13 @@ ACTIVE_COUPONS = {
 }
 
 # Owner Authorization PIN for discounts > 10%
-OWNER_APPROVAL_PIN = '9999'
+# Override in production: set the OWNER_APPROVAL_PIN environment variable.
+OWNER_APPROVAL_PIN = os.environ.get('OWNER_APPROVAL_PIN', '9999')
+
+# Discounts above this percentage of the subtotal need Owner approval
+DISCOUNT_APPROVAL_PCT = 10.0
+# Trade-in / exchange value above this percentage of the subtotal needs Owner approval
+EXCHANGE_APPROVAL_PCT = 50.0
 
 # Database Configuration
 DB_TYPE = os.environ.get('DB_TYPE', 'sqlite').lower()

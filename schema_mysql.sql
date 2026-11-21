@@ -70,6 +70,8 @@ CREATE TABLE IF NOT EXISTS SALE (
     user_id INT NOT NULL,
     sale_date DATETIME NOT NULL,
     subtotal DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+    cgst_amount DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+    sgst_amount DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
     tax_amount DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
     discount_amount DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
     discount_type VARCHAR(20) DEFAULT 'none',
