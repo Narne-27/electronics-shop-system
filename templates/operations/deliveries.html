@@ -1,0 +1,756 @@
+{% extends 'base.html' %}
+
+{% block title %}Delivery & Logistics - Electrodesk{% endblock %}
+
+{% block content %}
+<div class="page-header-container">
+    <div>
+        <h1 class="page-title-h1">Delivery & Logistics</h1>
+        <p class="page-subtitle-muted">Fulfillment management, customer shipments, carrier assignments, and real-time tracking</p>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+        {% if current_user.role in ['System Administrator', 'Admin', 'Shop Owner', 'Owner', 'Shop Manager', 'Manager'] %}
+        <button type="button" class="btn btn-outline-secondary d-flex align-items-center gap-2 shadow-sm" data-bs-toggle="modal" data-bs-target="#staffRosterModal">
+            <i class="bi bi-people"></i>
+            <span>Delivery Staff</span>
+        </button>
+        {% endif %}
+        {% if current_user.role != 'Delivery Staff' %}
+        <button type="button" class="btn btn-navy d-flex align-items-center gap-2 shadow-sm" data-bs-toggle="modal" data-bs-target="#createDeliveryModal">
+            <i class="bi bi-plus-circle"></i>
+            <span>Schedule Delivery</span>
+        </button>
+        {% endif %}
+    </div>
+</div>
+
+<!-- KPI Summary Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-lg-2">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-body p-3">
+                <div class="d-flex align-items-center justify-content-between mb-1">
+                    <span class="text-muted small fw-medium">Total Orders</span>
+                    <i class="bi bi-box-seam text-primary"></i>
+                </div>
+                <h3 class="fw-bold mb-0 text-dark">{{ stats.total }}</h3>
+                <small class="text-muted" style="font-size: 0.75rem;">Lifetime Deliveries</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-2">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-body p-3">
+                <div class="d-flex align-items-center justify-content-between mb-1">
+                    <span class="text-muted small fw-medium">Pending / Queued</span>
+                    <i class="bi bi-clock-history text-secondary"></i>
+                </div>
+                <h3 class="fw-bold mb-0 text-secondary">{{ stats.pending }}</h3>
+                <small class="text-muted" style="font-size: 0.75rem;">Awaiting Dispatch</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-2">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-body p-3">
+                <div class="d-flex align-items-center justify-content-between mb-1">
+                    <span class="text-muted small fw-medium">Assigned</span>
+                    <i class="bi bi-person-check text-info"></i>
+                </div>
+                <h3 class="fw-bold mb-0 text-info">{{ stats.assigned }}</h3>
+                <small class="text-muted" style="font-size: 0.75rem;">Personnel Allocated</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-2">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-body p-3">
+                <div class="d-flex align-items-center justify-content-between mb-1">
+                    <span class="text-muted small fw-medium">In Transit</span>
+                    <i class="bi bi-truck text-warning"></i>
+                </div>
+                <h3 class="fw-bold mb-0 text-warning">{{ stats.out_for_delivery }}</h3>
+                <small class="text-muted" style="font-size: 0.75rem;">Out for Delivery</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-2">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-body p-3">
+                <div class="d-flex align-items-center justify-content-between mb-1">
+                    <span class="text-muted small fw-medium">Delivered</span>
+                    <i class="bi bi-check2-circle text-success"></i>
+                </div>
+                <h3 class="fw-bold mb-0 text-success">{{ stats.delivered }}</h3>
+                <small class="text-success" style="font-size: 0.75rem;">{{ stats.success_rate }}% Success</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-2">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-body p-3">
+                <div class="d-flex align-items-center justify-content-between mb-1">
+                    <span class="text-muted small fw-medium">Freight Collected</span>
+                    <i class="bi bi-currency-rupee text-primary"></i>
+                </div>
+                <h3 class="fw-bold mb-0 text-dark">{{ stats.total_charges|inr }}</h3>
+                <small class="text-muted" style="font-size: 0.75rem;">Delivery Fees</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters and Search Toolbar -->
+<div class="card border-0 shadow-sm rounded-4 mb-4">
+    <div class="card-body p-3">
+        <form method="GET" action="{{ url_for('deliveries') }}" class="row g-2 align-items-center">
+            <div class="col-12 col-md-4">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-light border-end-0 text-muted"><i class="bi bi-search"></i></span>
+                    <input type="text" name="search" class="form-control form-control-sm border-start-0 bg-light" 
+                           placeholder="Search Delivery #, Invoice #, Recipient, Phone..." 
+                           value="{{ current_search }}">
+                </div>
+            </div>
+            <div class="col-6 col-md-2">
+                <select name="status" class="form-select form-select-sm bg-light" onchange="this.form.submit()">
+                    <option value="">All Statuses</option>
+                    <option value="Pending" {% if current_status == 'Pending' %}selected{% endif %}>Pending</option>
+                    <option value="Assigned" {% if current_status == 'Assigned' %}selected{% endif %}>Assigned</option>
+                    <option value="Out for Delivery" {% if current_status == 'Out for Delivery' %}selected{% endif %}>Out for Delivery</option>
+                    <option value="Delivered" {% if current_status == 'Delivered' %}selected{% endif %}>Delivered</option>
+                    <option value="Failed" {% if current_status == 'Failed' %}selected{% endif %}>Failed</option>
+                    <option value="Cancelled" {% if current_status == 'Cancelled' %}selected{% endif %}>Cancelled</option>
+                </select>
+            </div>
+            <div class="col-6 col-md-2">
+                <select name="assigned_to" class="form-select form-select-sm bg-light" onchange="this.form.submit()">
+                    <option value="">All Personnel</option>
+                    <option value="unassigned" {% if current_assigned == 'unassigned' %}selected{% endif %}>Unassigned Only</option>
+                    {% for staff in delivery_staff %}
+                    <option value="{{ staff.user_id }}" {% if current_assigned == staff.user_id|string %}selected{% endif %}>
+                        {{ staff.full_name }} ({{ staff.role }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-6 col-md-2">
+                <input type="date" name="date" class="form-control form-control-sm bg-light" 
+                       value="{{ current_date }}" title="Filter by Expected Date" onchange="this.form.submit()">
+            </div>
+            <div class="col-6 col-md-2 d-flex gap-2">
+                <button type="submit" class="btn btn-sm btn-outline-primary flex-grow-1">Filter</button>
+                {% if current_status or current_assigned or current_search or current_date or my_only %}
+                <a href="{{ url_for('deliveries') }}" class="btn btn-sm btn-outline-secondary" title="Clear Filters">
+                    <i class="bi bi-x-circle"></i>
+                </a>
+                {% endif %}
+                <a href="{{ url_for('deliveries', my_only='1' if my_only != '1' else '') }}" 
+                   class="btn btn-sm {% if my_only == '1' %}btn-primary text-white{% else %}btn-outline-secondary{% endif %}"
+                   title="Show deliveries assigned to me">
+                    <i class="bi bi-person"></i> Mine
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Delivery Orders Table -->
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+        <div class="fw-bold text-dark d-flex align-items-center gap-2">
+            <i class="bi bi-truck text-primary"></i>
+            <span>Logistics & Shipment Registry</span>
+        </div>
+        <span class="badge bg-secondary-subtle text-secondary">{{ deliveries|length }} Order(s)</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">Delivery #</th>
+                        <th>Invoice / Order</th>
+                        <th>Recipient & Address</th>
+                        <th>Expected Date</th>
+                        <th>Charges</th>
+                        <th>Assigned Staff</th>
+                        <th>Status</th>
+                        <th class="text-end pe-4">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for d in deliveries %}
+                    <tr>
+                        <td class="ps-4">
+                            <span class="fw-bold font-monospace text-primary">{{ d.delivery_number }}</span>
+                            <div class="text-muted small" style="font-size: 0.75rem;">Created: {{ d.created_at[:10] }}</div>
+                        </td>
+                        <td>
+                            <a href="{{ url_for('invoice_view', sale_id=d.sale_id) }}" class="fw-semibold text-decoration-none">
+                                {{ d.invoice_number }}
+                            </a>
+                            <div class="text-muted small">{{ d.sale_amount|inr }}</div>
+                        </td>
+                        <td>
+                            <div class="fw-semibold text-dark">{{ d.recipient_name }}</div>
+                            <div class="small text-muted"><i class="bi bi-telephone me-1"></i>{{ d.recipient_phone }}</div>
+                            <div class="small text-secondary text-truncate" style="max-width: 260px;" title="{{ d.delivery_address }}">
+                                <i class="bi bi-geo-alt me-1"></i>{{ d.delivery_address }}
+                            </div>
+                        </td>
+                        <td>
+                            <div class="fw-semibold text-dark">{{ d.expected_date }}</div>
+                            {% if d.status == 'Delivered' and d.delivered_at %}
+                            <small class="text-success" style="font-size: 0.75rem;"><i class="bi bi-check-circle me-1"></i>Delivered {{ d.delivered_at[:10] }}</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="fw-semibold">{{ d.delivery_charges|inr }}</span>
+                        </td>
+                        <td>
+                            {% if d.assigned_staff_name %}
+                            <span class="badge bg-light text-dark border d-inline-flex align-items-center gap-1">
+                                <i class="bi bi-person-fill text-secondary"></i> {{ d.assigned_staff_name }}
+                            </span>
+                            {% else %}
+                            <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Unassigned</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if d.status == 'Delivered' %}
+                            <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
+                                <i class="bi bi-check-circle-fill me-1"></i>Delivered
+                            </span>
+                            {% elif d.status == 'Out for Delivery' %}
+                            <span class="badge bg-warning-subtle text-warning border border-warning-subtle px-2 py-1">
+                                <i class="bi bi-truck me-1"></i>In Transit
+                            </span>
+                            {% elif d.status == 'Assigned' %}
+                            <span class="badge bg-info-subtle text-info border border-info-subtle px-2 py-1">
+                                <i class="bi bi-person-check me-1"></i>Assigned
+                            </span>
+                            {% elif d.status == 'Pending' %}
+                            <span class="badge bg-secondary-subtle text-secondary border px-2 py-1">
+                                <i class="bi bi-clock me-1"></i>Pending
+                            </span>
+                            {% elif d.status == 'Failed' %}
+                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1">
+                                <i class="bi bi-x-circle me-1"></i>Failed
+                            </span>
+                            {% else %}
+                            <span class="badge bg-dark-subtle text-dark border px-2 py-1">
+                                {{ d.status }}
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end pe-4">
+                            <div class="btn-group btn-group-sm">
+                                <!-- Quick Status Update Modal Trigger -->
+                                <button type="button" class="btn btn-outline-primary" 
+                                        onclick="openStatusModal({{ d.delivery_id }}, '{{ d.delivery_number }}', '{{ d.status }}')"
+                                        title="Update Status">
+                                    <i class="bi bi-arrow-repeat"></i> Status
+                                </button>
+                                <!-- View History / Timeline Trigger -->
+                                <button type="button" class="btn btn-outline-secondary" 
+                                        onclick="viewDeliveryTimeline({{ d.delivery_id }})"
+                                        title="View Tracking History">
+                                    <i class="bi bi-clock-history"></i>
+                                </button>
+                                {% if current_user.role != 'Delivery Staff' %}
+                                <div class="btn-group btn-group-sm">
+                                    <button type="button" class="btn btn-outline-secondary dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false">
+                                        <span class="visually-hidden">More</span>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                                        <li>
+                                            <a class="dropdown-item" href="javascript:void(0)" 
+                                               onclick="openAssignModal({{ d.delivery_id }}, '{{ d.delivery_number }}', '{{ d.assigned_to or '' }}')">
+                                                <i class="bi bi-person-plus me-2 text-primary"></i>Assign Staff
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item" href="javascript:void(0)" 
+                                               onclick="openEditModal({{ d.delivery_id }}, '{{ d.delivery_number }}', '{{ d.recipient_name|replace('\'', '\\\'') }}', '{{ d.recipient_phone }}', '{{ d.delivery_address|replace('\'', '\\\'')|replace('\n', ' ') }}', {{ d.delivery_charges }}, '{{ d.expected_date }}', '{{ (d.tracking_notes or '')|replace('\'', '\\\'') }}')">
+                                                <i class="bi bi-pencil me-2 text-secondary"></i>Edit Destination / Date
+                                            </a>
+                                        </li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <a class="dropdown-item" href="{{ url_for('invoice_view', sale_id=d.sale_id) }}">
+                                                <i class="bi bi-receipt me-2 text-muted"></i>View Invoice
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="text-center py-5 text-muted">
+                            <i class="bi bi-truck display-6 d-block mb-3 text-secondary opacity-50"></i>
+                            <div class="fw-semibold">No delivery orders match your filters.</div>
+                            <small>Create a new delivery schedule or adjust filter parameters.</small>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- ================= MODALS ================= -->
+
+<!-- 1. Schedule Delivery Modal -->
+<div class="modal fade" id="createDeliveryModal" tabindex="-1" aria-labelledby="createDeliveryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <form method="POST" action="{{ url_for('delivery_create') }}">
+                <div class="modal-header bg-light border-bottom">
+                    <h5 class="modal-title fw-bold" id="createDeliveryModalLabel">
+                        <i class="bi bi-truck text-primary me-2"></i>Schedule New Delivery Order
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Select POS Sale / Invoice <span class="text-danger">*</span></label>
+                            <select name="sale_id" id="deliverySaleSelect" class="form-select" required onchange="populateSaleDetails(this)">
+                                <option value="">-- Choose Completed Sale Invoice --</option>
+                                {% for s in available_sales %}
+                                <option value="{{ s.sale_id }}" 
+                                        data-name="{{ s.customer_name }}" 
+                                        data-phone="{{ s.phone }}" 
+                                        data-address="{{ s.address or '' }}"
+                                        data-city="{{ s.city or '' }}">
+                                    {{ s.invoice_number }} &bull; {{ s.customer_name }} &bull; {{ s.grand_total|inr }} ({{ s.sale_date[:10] }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Choose any existing POS sale to link shipment to customer and stock records.</div>
+                        </div>
+
+                        <div class="col-12 col-md-6">
+                            <label class="form-label fw-semibold">Recipient Full Name</label>
+                            <input type="text" name="recipient_name" id="deliveryRecipientName" class="form-control" placeholder="Customer Name">
+                        </div>
+
+                        <div class="col-12 col-md-6">
+                            <label class="form-label fw-semibold">Contact Phone Number</label>
+                            <input type="text" name="recipient_phone" id="deliveryRecipientPhone" class="form-control" placeholder="+91 98765 43210">
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Full Delivery Address <span class="text-danger">*</span></label>
+                            <textarea name="delivery_address" id="deliveryAddress" class="form-control" rows="2" placeholder="Street, Building, Landmark, City, PIN Code" required></textarea>
+                        </div>
+
+                        <div class="col-12 col-md-4">
+                            <label class="form-label fw-semibold">Delivery Fee / Charges (₹)</label>
+                            <input type="number" step="1" min="0" name="delivery_charges" class="form-control" value="0">
+                        </div>
+
+                        <div class="col-12 col-md-4">
+                            <label class="form-label fw-semibold">Expected Delivery Date <span class="text-danger">*</span></label>
+                            <input type="date" name="expected_date" class="form-control" value="{{ today.strftime('%Y-%m-%d') }}" required>
+                        </div>
+
+                        <div class="col-12 col-md-4">
+                            <label class="form-label fw-semibold">Assign Delivery Personnel</label>
+                            <select name="assigned_to" class="form-select">
+                                <option value="">-- Assign Later (Pending) --</option>
+                                {% for staff in delivery_staff %}
+                                <option value="{{ staff.user_id }}">{{ staff.full_name }} ({{ staff.role }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Dispatch / Package Notes</label>
+                            <input type="text" name="tracking_notes" class="form-control" placeholder="e.g. Fragile box, Evening delivery between 4-6 PM, Call before arrival">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light border-top">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-navy">Create & Dispatch Order</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 2. Update Status Modal -->
+<div class="modal fade" id="statusUpdateModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <form method="POST" id="statusUpdateForm" action="">
+                <div class="modal-header bg-light border-bottom">
+                    <h5 class="modal-title fw-bold">
+                        <i class="bi bi-arrow-repeat text-primary me-2"></i>Update Status: <span id="modalDeliveryNumber"></span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">New Status <span class="text-danger">*</span></label>
+                        <select name="status" id="modalStatusSelect" class="form-select" required>
+                            <option value="Pending">Pending (Awaiting Dispatch)</option>
+                            <option value="Assigned">Assigned (Personnel Allocated)</option>
+                            <option value="Out for Delivery">Out for Delivery (In Transit)</option>
+                            <option value="Delivered">Delivered (Handed Over / Completed)</option>
+                            <option value="Failed">Failed (Customer Unavailable / Reschedule)</option>
+                            <option value="Cancelled">Cancelled (Order Cancelled)</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Status Remarks / Proof Notes</label>
+                        <textarea name="remarks" class="form-control" rows="3" placeholder="e.g. OTP verified at doorstep, Customer asked to deliver tomorrow after 6pm, Dispatched with route #2" required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light border-top">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Status Update</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 3. Assign Staff Modal -->
+<div class="modal fade" id="assignStaffModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <form method="POST" id="assignStaffForm" action="">
+                <div class="modal-header bg-light border-bottom">
+                    <h5 class="modal-title fw-bold">
+                        <i class="bi bi-person-check text-primary me-2"></i>Assign Personnel: <span id="assignDeliveryNumber"></span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Delivery Executive / Personnel <span class="text-danger">*</span></label>
+                        <select name="assigned_to" id="assignStaffSelect" class="form-select">
+                            <option value="">-- Unassign (Mark Pending) --</option>
+                            {% for staff in delivery_staff %}
+                            <option value="{{ staff.user_id }}">
+                                {{ staff.full_name }} &bull; {{ staff.role }} ({{ staff.active_deliveries_count }} active)
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Assignment Instructions</label>
+                        <input type="text" name="remarks" class="form-control" placeholder="e.g. Assigned for South City express delivery slot">
+                    </div>
+                </div>
+                <div class="modal-footer bg-light border-top">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Confirm Assignment</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 4. Edit Delivery Details Modal -->
+<div class="modal fade" id="editDeliveryModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <form method="POST" id="editDeliveryForm" action="">
+                <div class="modal-header bg-light border-bottom">
+                    <h5 class="modal-title fw-bold">
+                        <i class="bi bi-pencil text-primary me-2"></i>Edit Delivery Details: <span id="editDeliveryNumber"></span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="row g-3">
+                        <div class="col-12 col-md-6">
+                            <label class="form-label fw-semibold">Recipient Name</label>
+                            <input type="text" name="recipient_name" id="editRecipientName" class="form-control" required>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label fw-semibold">Contact Phone</label>
+                            <input type="text" name="recipient_phone" id="editRecipientPhone" class="form-control" required>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Delivery Address</label>
+                            <textarea name="delivery_address" id="editDeliveryAddress" class="form-control" rows="2" required></textarea>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label fw-semibold">Delivery Charges (₹)</label>
+                            <input type="number" step="1" min="0" name="delivery_charges" id="editDeliveryCharges" class="form-control" required>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label fw-semibold">Expected Delivery Date</label>
+                            <input type="date" name="expected_date" id="editExpectedDate" class="form-control" required>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Notes / Special Instructions</label>
+                            <input type="text" name="tracking_notes" id="editTrackingNotes" class="form-control">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light border-top">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 5. Timeline / Delivery Audit History Modal -->
+<div class="modal fade" id="deliveryHistoryModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header bg-light border-bottom">
+                <h5 class="modal-title fw-bold">
+                    <i class="bi bi-clock-history text-primary me-2"></i>Delivery History & Tracking Timeline
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4" id="timelineModalBody">
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer bg-light border-top">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 6. Delivery Staff Roster Modal (Admin / Manager) -->
+<div class="modal fade" id="staffRosterModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header bg-light border-bottom">
+                <h5 class="modal-title fw-bold">
+                    <i class="bi bi-people text-primary me-2"></i>Delivery Staff & Logistics Roster
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-4">
+                    <h6 class="fw-bold mb-3 text-dark">Active Logistics Personnel</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Staff Name</th>
+                                    <th>Username</th>
+                                    <th>Role</th>
+                                    <th>Contact Phone</th>
+                                    <th class="text-center">Active Jobs</th>
+                                    <th class="text-center">Completed</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for s in delivery_staff %}
+                                <tr>
+                                    <td class="fw-semibold">{{ s.full_name }}</td>
+                                    <td><code>@{{ s.username }}</code></td>
+                                    <td><span class="badge bg-light text-dark border">{{ s.role }}</span></td>
+                                    <td>{{ s.phone or '-' }}</td>
+                                    <td class="text-center"><span class="badge bg-warning-subtle text-warning">{{ s.active_deliveries_count }}</span></td>
+                                    <td class="text-center"><span class="badge bg-success-subtle text-success">{{ s.completed_deliveries_count }}</span></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <hr>
+
+                <h6 class="fw-bold mb-3 text-dark"><i class="bi bi-person-plus me-2 text-primary"></i>Register New Delivery Personnel</h6>
+                <form method="POST" action="{{ url_for('delivery_staff_create') }}" class="row g-2">
+                    <div class="col-12 col-md-6">
+                        <label class="form-label small fw-semibold">Full Name <span class="text-danger">*</span></label>
+                        <input type="text" name="full_name" class="form-control form-control-sm" placeholder="e.g. Rahul Verma" required>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label small fw-semibold">Username <span class="text-danger">*</span></label>
+                        <input type="text" name="username" class="form-control form-control-sm" placeholder="e.g. rahul" required>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label small fw-semibold">Phone Number</label>
+                        <input type="text" name="phone" class="form-control form-control-sm" placeholder="+91 98765 00000">
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label small fw-semibold">Default Password</label>
+                        <input type="password" name="password" class="form-control form-control-sm" value="delivery123" required>
+                    </div>
+                    <div class="col-12 text-end mt-3">
+                        <button type="submit" class="btn btn-sm btn-navy">
+                            <i class="bi bi-check2"></i> Add Delivery Personnel
+                        </button>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer bg-light border-top">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function populateSaleDetails(selectEl) {
+    const opt = selectEl.options[selectEl.selectedIndex];
+    if (!opt || !opt.value) return;
+
+    const name = opt.getAttribute('data-name') || '';
+    const phone = opt.getAttribute('data-phone') || '';
+    let address = opt.getAttribute('data-address') || '';
+    const city = opt.getAttribute('data-city') || '';
+    if (city && !address.includes(city)) {
+        address = address ? (address + ', ' + city) : city;
+    }
+
+    document.getElementById('deliveryRecipientName').value = name;
+    document.getElementById('deliveryRecipientPhone').value = phone;
+    document.getElementById('deliveryAddress').value = address;
+}
+
+function openStatusModal(delId, delNum, currentStatus) {
+    document.getElementById('modalDeliveryNumber').textContent = delNum;
+    document.getElementById('modalStatusSelect').value = currentStatus;
+    document.getElementById('statusUpdateForm').action = '/deliveries/' + delId + '/update-status';
+    const modal = new bootstrap.Modal(document.getElementById('statusUpdateModal'));
+    modal.show();
+}
+
+function openAssignModal(delId, delNum, currentAssigned) {
+    document.getElementById('assignDeliveryNumber').textContent = delNum;
+    document.getElementById('assignStaffSelect').value = currentAssigned || '';
+    document.getElementById('assignStaffForm').action = '/deliveries/' + delId + '/assign';
+    const modal = new bootstrap.Modal(document.getElementById('assignStaffModal'));
+    modal.show();
+}
+
+function openEditModal(delId, delNum, name, phone, address, charges, date, notes) {
+    document.getElementById('editDeliveryNumber').textContent = delNum;
+    document.getElementById('editRecipientName').value = name;
+    document.getElementById('editRecipientPhone').value = phone;
+    document.getElementById('editDeliveryAddress').value = address;
+    document.getElementById('editDeliveryCharges').value = charges;
+    document.getElementById('editExpectedDate').value = date;
+    document.getElementById('editTrackingNotes').value = notes;
+    document.getElementById('editDeliveryForm').action = '/deliveries/' + delId + '/edit';
+    const modal = new bootstrap.Modal(document.getElementById('editDeliveryModal'));
+    modal.show();
+}
+
+function viewDeliveryTimeline(delId) {
+    const modalBody = document.getElementById('timelineModalBody');
+    modalBody.innerHTML = `
+        <div class="text-center py-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    `;
+    const modal = new bootstrap.Modal(document.getElementById('deliveryHistoryModal'));
+    modal.show();
+
+    fetch('/deliveries/' + delId + '/history')
+        .then(res => res.json())
+        .then(data => {
+            if (data.error) {
+                modalBody.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+                return;
+            }
+            const del = data.delivery;
+            const logs = data.logs || [];
+            const items = data.items || [];
+
+            let itemsHtml = items.map(it => `
+                <li class="list-group-item d-flex justify-content-between align-items-center py-2">
+                    <div>
+                        <div class="fw-semibold text-dark">${it.product_name}</div>
+                        <small class="text-muted font-monospace">${it.product_code} &bull; Qty: ${it.quantity}</small>
+                    </div>
+                    <span class="fw-bold">₹${Number(it.total_price).toLocaleString('en-IN')}</span>
+                </li>
+            `).join('');
+
+            let timelineHtml = logs.map(l => {
+                let badgeClass = 'bg-secondary';
+                if (l.status === 'Delivered') badgeClass = 'bg-success';
+                else if (l.status === 'Out for Delivery') badgeClass = 'bg-warning text-dark';
+                else if (l.status === 'Assigned') badgeClass = 'bg-info text-dark';
+                else if (l.status === 'Failed') badgeClass = 'bg-danger';
+
+                return `
+                    <div class="d-flex gap-3 mb-3">
+                        <div class="d-flex flex-column align-items-center">
+                            <span class="badge ${badgeClass} rounded-pill p-2"><i class="bi bi-circle-fill" style="font-size: 0.5rem;"></i></span>
+                            <div class="vr flex-grow-1 my-1" style="width: 2px;"></div>
+                        </div>
+                        <div class="flex-grow-1 pb-2">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="fw-bold text-dark">${l.status}</span>
+                                <small class="text-muted font-monospace">${l.created_at}</small>
+                            </div>
+                            <div class="text-secondary small mb-1">${l.remarks || 'No remarks recorded.'}</div>
+                            <small class="text-muted"><i class="bi bi-person me-1"></i>Logged by: ${l.user_name || 'System'}</small>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            modalBody.innerHTML = `
+                <div class="row g-3 mb-4">
+                    <div class="col-12 col-md-6">
+                        <div class="p-3 bg-light rounded-3">
+                            <div class="text-muted small">Delivery Identifier</div>
+                            <div class="fw-bold font-monospace text-primary fs-5">${del.delivery_number}</div>
+                            <div class="mt-2 text-muted small">Recipient: <strong class="text-dark">${del.recipient_name}</strong></div>
+                            <div class="text-muted small">Phone: <strong class="text-dark">${del.recipient_phone}</strong></div>
+                            <div class="text-muted small">Address: <span class="text-dark">${del.delivery_address}</span></div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <div class="p-3 bg-light rounded-3">
+                            <div class="text-muted small">Linked Invoice</div>
+                            <div class="fw-bold fs-5 text-dark">${del.invoice_number}</div>
+                            <div class="mt-2 text-muted small">Sale Total: <strong class="text-dark">₹${Number(del.grand_total).toLocaleString('en-IN')}</strong></div>
+                            <div class="text-muted small">Assigned Staff: <span class="badge bg-secondary text-white">${del.assigned_staff_name || 'Unassigned'}</span></div>
+                            <div class="text-muted small">Expected Date: <strong class="text-dark">${del.expected_date}</strong></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <h6 class="fw-bold text-dark mb-2"><i class="bi bi-box me-1 text-primary"></i>Package Items</h6>
+                    <ul class="list-group list-group-flush rounded-3 border">
+                        ${itemsHtml || '<li class="list-group-item text-muted">No items found</li>'}
+                    </ul>
+                </div>
+
+                <div>
+                    <h6 class="fw-bold text-dark mb-3"><i class="bi bi-clock-history me-1 text-primary"></i>Status Audit Log Timeline</h6>
+                    <div>
+                        ${timelineHtml || '<div class="text-muted">No status logs recorded yet.</div>'}
+                    </div>
+                </div>
+            `;
+        })
+        .catch(err => {
+            modalBody.innerHTML = `<div class="alert alert-danger">Failed to load delivery timeline: ${err.message}</div>`;
+        });
+}
+</script>
+{% endblock %}

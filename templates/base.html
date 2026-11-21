@@ -125,6 +125,10 @@
                 <i class="bi bi-tools"></i>
                 <span data-i18n="repair_tickets">Repair Tickets</span>
             </a>
+            <a href="{{ url_for('deliveries') }}" class="sidebar-item {% if request.endpoint in ['deliveries', 'delivery_view'] %}active{% endif %}">
+                <i class="bi bi-truck"></i>
+                <span data-i18n="deliveries">Delivery & Logistics</span>
+            </a>
 
             <!-- FINANCE & REPORTS -->
             {% if current_user.role in ['System Administrator', 'Admin', 'Shop Owner', 'Shop Manager', 'Manager'] %}
@@ -327,6 +331,7 @@
 
                 <div class="nav-group-header">Operations</div>
                 <a href="{{ url_for('repair_tickets') }}" class="sidebar-item">Repair Tickets</a>
+                <a href="{{ url_for('deliveries') }}" class="sidebar-item">Delivery & Logistics</a>
 
                 {% if current_user.role in ['System Administrator', 'Admin', 'Shop Owner', 'Shop Manager', 'Manager'] %}
                 <div class="nav-group-header">Finance & Reports</div>

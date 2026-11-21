@@ -1,413 +1,453 @@
 """
-Automated Comprehensive Test Suite for Electrodesk - Electronics Shop Management System
-Tests all endpoints, 4 RBAC roles (Ram, Geetha, Sai, Suresh), Indian Rupee formatting,
-GST (CGST 9% + SGST 9%) calculations, automatic billing, stock deductions, and warranty tracking.
+Electrodesk regression tests.  Run:  python test_app.py
+Uses a throw-away SQLite file, never your real electrodesk.db.
 """
-import unittest
-import json
+import io
 import os
-import sys
+import json
+import tempfile
+import unittest
+import datetime
+from unittest import mock
 
-# Add project root to sys.path
-sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
-
-from app import app
-import db
-import init_db
 import config
 
+_TMP_DIR = tempfile.mkdtemp(prefix='electrodesk_test_')
+config.SQLITE_DB_PATH = os.path.join(_TMP_DIR, 'test.db')
+config.DB_TYPE = 'sqlite'
 
-class TestElectrodeskSystem(unittest.TestCase):
+import db          # noqa: E402
+import init_db     # noqa: E402
+import app as app_module   # noqa: E402
 
-    @classmethod
-    def setUpClass(cls):
-        app.config['TESTING'] = True
-        app.config['WTF_CSRF_ENABLED'] = False
-        if os.path.exists(config.SQLITE_DB_PATH):
-            os.remove(config.SQLITE_DB_PATH)
-        init_db.init_sqlite_db()
-        cls.client = app.test_client()
+flask_app = app_module.app
+flask_app.config['TESTING'] = True
 
-    def login(self, username, password):
-        return self.client.post('/login', data={
-            'username': username,
-            'password': password
-        }, follow_redirects=True)
 
-    def logout(self):
-        return self.client.get('/logout', follow_redirects=True)
+def fresh_db():
+    if os.path.exists(config.SQLITE_DB_PATH):
+        os.remove(config.SQLITE_DB_PATH)
+    init_db.init_sqlite_db()
 
-    def test_01_login_all_roles(self):
-        """Test login for Ram, Geetha, Sai, and Suresh with their avatars."""
-        # 1. Ram (admin) - System Administrator
-        resp = self.login('admin', 'admin123')
-        self.assertEqual(resp.status_code, 200)
-        self.assertIn(b'Mirror Hall', resp.data)
-        self.assertIn(b'Ram', resp.data)
-        self.assertIn(b'RA', resp.data)
-        self.logout()
 
-        # 2. Geetha (geetha) - Shop Manager
-        resp = self.login('geetha', 'geetha123')
-        self.assertEqual(resp.status_code, 200)
-        self.assertIn(b'Geetha', resp.data)
-        self.assertIn(b'GE', resp.data)
-        self.logout()
+def login(username, password):
+    c = flask_app.test_client()
+    r = c.post('/login', data={'username': username, 'password': password})
+    assert r.status_code == 302, f'login failed for {username}'
+    return c
 
-        # 3. Sai (sai) - Sales Staff
-        resp = self.login('sai', 'sai123')
-        self.assertEqual(resp.status_code, 200)
-        self.assertIn(b'Sai', resp.data)
-        self.assertIn(b'SA', resp.data)
-        self.logout()
 
-        # 4. Suresh (suresh) - Shop Owner
-        resp = self.login('suresh', 'suresh123')
-        self.assertEqual(resp.status_code, 200)
-        self.assertIn(b'Suresh', resp.data)
-        self.assertIn(b'S', resp.data)
-        self.logout()
+def simple_product(min_stock=6):
+    """A product that does not require a serial number."""
+    return db.query_one("""
+        SELECT p.* FROM PRODUCT p JOIN CATEGORY c ON p.category_id = c.category_id
+        WHERE LOWER(c.category_name) NOT LIKE '%phone%' AND LOWER(c.category_name) NOT LIKE '%laptop%'
+          AND LOWER(c.category_name) NOT LIKE '%tv%' AND LOWER(c.category_name) NOT LIKE '%display%'
+          AND LOWER(c.category_name) NOT LIKE '%tablet%' AND p.stock_quantity >= %s
+        ORDER BY p.product_id LIMIT 1
+    """, (min_stock,))
 
-    def test_02_rbac_restrictions(self):
-        """Verify role permissions (Sales Staff and Manager cannot access /users, Admin and Owner can)."""
-        # Sai (Sales Staff) trying to access user management
-        self.login('sai', 'sai123')
-        resp = self.client.get('/users', follow_redirects=True)
-        self.assertIn(b'Access denied', resp.data)
-        self.logout()
 
-        # Geetha (Shop Manager) trying to access user management
-        self.login('geetha', 'geetha123')
-        resp = self.client.get('/users', follow_redirects=True)
-        self.assertIn(b'Access denied', resp.data)
-        self.logout()
+def stock_of(pid):
+    return db.query_one("SELECT stock_quantity AS s FROM PRODUCT WHERE product_id = %s", (pid,))['s']
 
-        # Ram (System Administrator) can access user management & matrix
-        self.login('admin', 'admin123')
-        resp = self.client.get('/users', follow_redirects=True)
-        self.assertEqual(resp.status_code, 200)
-        self.assertIn(b'Users & Access Control', resp.data)
-        self.assertIn(b'Role Permission Matrix', resp.data)
-        self.logout()
 
-    def test_03_dashboard_and_low_stock_alerts(self):
-        """Test dashboard metrics, recent sales and low stock alerts."""
-        self.login('admin', 'admin123')
-        resp = self.client.get('/dashboard')
-        self.assertEqual(resp.status_code, 200)
-        self.assertIn(b"Today's Sales", resp.data)
-        self.assertIn(b'Low Stock Alert', resp.data)
-        self.assertIn(b'Recent Sales', resp.data)
-        self.logout()
+def sale_count():
+    return db.query_one("SELECT COUNT(*) AS c FROM SALE")['c']
 
-    def test_04_category_crud_and_2col_grid(self):
-        """Test category management with CAT-code and 2-column card stats."""
-        self.login('geetha', 'geetha123')
-        
-        # Add category
-        resp = self.client.post('/categories/add', data={
-            'category_code': 'CAT-99',
-            'category_name': 'Smart Home Automation',
-            'icon': 'bi-house-gear',
-            'description': 'Smart bulbs, hubs, robotic vacuums'
-        }, follow_redirects=True)
-        self.assertIn(b'created successfully', resp.data)
 
-        # Verify in database
-        cat = db.query_one("SELECT * FROM CATEGORY WHERE category_name = 'Smart Home Automation'")
-        self.assertIsNotNone(cat)
-        self.assertEqual(cat['category_code'], 'CAT-99')
+class Base(unittest.TestCase):
+    def setUp(self):
+        fresh_db()
+        self.sai = login('sai', 'sai123')
+        self.admin = login('admin', 'admin123')
+        self.owner = login('suresh', 'suresh123')
+        self.prod = simple_product()
+        self.pid = self.prod['product_id']
 
-        # View category page
-        resp = self.client.get('/categories')
-        self.assertEqual(resp.status_code, 200)
-        self.assertIn(b'CAT-99', resp.data)
-        self.assertIn(b'Smart Home Automation', resp.data)
+    def checkout(self, client, **extra):
+        body = {'items': [{'product_id': self.pid, 'quantity': extra.pop('qty', 1)}], 'payment_method': 'Cash'}
+        body.update(extra)
+        r = client.post('/api/pos/checkout', json=body)
+        return r.status_code, r.get_json()
 
-        # Edit category
-        resp = self.client.post(f'/categories/edit/{cat["category_id"]}', data={
-            'category_code': 'CAT-99',
-            'category_name': 'Smart Home Automation Pro',
-            'icon': 'bi-cpu',
-            'description': 'Updated description'
-        }, follow_redirects=True)
-        self.assertIn(b'updated successfully', resp.data)
 
-        # Delete category
-        resp = self.client.post(f'/categories/delete/{cat["category_id"]}', follow_redirects=True)
-        self.assertIn(b'deleted successfully', resp.data)
-        self.logout()
+class TestSecurity(Base):
+    def test_open_redirect_blocked(self):
+        for evil in ('https://evil.example.com', '//evil.example.com', '/\\evil.example.com', 'javascript:alert(1)'):
+            c = flask_app.test_client()
+            r = c.post('/login?next=' + evil, data={'username': 'sai', 'password': 'sai123'})
+            self.assertNotIn('evil', r.headers['Location'], evil)
+        c = flask_app.test_client()
+        r = c.post('/login?next=/dashboard', data={'username': 'sai', 'password': 'sai123'})
+        self.assertTrue(r.headers['Location'].endswith('/dashboard'))
 
-    def test_05_product_crud(self):
-        """Test product addition with INR pricing, editing and listing."""
-        self.login('admin', 'admin123')
+    def test_cross_site_post_blocked(self):
+        r = self.admin.post('/inventory/adjust', data={}, headers={'Origin': 'https://evil.example.com'})
+        self.assertEqual(r.status_code, 403)
 
-        # Add new product
-        resp = self.client.post('/products/add', data={
-            'product_code': 'TEST-ELEC-999',
-            'product_name': 'Test Wireless Noise Earbuds',
-            'category_id': 3,
-            'brand': 'AudioMax',
-            'model': 'AM-X1',
-            'cost_price': '4500',
-            'selling_price': '8999',
-            'stock_quantity': '15',
-            'reorder_level': '5',
-            'warranty_months': '18',
-            'description': 'Bluetooth 5.4 wireless earbuds'
-        }, follow_redirects=True)
-        self.assertIn(b'added successfully', resp.data)
+    def test_cost_price_not_sent_to_sales_staff(self):
+        self.assertNotIn('"cost_price"', self.sai.get('/pos').get_data(as_text=True))
+        self.assertIn('"cost_price"', self.admin.get('/pos').get_data(as_text=True))
 
-        prod = db.query_one("SELECT * FROM PRODUCT WHERE product_code = 'TEST-ELEC-999'")
-        self.assertIsNotNone(prod)
-        self.assertEqual(prod['brand'], 'AudioMax')
+    def test_deactivated_user_loses_access_immediately(self):
+        db.execute("UPDATE USER SET status = 'Inactive' WHERE username = 'sai'")
+        r = self.sai.get('/pos')
+        self.assertEqual(r.status_code, 302)
+        self.assertIn('/login', r.headers['Location'])
 
-        # Edit product
-        resp = self.client.post(f'/products/edit/{prod["product_id"]}', data={
-            'product_code': 'TEST-ELEC-999',
-            'product_name': 'Test Wireless Noise Earbuds Pro',
-            'category_id': 3,
-            'brand': 'AudioMax',
-            'model': 'AM-X1 Pro',
-            'cost_price': '4500',
-            'selling_price': '9999',
-            'stock_quantity': '20',
-            'reorder_level': '5',
-            'warranty_months': '24',
-            'description': 'Upgraded drivers'
-        }, follow_redirects=True)
-        self.assertIn(b'updated successfully', resp.data)
+    def test_user_management_rules(self):
+        a = self.admin
+        a.post('/users/add', data={'username': 'blank', 'full_name': 'Blank', 'role': 'Sales Staff', 'password': ''})
+        self.assertIsNone(db.query_one("SELECT 1 FROM USER WHERE username = 'blank'"))
+        a.post('/users/add', data={'username': 'weird', 'full_name': 'Weird', 'role': 'banana', 'password': 'secret1'})
+        self.assertIsNone(db.query_one("SELECT 1 FROM USER WHERE username = 'weird'"))
+        a.post('/users/add', data={'username': 'boss2', 'full_name': 'Boss', 'role': 'Shop Owner', 'password': 'secret1'})
+        self.assertIsNone(db.query_one("SELECT 1 FROM USER WHERE username = 'boss2'"), 'admin must not create owners')
+        a.post('/users/add', data={'username': 'newstaff', 'full_name': 'New Staff', 'role': 'Sales Staff', 'password': 'secret1'})
+        self.assertIsNotNone(db.query_one("SELECT 1 FROM USER WHERE username = 'newstaff'"))
+        me = db.query_one("SELECT user_id FROM USER WHERE username = 'admin'")['user_id']
+        a.post(f'/users/edit/{me}', data={'full_name': 'Ram', 'role': 'Sales Staff', 'status': 'Inactive'})
+        row = db.query_one("SELECT role, status FROM USER WHERE user_id = %s", (me,))
+        self.assertEqual((row['role'], row['status']), ('System Administrator', 'Active'))
+        owner = db.query_one("SELECT user_id FROM USER WHERE username = 'suresh'")['user_id']
+        a.post(f'/users/edit/{owner}', data={'full_name': 'Suresh', 'role': 'Shop Owner', 'status': 'Active', 'password': 'hijack1'})
+        c = flask_app.test_client()
+        r = c.post('/login', data={'username': 'suresh', 'password': 'hijack1'}, follow_redirects=False)
+        self.assertEqual(r.status_code, 200, 'admin must not be able to reset the owner password')   # 200 = login page re-shown
 
-        # Clean up test product
-        db.execute("DELETE FROM STOCK_MOVEMENT WHERE product_id = %s", (prod['product_id'],))
-        db.execute("DELETE FROM PRODUCT WHERE product_id = %s", (prod['product_id'],))
-        self.logout()
 
-    def test_06_customer_crud(self):
-        """Test customer registration, editing and profile details."""
-        self.login('sai', 'sai123')
+class TestCheckout(Base):
+    def test_normal_sale_server_side_totals(self):
+        before = stock_of(self.pid)
+        status, body = self.checkout(self.sai, qty=2, tax_rate=0)      # client tax_rate must be ignored
+        self.assertEqual(status, 200, body)
+        sale = db.query_one("SELECT * FROM SALE WHERE invoice_number = %s", (body['invoice_number'],))
+        expected_tax = round(self.prod['selling_price'] * 2 * (self.prod['tax_rate'] / 100), 2)
+        self.assertAlmostEqual(sale['tax_amount'], expected_tax, places=2)
+        self.assertAlmostEqual(sale['grand_total'], sale['subtotal'] + expected_tax, places=2)
+        self.assertEqual(stock_of(self.pid), before - 2)
+        self.assertEqual(db.query_one("SELECT COUNT(*) AS c FROM STOCK_MOVEMENT WHERE reference_id = %s", (body['invoice_number'],))['c'], 1)
 
-        # Add customer
-        resp = self.client.post('/customers/add', data={
-            'customer_name': 'Venkatesh Rao',
-            'phone': '+91 98888 77777',
-            'email': 'venkatesh@example.in',
-            'address': 'Banjara Hills, Hyderabad'
-        }, follow_redirects=True)
-        self.assertIn(b'registered successfully', resp.data)
+    def test_tampered_values_rejected(self):
+        before, n = stock_of(self.pid), sale_count()
+        price = self.prod['selling_price']
+        self.assertEqual(self.checkout(self.sai, exchange_value=price * 10)[0], 403)   # free goods via exchange
+        self.assertEqual(self.checkout(self.sai, discount_amount=-5000)[0], 400)       # negative discount
+        self.assertEqual(self.checkout(self.sai, qty=-3)[0], 400)                      # negative quantity
+        self.assertEqual(self.checkout(self.sai, qty=0)[0], 400)
+        self.assertEqual(self.checkout(self.sai, discount_amount='abc')[0], 400)       # no 500 on junk
+        self.assertEqual(self.checkout(self.sai, emi_months=999)[0], 400)
+        self.assertEqual((stock_of(self.pid), sale_count()), (before, n))
 
-        cust = db.query_one("SELECT * FROM CUSTOMER WHERE phone = '+91 98888 77777'")
-        self.assertIsNotNone(cust)
+    def test_discount_over_10_percent_needs_owner(self):
+        price = self.prod['selling_price']
+        big = round(price * 0.2, 2)
+        self.assertEqual(self.checkout(self.sai, discount_amount=big)[0], 403)
+        self.assertEqual(self.checkout(self.sai, discount_amount=big, owner_pin='9999')[0], 200)
+        self.assertEqual(self.checkout(self.owner, discount_amount=big)[0], 200)
+        # a discount can never exceed the bill
+        status, body = self.checkout(self.owner, discount_amount=price * 50)
+        self.assertEqual(status, 200)
+        self.assertEqual(db.query_one("SELECT grand_total AS g FROM SALE WHERE invoice_number = %s", (body['invoice_number'],))['g'], 0.0)
 
-        # View customer detail page
-        resp = self.client.get(f'/customers/{cust["customer_id"]}')
-        self.assertEqual(resp.status_code, 200)
-        self.assertIn(b'Venkatesh Rao', resp.data)
+    def test_cannot_oversell(self):
+        stock = stock_of(self.pid)
+        self.assertEqual(self.checkout(self.sai, qty=stock + 1)[0], 400)
+        two_lines = {'items': [{'product_id': self.pid, 'quantity': stock}, {'product_id': self.pid, 'quantity': 1}], 'payment_method': 'Cash'}
+        self.assertEqual(self.sai.post('/api/pos/checkout', json=two_lines).status_code, 400)
+        self.assertEqual(stock_of(self.pid), stock)
 
-        # Edit customer
-        resp = self.client.post(f'/customers/edit/{cust["customer_id"]}', data={
-            'customer_name': 'Venkatesh Rao Updated',
-            'phone': '+91 98888 77777',
-            'email': 'venkat.updated@example.in',
-            'address': 'Madhapur, Hyderabad'
-        }, follow_redirects=True)
-        self.assertIn(b'updated successfully', resp.data)
+    def test_checkout_is_atomic(self):
+        before, n = stock_of(self.pid), sale_count()
+        real = db.Transaction.execute
 
-        self.logout()
+        def boom(self_tx, sql, params=()):
+            if 'STOCK_MOVEMENT' in sql and 'Customer Sale' in sql:
+                raise RuntimeError('simulated crash mid-checkout')
+            return real(self_tx, sql, params)
 
-    def test_07_inventory_tracking_and_adjustment(self):
-        """Test inventory view and stock adjustment."""
-        self.login('geetha', 'geetha123')
+        with mock.patch.object(db.Transaction, 'execute', boom):
+            status, _ = self.checkout(self.sai)
+        self.assertEqual(status, 500)
+        self.assertEqual((stock_of(self.pid), sale_count()), (before, n), 'partial sale was left behind')
 
-        # Check inventory page
-        resp = self.client.get('/inventory')
-        self.assertEqual(resp.status_code, 200)
-        self.assertIn(b'Inventory Cost Value', resp.data)
+    def test_credit_sale_needs_customer_and_creates_dues(self):
+        self.assertEqual(self.checkout(self.sai, payment_method='Pay Later')[0], 400)
+        cust = db.query_one("SELECT customer_id FROM CUSTOMER LIMIT 1")['customer_id']
+        status, body = self.checkout(self.sai, payment_method='Pay Later', customer_id=cust)
+        self.assertEqual(status, 200)
+        sale = db.query_one("SELECT * FROM SALE WHERE invoice_number = %s", (body['invoice_number'],))
+        self.assertEqual((sale['payment_status'], sale['amount_paid']), ('Pending', 0.0))
+        self.assertAlmostEqual(sale['balance_due'], sale['grand_total'], places=2)
 
-        # Adjust stock on product 1 (add 5 units)
-        prod_before = db.query_one("SELECT stock_quantity FROM PRODUCT WHERE product_id = 1")
-        initial_stock = prod_before['stock_quantity']
+    def test_warranty_expiry_is_calendar_accurate(self):
+        _, body = self.checkout(self.sai)
+        row = db.query_one("""SELECT si.warranty_months m, si.warranty_expiry_date e FROM SALE_ITEM si
+                              JOIN SALE s ON s.sale_id = si.sale_id WHERE s.invoice_number = %s""", (body['invoice_number'],))
+        today = app_module.get_app_today()
+        self.assertEqual(row['e'], app_module.add_months(today, row['m']).strftime('%Y-%m-%d'))
+        self.assertEqual(app_module.add_months(datetime.date(2026, 11, 20), 12), datetime.date(2027, 11, 20))
+        self.assertEqual(app_module.add_months(datetime.date(2026, 1, 31), 1), datetime.date(2026, 2, 28))
 
-        resp = self.client.post('/inventory/adjust', data={
-            'product_id': 1,
-            'type': 'add',
-            'quantity': 5,
-            'notes': 'Test batch delivery'
-        }, follow_redirects=True)
-        self.assertIn(b'successfully updated', resp.data)
+    def test_emi_rates_from_settings_are_used(self):
+        self.admin.post('/settings', data={'action': 'update_settings', 'app_today_mode': 'auto',
+                                           'emi_rate_3m': '0', 'emi_rate_6m': '10', 'emi_rate_9m': '14'})
+        _, body = self.checkout(self.sai, emi_months=6)
+        self.assertEqual(db.query_one("SELECT emi_interest_rate r FROM SALE WHERE invoice_number = %s", (body['invoice_number'],))['r'], 10.0)
 
-        prod_after = db.query_one("SELECT stock_quantity FROM PRODUCT WHERE product_id = 1")
-        self.assertEqual(prod_after['stock_quantity'], initial_stock + 5)
+    def test_coupon_is_validated_server_side(self):
+        self.assertEqual(self.checkout(self.sai, coupon_code='NOPE')[0], 400)
+        status, body = self.checkout(self.sai, coupon_code='WELCOME5')
+        self.assertEqual(status, 200)
+        sale = db.query_one("SELECT * FROM SALE WHERE invoice_number = %s", (body['invoice_number'],))
+        self.assertAlmostEqual(sale['discount_amount'], round(sale['subtotal'] * 0.05, 2), places=2)
 
-        # Reset stock back
-        db.execute("UPDATE PRODUCT SET stock_quantity = %s WHERE product_id = 1", (initial_stock,))
-        self.logout()
 
-    def test_08_pos_automatic_billing_checkout(self):
-        """
-        Test automatic billing:
-        - Select items
-        - Apply GST 18% (CGST 9% + SGST 9%)
-        - Stock deduction in PRODUCT
-        - SALE and SALE_ITEM record generation
-        - Warranty expiry calculation
-        - Sold by cashier metadata
-        """
-        self.login('sai', 'sai123')
+class TestOperations(Base):
+    def _sale(self, **kw):
+        status, body = self.checkout(self.sai, **kw)
+        self.assertEqual(status, 200, body)
+        return db.query_one("SELECT * FROM SALE WHERE invoice_number = %s", (body['invoice_number'],))
 
-        # Check product 1 initial stock
-        prod = db.query_one("SELECT * FROM PRODUCT WHERE product_id = 1")
-        initial_stock = prod['stock_quantity']
+    def test_return_only_once(self):
+        sale = self._sale(qty=2)
+        after_sale = stock_of(self.pid)
+        for _ in range(2):
+            self.admin.post('/returns/create', data={'invoice_number': sale['invoice_number'], 'refund_amount': '', 'reason': 'x'})
+        self.assertEqual(db.query_one("SELECT COUNT(*) c FROM CREDIT_NOTE WHERE sale_id = %s", (sale['sale_id'],))['c'], 1)
+        self.assertEqual(stock_of(self.pid), after_sale + 2)
 
-        payload = {
-            'items': [
-                {
-                    'product_id': 1,
-                    'quantity': 1,
-                    'serial_number': 'SN-TEST-S25U-9901'
-                }
-            ],
-            'customer_id': 1,
-            'payment_method': 'UPI',
-            'payment_status': 'Paid',
-            'tax_rate': 18.0,
-            'discount_amount': 500.0,
-            'notes': 'Electrodesk POS Test Sale'
-        }
+    def test_refund_cannot_exceed_amount_paid(self):
+        sale = self._sale()
+        self.admin.post('/returns/create', data={'invoice_number': sale['invoice_number'], 'refund_amount': '999999', 'reason': 'x'})
+        self.assertEqual(db.query_one("SELECT COUNT(*) c FROM CREDIT_NOTE")['c'], 0)
 
-        resp = self.client.post('/api/pos/checkout',
-                                data=json.dumps(payload),
-                                content_type='application/json')
-        self.assertEqual(resp.status_code, 200)
-        res_data = json.loads(resp.data)
-        self.assertTrue(res_data['success'])
-        self.assertIn('sale_id', res_data)
-        sale_id = res_data['sale_id']
+    def test_dues_payment_cannot_overpay(self):
+        cust = db.query_one("SELECT customer_id FROM CUSTOMER LIMIT 1")['customer_id']
+        sale = self._sale(payment_method='Pay Later', customer_id=cust)
+        due = sale['balance_due']
+        self.sai.post('/customer-dues/pay', data={'sale_id': sale['sale_id'], 'amount': str(due + 500), 'payment_method': 'Cash'})
+        self.assertEqual(db.query_one("SELECT balance_due b FROM SALE WHERE sale_id = %s", (sale['sale_id'],))['b'], due)
+        self.sai.post('/customer-dues/pay', data={'sale_id': sale['sale_id'], 'amount': str(due), 'payment_method': 'Cash'})
+        row = db.query_one("SELECT balance_due b, payment_status s FROM SALE WHERE sale_id = %s", (sale['sale_id'],))
+        self.assertEqual((row['b'], row['s']), (0.0, 'Paid'))
 
-        # Verify stock was deducted accurately
-        prod_after = db.query_one("SELECT stock_quantity FROM PRODUCT WHERE product_id = 1")
-        self.assertEqual(prod_after['stock_quantity'], initial_stock - 1)
+    def test_inventory_can_be_set_to_zero(self):
+        self.admin.post('/inventory/adjust', data={'product_id': self.pid, 'type': 'set', 'quantity': '0'})
+        self.assertEqual(stock_of(self.pid), 0)
+        self.admin.post('/inventory/adjust', data={'product_id': self.pid, 'type': 'add', 'quantity': '-4'})
+        self.assertEqual(stock_of(self.pid), 0)
 
-        # Verify SALE record
-        sale = db.query_one("SELECT * FROM SALE WHERE sale_id = %s", (sale_id,))
-        self.assertIsNotNone(sale)
-        self.assertEqual(sale['customer_id'], 1)
-        self.assertEqual(sale['payment_method'], 'UPI')
+    def test_product_edit_stock_change_is_audited(self):
+        p = db.query_one("SELECT * FROM PRODUCT WHERE product_id = %s", (self.pid,))
+        form = {'product_code': p['product_code'], 'product_name': p['product_name'], 'category_id': p['category_id'],
+                'brand': p['brand'], 'cost_price': p['cost_price'], 'selling_price': p['selling_price'],
+                'stock_quantity': p['stock_quantity'] + 7, 'reorder_level': p['reorder_level'], 'warranty_months': p['warranty_months']}
+        self.admin.post(f'/products/edit/{self.pid}', data=form)
+        self.assertEqual(db.query_one("SELECT COUNT(*) c FROM STOCK_MOVEMENT WHERE product_id = %s AND reference_id = 'PROD-EDIT'", (self.pid,))['c'], 1)
+        form['selling_price'] = 'abc'
+        r = self.admin.post(f'/products/edit/{self.pid}', data=form)
+        self.assertEqual(r.status_code, 302)    # friendly redirect instead of a 500
 
-        # Verify SALE_ITEM and warranty date calculation
-        items = db.query("SELECT * FROM SALE_ITEM WHERE sale_id = %s", (sale_id,))
-        self.assertEqual(len(items), 1)
-        self.assertEqual(items[0]['serial_number'], 'SN-TEST-S25U-9901')
-        self.assertIsNotNone(items[0]['warranty_expiry_date'])
+    def test_product_delete_keeps_history_when_blocked(self):
+        # product has movements AND is referenced by a PO / sale -> must not lose STOCK_MOVEMENT rows
+        before = db.query_one("SELECT COUNT(*) c FROM STOCK_MOVEMENT WHERE product_id = %s", (self.pid,))['c']
+        self._sale()
+        self.admin.post(f'/products/delete/{self.pid}')
+        self.assertIsNotNone(db.query_one("SELECT 1 FROM PRODUCT WHERE product_id = %s", (self.pid,)))
+        self.assertGreaterEqual(db.query_one("SELECT COUNT(*) c FROM STOCK_MOVEMENT WHERE product_id = %s", (self.pid,))['c'], before)
 
-        # Test printable invoice rendering
-        inv_resp = self.client.get(f'/invoice/{sale_id}')
-        self.assertEqual(inv_resp.status_code, 200)
-        self.assertIn(b'Tax Invoice', inv_resp.data)
-        self.assertIn(b'Electrodesk', inv_resp.data)
-        self.assertIn(b'CGST (9.0%)', inv_resp.data)
-        self.assertIn(b'SGST (9.0%)', inv_resp.data)
-        self.assertIn(b'SN-TEST-S25U-9901', inv_resp.data)
+    def test_csv_export_can_be_reimported(self):
+        csv_text = self.admin.get('/products/export.csv').get_data(as_text=True)
+        lines = csv_text.strip().splitlines()
+        header = lines[0].split(',')
+        price_idx = header.index('Selling Price')
+        first = lines[1].split(',')
+        sku = first[0]
+        first[price_idx] = '12345.0'
+        lines[1] = ','.join(first)
+        data = {'file': (io.BytesIO('\ufeff'.join(['', '\n'.join(lines)]).encode('utf-8')), 'products.csv')}
+        r = self.admin.post('/products/import-csv', data=data, content_type='multipart/form-data')
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(db.query_one("SELECT selling_price p FROM PRODUCT WHERE product_code = %s", (sku,))['p'], 12345.0)
 
-        self.logout()
+    def test_quotation_conversion(self):
+        self.sai.post('/quotations/create', data={'product_id': self.pid, 'quantity': '1'})
+        q = db.query_one("SELECT * FROM QUOTATION ORDER BY quote_id DESC LIMIT 1")
+        before = stock_of(self.pid)
+        self.sai.post(f"/quotations/convert/{q['quote_id']}")
+        sale = db.query_one("SELECT * FROM SALE ORDER BY sale_id DESC LIMIT 1")
+        self.assertEqual(sale['payment_status'], 'Pending')       # converting is not a payment
+        self.assertAlmostEqual(sale['balance_due'], q['grand_total'], places=2)
+        self.assertEqual(stock_of(self.pid), before - 1)
+        self.sai.post(f"/quotations/convert/{q['quote_id']}")      # second click does nothing
+        self.assertEqual(stock_of(self.pid), before - 1)
+        # expired quotation is refused
+        self.sai.post('/quotations/create', data={'product_id': self.pid, 'quantity': '1'})
+        q2 = db.query_one("SELECT * FROM QUOTATION ORDER BY quote_id DESC LIMIT 1")
+        db.execute("UPDATE QUOTATION SET expiry_date = '2000-01-01' WHERE quote_id = %s", (q2['quote_id'],))
+        n = sale_count()
+        self.sai.post(f"/quotations/convert/{q2['quote_id']}")
+        self.assertEqual(sale_count(), n)
+        # negative quantity quotation is refused
+        n_q = db.query_one("SELECT COUNT(*) c FROM QUOTATION")['c']
+        self.sai.post('/quotations/create', data={'product_id': self.pid, 'quantity': '-5'})
+        self.assertEqual(db.query_one("SELECT COUNT(*) c FROM QUOTATION")['c'], n_q)
 
-    def test_09_warranty_tracking_module(self):
-        """Test warranty search by serial number and status filters."""
-        self.login('sai', 'sai123')
 
-        resp = self.client.get('/warranty?search=SN-APPL-16PM-8801')
-        self.assertEqual(resp.status_code, 200)
-        self.assertIn(b'SN-APPL-16PM-8801', resp.data)
-        self.assertIn(b'Active', resp.data)
+class TestFinance(Base):
+    def test_daily_closing_ignores_browser_values_and_unpaid_credit(self):
+        cust = db.query_one("SELECT customer_id FROM CUSTOMER LIMIT 1")['customer_id']
+        self.checkout(self.sai, payment_method='Pay Later', customer_id=cust)
+        today = app_module.get_app_today().strftime('%Y-%m-%d')
+        expected = app_module.compute_closing_totals(today)
+        self.sai.post('/reports/daily-closing', data={'closing_date': today, 'actual_cash': str(expected['cash']),
+                                                      'expected_cash': '999999', 'expected_total': '999999'})
+        row = db.query_one("SELECT * FROM DAILY_CLOSING WHERE closing_date = %s", (today,))
+        self.assertEqual(row['expected_cash'], expected['cash'])
+        self.assertEqual(row['cash_difference'], 0.0)
+        # staff cannot overwrite a finalised closing
+        self.sai.post('/reports/daily-closing', data={'closing_date': today, 'actual_cash': '0'})
+        self.assertEqual(db.query_one("SELECT actual_cash a FROM DAILY_CLOSING WHERE closing_date = %s", (today,))['a'], expected['cash'])
+        # a manager can amend it
+        login('geetha', 'geetha123').post('/reports/daily-closing', data={'closing_date': today, 'actual_cash': '1'})
+        self.assertEqual(db.query_one("SELECT actual_cash a FROM DAILY_CLOSING WHERE closing_date = %s", (today,))['a'], 1.0)
 
-        self.logout()
+    def _gst_csv_totals(self):
+        lines = self.admin.get('/reports/gst/export.csv').get_data(as_text=True).strip().splitlines()[1:]
+        rows = [l.split(',') for l in lines if l]
+        return sum(int(r[2]) for r in rows), round(sum(float(r[3]) for r in rows), 2)
 
-    def test_10_reports_module(self):
-        """Test sales and inventory reporting with presets and 14-day chart."""
-        self.login('geetha', 'geetha123')
+    def test_gst_report_excludes_refunded_and_uses_net_taxable(self):
+        status, body = self.checkout(self.sai, discount_amount=round(self.prod['selling_price'] * 0.05, 2))
+        self.assertEqual(status, 200)
+        sale = db.query_one("SELECT * FROM SALE WHERE invoice_number = %s", (body['invoice_number'],))
+        expect = db.query_one("""SELECT COUNT(*) c, SUM(subtotal - COALESCE(discount_amount,0) - COALESCE(exchange_value,0)) t
+                                 FROM SALE WHERE payment_status <> 'Refunded'""")
+        self.assertEqual(self._gst_csv_totals(), (expect['c'], round(expect['t'], 2)))
+        n_before, taxable_before = self._gst_csv_totals()
+        self.admin.post('/returns/create', data={'invoice_number': sale['invoice_number'], 'refund_amount': '', 'reason': 'x'})
+        n_after, taxable_after = self._gst_csv_totals()
+        self.assertEqual(n_after, n_before - 1)
+        self.assertAlmostEqual(taxable_before - taxable_after, sale['subtotal'] - sale['discount_amount'], places=1)
 
-        resp = self.client.get('/reports?preset=month')
-        self.assertEqual(resp.status_code, 200)
-        self.assertIn(b'Total Revenue', resp.data)
-        self.assertIn(b'Gross Profit', resp.data)
-        self.assertIn(b'Sales report', resp.data)
-        self.assertIn(b'Inventory report', resp.data)
+    def test_settings_validation_and_banner_clear(self):
+        self.admin.post('/settings', data={'action': 'update_settings', 'offers_banner': 'Diwali sale', 'app_today_mode': 'auto',
+                                           'emi_rate_3m': '0', 'emi_rate_6m': '12', 'emi_rate_9m': '14'})
+        self.admin.post('/settings', data={'action': 'update_settings', 'offers_banner': '', 'app_today_mode': 'auto',
+                                           'emi_rate_3m': '0', 'emi_rate_6m': '12', 'emi_rate_9m': '14'})
+        self.assertEqual(db.query_one("SELECT setting_value v FROM STORE_SETTING WHERE setting_key = 'offers_banner'")['v'], '')
+        self.admin.post('/settings', data={'action': 'update_settings', 'app_today_mode': 'manual', 'app_today': 'not-a-date',
+                                           'emi_rate_3m': '0', 'emi_rate_6m': '12', 'emi_rate_9m': '14'})
+        self.assertNotEqual(db.query_one("SELECT setting_value v FROM STORE_SETTING WHERE setting_key = 'app_today_mode'")['v'], 'manual')
+        self.assertEqual(self.sai.post('/settings', data={'action': 'update_settings'}).status_code, 302)  # blocked role
 
-        self.logout()
+    def test_auto_mode_uses_real_date(self):
+        db.upsert_setting('app_today_mode', 'auto')
+        self.assertEqual(app_module.get_app_today(), datetime.date.today())
 
-    def test_11_user_management_crud(self):
-        """Test Admin adding, editing, and deleting a user account."""
-        self.login('admin', 'admin123')
 
-        # Clean up any lingering test user
-        db.execute("DELETE FROM USER WHERE username IN ('kiran_test', 'johndoe_test')")
+class TestBackupRestore(Base):
+    def _counts(self):
+        return {t: db.query_one(f"SELECT COUNT(*) c FROM {t}")['c'] for t in app_module.BACKUP_TABLES}
 
-        # Add new user
-        resp = self.client.post('/users/add', data={
-            'username': 'kiran_test',
-            'full_name': 'Kiran Varma',
-            'role': 'Sales Staff',
-            'password': 'password123',
-            'email': 'kiran@electrodesk.com',
-            'phone': '+91 94444 33333'
-        }, follow_redirects=True)
-        self.assertIn(b'created successfully', resp.data)
+    def test_restore_really_restores(self):
+        backup = self.admin.get('/settings/backup-json').get_data()
+        original = self._counts()
+        self.checkout(self.sai, qty=2)
+        db.execute("INSERT INTO CUSTOMER (customer_name, phone) VALUES ('Temp Person', '9000000001')")
+        self.assertNotEqual(self._counts(), original)
+        r = self.admin.post('/settings/restore-json', data={'file': (io.BytesIO(backup), 'b.json')}, content_type='multipart/form-data')
+        self.assertEqual(r.status_code, 302)
+        restored = self._counts()
+        for t in original:
+            if t != 'AUDIT_LOG':
+                self.assertEqual(restored[t], original[t], t)
 
-        user = db.query_one("SELECT * FROM USER WHERE username = 'kiran_test'")
-        self.assertIsNotNone(user)
-        self.assertEqual(user['role'], 'Sales Staff')
-        self.assertEqual(user['avatar'], 'KV')
+    def test_bad_restore_leaves_data_untouched(self):
+        original = self._counts()
+        for payload in (b'not json', json.dumps({'tables': {}}).encode(), json.dumps({'tables': {'USER': [{'username': 'x', 'status': 'Inactive'}]}}).encode()):
+            self.admin.post('/settings/restore-json', data={'file': (io.BytesIO(payload), 'b.json')}, content_type='multipart/form-data')
+        broken = json.dumps({'tables': {'USER': [{'user_id': 1, 'username': 'a', 'password_hash': 'x', 'full_name': 'A', 'role': 'Sales Staff', 'status': 'Active'}],
+                                        'SALE_ITEM': [{'item_id': 1, 'sale_id': 99999, 'product_id': 99999}]}}).encode()
+        self.admin.post('/settings/restore-json', data={'file': (io.BytesIO(broken), 'b.json')}, content_type='multipart/form-data')
+        self.assertEqual(self._counts()['PRODUCT'], original['PRODUCT'])
+        self.assertEqual(self._counts()['USER'], original['USER'])
 
-        # Edit user
-        resp = self.client.post(f'/users/edit/{user["user_id"]}', data={
-            'full_name': 'Kiran Varma Senior',
-            'role': 'Shop Manager',
-            'status': 'Active',
-            'email': 'kiran.senior@electrodesk.com',
-            'phone': '+91 94444 33334',
-            'password': ''  # Keep password unchanged
-        }, follow_redirects=True)
-        self.assertIn(b'profile updated', resp.data)
 
-        # Delete user
-        resp = self.client.post(f'/users/delete/{user["user_id"]}', follow_redirects=True)
-        self.assertIn(b'deleted successfully', resp.data)
+class TestSecondPassAudit(Base):
+    """Defects found during the independent audit of the first fix release."""
 
-        deleted = db.query_one("SELECT * FROM USER WHERE username = 'kiran_test'")
-        self.assertIsNone(deleted)
-        self.logout()
+    def test_zero_rated_product_is_not_taxed(self):
+        db.execute("UPDATE PRODUCT SET tax_rate = 0 WHERE product_id = %s", (self.pid,))
+        status, body = self.checkout(self.sai)
+        self.assertEqual(status, 200)
+        self.assertEqual(db.query_one("SELECT tax_amount t FROM SALE WHERE invoice_number = %s", (body['invoice_number'],))['t'], 0.0)
+        self.sai.post('/quotations/create', data={'product_id': self.pid, 'quantity': '1'})
+        self.assertEqual(db.query_one("SELECT tax_amount t FROM QUOTATION ORDER BY quote_id DESC LIMIT 1")['t'], 0.0)
 
-    def test_12_pos_insufficient_stock_rejection(self):
-        """Test that POS checkout rejects requests exceeding available stock."""
-        self.login('sai', 'sai123')
+    def test_returned_serial_can_be_resold(self):
+        ph = db.query_one("""SELECT p.product_id FROM PRODUCT p JOIN CATEGORY c ON p.category_id = c.category_id
+                             WHERE LOWER(c.category_name) LIKE '%phone%' AND p.stock_quantity > 2 LIMIT 1""")['product_id']
+        def sell(sn):
+            return self.sai.post('/api/pos/checkout', json={'items': [{'product_id': ph, 'quantity': 1, 'serial_number': sn}], 'payment_method': 'Cash'})
+        first = sell('IMEI-AUDIT-1')
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(sell('IMEI-AUDIT-1').status_code, 400)          # still unique while the sale stands
+        self.admin.post('/returns/create', data={'invoice_number': first.get_json()['invoice_number'], 'refund_amount': '', 'reason': 'x'})
+        self.assertEqual(sell('IMEI-AUDIT-1').status_code, 200)          # free again after the return
 
-        p = db.query_one("SELECT * FROM PRODUCT LIMIT 1")
-        req_qty = p['stock_quantity'] + 999
+    def test_restore_of_older_backup_keeps_audit_log(self):
+        data = json.loads(self.admin.get('/settings/backup-json').get_data())
+        audit_before = db.query_one("SELECT COUNT(*) c FROM AUDIT_LOG")['c']
+        del data['tables']['AUDIT_LOG']
+        r = self.admin.post('/settings/restore-json', data={'file': (io.BytesIO(json.dumps(data).encode()), 'old.json')},
+                            content_type='multipart/form-data')
+        self.assertEqual(r.status_code, 302)
+        self.assertGreaterEqual(db.query_one("SELECT COUNT(*) c FROM AUDIT_LOG")['c'], audit_before)
 
-        payload = {
-            'items': [{'product_id': p['product_id'], 'quantity': req_qty}],
-            'customer_id': None
-        }
+    def test_fractional_and_boolean_quantities_rejected(self):
+        before = stock_of(self.pid)
+        self.assertEqual(self.checkout(self.sai, qty=1.9)[0], 400)
+        self.assertEqual(self.checkout(self.sai, qty=True)[0], 400)
+        self.assertEqual(self.checkout(self.sai, qty='2')[0], 200)       # numeric strings still fine
+        self.assertEqual(stock_of(self.pid), before - 2)
 
-        resp = self.client.post('/api/pos/checkout',
-                                data=json.dumps(payload),
-                                content_type='application/json')
-        self.assertEqual(resp.status_code, 400)
-        res_data = json.loads(resp.data)
-        self.assertFalse(res_data['success'])
-        self.assertIn('Insufficient stock', res_data['message'])
-        self.logout()
+    def test_exact_ten_percent_never_needs_owner(self):
+        for price in (1699.0, 999.0, 33333.0, 7.0, 12345.67):
+            db.execute("UPDATE PRODUCT SET selling_price = %s WHERE product_id = %s", (price, self.pid))
+            self.assertEqual(self.checkout(self.sai, discount_amount=round(price * 0.10, 2))[0], 200, price)
+            self.assertEqual(self.checkout(self.sai, coupon_code='FESTIVE10')[0], 200, price)
+            self.assertEqual(self.checkout(self.sai, discount_amount=round(price * 0.11, 2))[0], 403, price)
 
-    def test_13_reports_custom_date_filtering(self):
-        """Test custom date filtering on reports."""
-        self.login('geetha', 'geetha123')
-        resp = self.client.get('/reports?preset=custom&start_date=2026-01-01&end_date=2026-12-31')
-        self.assertEqual(resp.status_code, 200)
-        self.assertIn(b'Sales report', resp.data)
-        self.assertIn(b'2026-01-01', resp.data)
-        self.assertIn(b'2026-12-31', resp.data)
-        self.logout()
+    def test_concurrent_checkouts_cannot_oversell(self):
+        import threading
+        db.execute("UPDATE PRODUCT SET stock_quantity = 1 WHERE product_id = %s", (self.pid,))
+        results = []
+
+        def buy():
+            results.append(self.checkout(login('sai', 'sai123'))[0])
+
+        threads = [threading.Thread(target=buy) for _ in range(6)]
+        for th in threads:
+            th.start()
+        for th in threads:
+            th.join()
+        self.assertEqual(results.count(200), 1, results)
+        self.assertEqual(stock_of(self.pid), 0)
+
+
+class TestMySQLScriptSplitter(unittest.TestCase):
+    def test_all_tables_survive_comment_stripping(self):
+        with open(os.path.join(config.BASE_DIR, 'schema_mysql.sql'), encoding='utf-8') as fh:
+            stmts = init_db._split_mysql_script(fh.read())
+        self.assertEqual(sum(1 for s in stmts if s.upper().startswith('CREATE TABLE')), 22)
+        self.assertFalse(any(s.startswith('--') for s in stmts))
+        sale = next(s for s in stmts if 'CREATE TABLE IF NOT EXISTS SALE (' in s)
+        self.assertIn('cgst_amount', sale)
+        self.assertIn('sgst_amount', sale)
 
 
 if __name__ == '__main__':
-    unittest.main()
+    unittest.main(verbosity=2)

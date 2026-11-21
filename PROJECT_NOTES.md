@@ -14,11 +14,12 @@
   - *System Administrator (Ram)*: Full system, catalog, user, audit, and settings access.
   - *Shop Manager (Geetha)*: Operations, POs, inventory, and reports; cannot alter system settings.
   - *Sales Staff (Sai)*: POS, customers, billing, warranties; blocked from settings, audit log, and deletes.
-- **Operational Date**: `APP_TODAY = datetime.date(2026, 11, 19)` in `config.py`; runtime override in Settings (`STORE_SETTING.app_today`). All statuses derive from it.
+- **Operational Date**: resolved per request by `get_app_today()` in `app.py`: the real current date by default, or a manual override in Settings (`STORE_SETTING.app_today_mode/app_today`). All statuses derive from it.
 - **Execution & Tests**:
   - Run App: `python app.py` (Default port: http://127.0.0.1:5000).
-  - Run Unit Tests: `python -m unittest test_phase2.py`.
+  - Run Unit Tests: `python test_app.py`.
 - **Progress (Steps 1–8)**:
   - **Done**: Step 1 (Data Core/Seed/CRUD), Step 2 (POS/EMI/Discounts/Thermal & A4 Invoice), Step 3 (Warranty Center/KPIs/Claims), Step 4 (Operations: Returns, Ledger, POs, Quotes, Repair Tickets), Step 5 (Finance: P&L statement, category margins, best-sellers, slow-moving stock, expenses CRUD feeding net profit, monthly GST summary by rate with CSV export, daily closing report with physical cash count & difference flags).
   - **In Progress / Coded**: Step 6 (System: WhatsApp, Notifications, Audit, Settings, Search, i18n).
+  - **Bug-fix release (done)**: atomic server-side checkout, single-use returns, real JSON restore, server-side daily closing, MySQL init fixed, safer auth/users – see `FIXES.md`.
   - **Todo**: Steps 7–8 (Part 3 specifications / final phase hardening).
