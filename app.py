@@ -27,6 +27,7 @@ app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE='Lax',
     MAX_CONTENT_LENGTH=16 * 1024 * 1024,   # 16 MB upload cap (CSV import / JSON restore)
+    TEMPLATES_AUTO_RELOAD=True,
 )
 
 # Ensure database is initialized on startup
@@ -168,23 +169,32 @@ def block_cross_site_posts():
 # SHARED FORMATTERS: INR CURRENCY & DATES
 # ==========================================================
 
-def format_inr(value):
+def format_inr(value, decimals=0):
     """
     Formats a number as Indian Currency (INR):
-    e.g. 3172747 -> ₹31,72,747 (maximumFractionDigits: 0)
+    e.g. 3172747 -> ₹31,72,747
+    353752 -> ₹3,53,752
     Matches: Intl.NumberFormat('en-IN', {style:'currency', currency:'INR', maximumFractionDigits:0})
     """
     if value is None:
         return '₹0'
     try:
-        val = round(float(value))
+        val = float(value)
         is_neg = val < 0
-        s = str(abs(val))
-        if len(s) <= 3:
-            formatted = s
+        val = abs(val)
+        if decimals > 0:
+            val_rounded = round(val, decimals)
+            parts = f"{val_rounded:.{decimals}f}".split('.')
+            int_part = parts[0]
+            dec_part = '.' + parts[1]
         else:
-            last_three = s[-3:]
-            remaining = s[:-3]
+            int_part = str(round(val))
+            dec_part = ''
+        if len(int_part) <= 3:
+            formatted = int_part
+        else:
+            last_three = int_part[-3:]
+            remaining = int_part[:-3]
             groups = []
             while len(remaining) > 2:
                 groups.insert(0, remaining[-2:])
@@ -192,31 +202,47 @@ def format_inr(value):
             if remaining:
                 groups.insert(0, remaining)
             formatted = ','.join(groups) + ',' + last_three
-        return f"{'-' if is_neg else ''}₹{formatted}"
+        return f"{'-' if is_neg else ''}₹{formatted}{dec_part}"
     except Exception:
         return f"₹{value}"
 
 
 def format_date_in(value):
     """
-    Formats a date string or object like: '19 Nov 2026'
+    Formats a date string or object like: '22 Nov 2026'
     """
     if not value:
         return ''
     if isinstance(value, str):
         try:
             d = datetime.datetime.fromisoformat(value[:19])
-            return d.strftime('%d %b %Y').lstrip('0')
+            return d.strftime('%d %b %Y')
         except Exception:
             try:
                 parts = value[:10].split('-')
                 dt = datetime.date(int(parts[0]), int(parts[1]), int(parts[2]))
-                return dt.strftime('%d %b %Y').lstrip('0')
+                return dt.strftime('%d %b %Y')
             except Exception:
                 return value
     elif isinstance(value, (datetime.date, datetime.datetime)):
-        return value.strftime('%d %b %Y').lstrip('0')
+        return value.strftime('%d %b %Y')
     return str(value)
+
+
+def get_customer_dues_summary(database=None):
+    """
+    Shared query for Customer Dues metrics across Sidebar badge, Hub card, and Ledger.
+    Single source of truth for unpaid balance totals and active dues count.
+    """
+    d = database or db
+    try:
+        row = d.query_one("SELECT COALESCE(SUM(balance_due), 0.0) as amt, COUNT(*) as cnt FROM SALE WHERE balance_due > 0")
+        return {
+            'amt': float(row['amt']) if row else 0.0,
+            'cnt': int(row['cnt']) if row else 0
+        }
+    except Exception:
+        return {'amt': 0.0, 'cnt': 0}
 
 
 app.jinja_env.filters['inr'] = format_inr
@@ -288,7 +314,8 @@ def roles_required(*allowed_roles):
         'Shop Owner': ['Shop Owner', 'Owner'],
         'System Administrator': ['System Administrator', 'Admin'],
         'Shop Manager': ['Shop Manager', 'Manager'],
-        'Sales Staff': ['Sales Staff', 'Staff']
+        'Sales Staff': ['Sales Staff', 'Staff'],
+        'Delivery Staff': ['Delivery Staff', 'Delivery']
     }
 
     expanded = set()
@@ -404,16 +431,30 @@ def inject_global_context():
             pass
 
         try:
-            dc = db.query_one("SELECT COUNT(*) as cnt FROM SALE WHERE balance_due > 0")
-            dues_count = dc['cnt'] if dc else 0
+            dues_summary = get_customer_dues_summary(db)
+            dues_count = dues_summary['cnt']
         except Exception:
             pass
+
+    # Read store address & store location dynamically from settings
+    store_addr = config.STORE_ADDRESS
+    store_loc = getattr(config, 'STORE_LOCATION', 'Hitec City, Hyderabad')
+    try:
+        s_addr = db.query_one("SELECT setting_value FROM STORE_SETTING WHERE setting_key = 'store_address'")
+        if s_addr and s_addr.get('setting_value'):
+            store_addr = s_addr['setting_value']
+        s_loc = db.query_one("SELECT setting_value FROM STORE_SETTING WHERE setting_key = 'store_location'")
+        if s_loc and s_loc.get('setting_value'):
+            store_loc = s_loc['setting_value']
+    except Exception:
+        pass
 
     return {
         'store': {
             'name': config.STORE_NAME,
             'tagline': config.STORE_TAGLINE,
-            'address': config.STORE_ADDRESS,
+            'address': store_addr,
+            'location': store_loc,
             'phone': config.STORE_PHONE,
             'email': config.STORE_EMAIL,
             'website': config.STORE_WEBSITE,
@@ -432,7 +473,7 @@ def inject_global_context():
             'email': session.get('email')
         } if 'user_id' in session else None,
         'app_today': today,
-        'app_today_formatted': today.strftime('%d %b %Y').lstrip('0'),
+        'app_today_formatted': today.strftime('%d %b %Y'),
         'today_weekday': today.strftime('%A'),
         'low_stock_count': low_stock_count,
         'expiring_warranties_count': expiring_warranties_count,
@@ -448,7 +489,9 @@ def inject_global_context():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    if 'user_id' in session:
+    if request.args.get('logout') or request.args.get('force'):
+        session.clear()
+    elif 'user_id' in session:
         return redirect(url_for('mirror_hall_hub'))
 
     if request.method == 'POST':
@@ -475,7 +518,7 @@ def login():
         else:
             flash('Invalid username or password. Please try again.', 'danger')
 
-    return render_template('login.html')
+    return render_template('login.html', demo_mode=config.DEMO_MODE)
 
 
 @app.route('/logout')
@@ -515,15 +558,18 @@ def get_hub_sections_data(user_role):
     cust_cnt = db.query_one("SELECT COUNT(*) as cnt FROM CUSTOMER")
     total_cust = cust_cnt['cnt'] if cust_cnt else 0
 
-    dues_data = db.query_one("SELECT COALESCE(SUM(grand_total), 0.0) as amt, COUNT(*) as cnt FROM SALE WHERE payment_status = 'Pending'")
-    pending_dues_amt = dues_data['amt'] if dues_data else 0.0
-    pending_dues_cnt = dues_data['cnt'] if dues_data else 0
+    # Single shared query for customer dues
+    dues_data = get_customer_dues_summary(db)
+    pending_dues_amt = dues_data['amt']
+    pending_dues_cnt = dues_data['cnt']
 
     quote_cnt = db.query_one("SELECT COUNT(*) as cnt FROM QUOTATION")
     total_quotes = quote_cnt['cnt'] if quote_cnt else 0
 
     today_rev = db.query_one("SELECT COALESCE(SUM(grand_total), 0.0) as rev, COUNT(*) as cnt FROM SALE WHERE DATE(sale_date) = %s", (today_str,))
-    today_sales_val = today_rev['rev'] if today_rev else 0.0
+    today_refund_data = db.query_one("SELECT COALESCE(SUM(refund_amount), 0.0) as ref FROM CREDIT_NOTE WHERE DATE(created_at) = %s", (today_str,))
+    today_refund_amt = today_refund_data['ref'] if today_refund_data else 0.0
+    today_sales_val = max(0.0, (today_rev['rev'] if today_rev else 0.0) - today_refund_amt)
     today_orders_cnt = today_rev['cnt'] if today_rev else 0
 
     sale_cnt = db.query_one("SELECT COUNT(*) as cnt FROM SALE")
@@ -534,6 +580,12 @@ def get_hub_sections_data(user_role):
 
     rep_cnt = db.query_one("SELECT COUNT(*) as cnt FROM REPAIR_TICKET WHERE status != 'Delivered'")
     total_repairs_cnt = rep_cnt['cnt'] if rep_cnt else 0
+
+    deliv_active = db.query_one("SELECT COUNT(*) as cnt FROM DELIVERY_ORDER WHERE status IN ('Pending', 'Assigned', 'Out for Delivery')")
+    active_deliveries_cnt = deliv_active['cnt'] if deliv_active else 0
+
+    deliv_total = db.query_one("SELECT COUNT(*) as cnt FROM DELIVERY_ORDER")
+    total_deliveries_cnt = deliv_total['cnt'] if deliv_total else 0
 
     exp_data = db.query_one("SELECT COALESCE(SUM(amount), 0.0) as total FROM EXPENSE")
     total_expenses = exp_data['total'] if exp_data else 0.0
@@ -556,7 +608,7 @@ def get_hub_sections_data(user_role):
             'eyebrow': 'SHOP OVERVIEW',
             'icon': 'bi-grid-1x2-fill',
             'route': '/dashboard',
-            'metric': f"₹{today_sales_val:,.0f} Today" if today_sales_val > 0 else "Active Today",
+            'metric': f"{format_inr(today_sales_val)} Today" if today_sales_val > 0 else "Active Today",
             'badge': None,
             'accent': '#2bf0ff',
             'warm_accent': '#38bdf8',
@@ -644,7 +696,7 @@ def get_hub_sections_data(user_role):
             'eyebrow': 'COLLECTIONS',
             'icon': 'bi-wallet2',
             'route': '/customer-dues',
-            'metric': f"₹{pending_dues_amt:,.0f} Pending" if pending_dues_amt > 0 else "All Settled",
+            'metric': f"{format_inr(pending_dues_amt)} Pending" if pending_dues_amt > 0 else "All Settled",
             'badge': f"{pending_dues_cnt} Due" if pending_dues_cnt > 0 else None,
             'accent': '#f97316',
             'warm_accent': '#fb923c',
@@ -658,7 +710,7 @@ def get_hub_sections_data(user_role):
             'eyebrow': 'PROPOSALS',
             'icon': 'bi-file-earmark-text-fill',
             'route': '/quotations',
-            'metric': f"{total_quotes} Estimates",
+            'metric': f"{total_quotes} {'Estimate' if total_quotes == 1 else 'Estimates'}",
             'badge': None,
             'accent': '#6366f1',
             'warm_accent': '#818cf8',
@@ -700,7 +752,7 @@ def get_hub_sections_data(user_role):
             'eyebrow': 'REFUNDS',
             'icon': 'bi-arrow-return-left',
             'route': '/returns',
-            'metric': f"{total_returns_cnt} Credit Notes",
+            'metric': f"{total_returns_cnt} {'Credit Note' if total_returns_cnt == 1 else 'Credit Notes'}",
             'badge': None,
             'accent': '#ec4899',
             'warm_accent': '#f472b6',
@@ -708,6 +760,20 @@ def get_hub_sections_data(user_role):
         },
 
         # 4. OPERATIONS
+        {
+            'id': 'deliveries',
+            'name': 'Delivery & Logistics',
+            'code': 'DLVR',
+            'category': 'Operations',
+            'eyebrow': 'LOGISTICS',
+            'icon': 'bi-truck',
+            'route': '/deliveries',
+            'metric': f"{active_deliveries_cnt} Active Dispatches" if active_deliveries_cnt > 0 else f"{total_deliveries_cnt} Orders" if total_deliveries_cnt > 0 else "Dispatch & Fleet",
+            'badge': f"{active_deliveries_cnt} Active" if active_deliveries_cnt > 0 else None,
+            'accent': '#06b6d4',
+            'warm_accent': '#38bdf8',
+            'allowed_roles': None
+        },
         {
             'id': 'repair_tickets',
             'name': 'Repair Tickets',
@@ -732,7 +798,7 @@ def get_hub_sections_data(user_role):
             'eyebrow': 'FINANCIALS',
             'icon': 'bi-pie-chart-fill',
             'route': '/reports/profit-loss',
-            'metric': f"₹{today_sales_val:,.0f} Rev Today" if today_sales_val > 0 else "Net P&L Reports",
+            'metric': f"{format_inr(today_sales_val)} Rev Today" if today_sales_val > 0 else "Net P&L Reports",
             'badge': None,
             'accent': '#8b5cf6',
             'warm_accent': '#a78bfa',
@@ -746,7 +812,7 @@ def get_hub_sections_data(user_role):
             'eyebrow': 'OUTFLOWS',
             'icon': 'bi-cash-coin',
             'route': '/expenses',
-            'metric': f"₹{total_expenses:,.0f} Recorded",
+            'metric': f"{format_inr(total_expenses)} Recorded",
             'badge': None,
             'accent': '#f43f5e',
             'warm_accent': '#fb7185',
@@ -898,17 +964,21 @@ def dashboard():
     # Derived inventory valuation
     inv_totals = get_inventory_derived_totals()
 
-    # Sales metrics
+    # Sales metrics (net of credit notes & customer returns)
     today_sales = db.query_one("""
         SELECT COALESCE(SUM(grand_total), 0.0) as revenue, COUNT(*) as count 
         FROM SALE 
         WHERE DATE(sale_date) = %s
     """, (today_str,))
-    today_revenue = today_sales['revenue'] if today_sales else 0.0
+    today_refund_data = db.query_one("SELECT COALESCE(SUM(refund_amount), 0.0) as ref FROM CREDIT_NOTE WHERE DATE(created_at) = %s", (today_str,))
+    today_refund_amt = today_refund_data['ref'] if today_refund_data else 0.0
+    today_revenue = max(0.0, (today_sales['revenue'] if today_sales else 0.0) - today_refund_amt)
     today_orders = today_sales['count'] if today_sales else 0
 
     all_time = db.query_one("SELECT COALESCE(SUM(grand_total), 0.0) as rev, COUNT(*) as count FROM SALE")
-    total_revenue = all_time['rev'] if all_time else 0.0
+    all_refund_data = db.query_one("SELECT COALESCE(SUM(refund_amount), 0.0) as ref FROM CREDIT_NOTE")
+    all_refund_amt = all_refund_data['ref'] if all_refund_data else 0.0
+    total_revenue = max(0.0, (all_time['rev'] if all_time else 0.0) - all_refund_amt)
     total_sales_count = all_time['count'] if all_time else 0
 
     # Low-stock items
@@ -1062,6 +1132,21 @@ def products():
                            selected_category=category_id,
                            stock_filter=stock_filter,
                            current_sort=sort_by)
+
+
+@app.route('/products/<int:product_id>')
+@login_required
+def product_detail(product_id):
+    product = db.query_one("""
+        SELECT p.*, c.category_name
+        FROM PRODUCT p
+        JOIN CATEGORY c ON p.category_id = c.category_id
+        WHERE p.product_id = %s
+    """, (product_id,))
+    if not product:
+        flash('Product not found.', 'danger')
+        return redirect(url_for('products'))
+    return render_template('product_detail.html', product=product)
 
 
 def _product_form_values():
@@ -1798,6 +1883,32 @@ def pos_checkout():
     emi_months = parse_int(data.get('emi_months'), 'EMI months', 0, minimum=0)
     owner_pin = str(data.get('owner_pin') or '').strip()
     notes = str(data.get('notes') or 'Retail counter sale').strip()[:500]
+    upi_ref = str(data.get('upi_ref') or '').strip()[:50]
+    card_last4 = str(data.get('card_last4') or '').strip()[:10]
+    card_brand = str(data.get('card_brand') or '').strip()[:20]
+    card_auth = str(data.get('card_auth') or '').strip()[:30]
+    cash_tendered = parse_float(data.get('cash_tendered'), 'Cash tendered', 0.0, minimum=0.0)
+
+    payment_details = []
+    if payment_method == 'UPI' and upi_ref:
+        payment_details.append(f"UPI Ref: {upi_ref}")
+    elif payment_method == 'Card':
+        card_desc = f"Card •••• {card_last4}" if card_last4 else "Card Payment"
+        if card_brand:
+            card_desc += f" ({card_brand})"
+        if card_auth:
+            card_desc += f" [Auth: {card_auth}]"
+        payment_details.append(card_desc)
+    elif payment_method == 'Cash' and cash_tendered > 0:
+        payment_details.append(f"Cash Tendered: ₹{cash_tendered:,.2f}")
+
+    if payment_details:
+        detail_str = " | ".join(payment_details)
+        if notes and notes != 'Retail counter sale':
+            notes = f"{notes} | {detail_str}"
+        else:
+            notes = detail_str
+
     today = get_app_today()
 
     emi_plans = get_emi_plans()
@@ -1827,6 +1938,9 @@ def pos_checkout():
                     (pid,))
                 if not prod:
                     raise CheckoutError(f'Product #{pid} not found.')
+
+                if prod['stock_quantity'] <= 0:
+                    raise CheckoutError(f"'{prod['product_name']}' is out of stock (0 available). Cannot sell items with 0 stock.")
 
                 reserved[pid] = reserved.get(pid, 0) + qty
                 if prod['stock_quantity'] < reserved[pid]:
@@ -2374,14 +2488,145 @@ def warranty_export_csv():
 @app.route('/returns')
 @login_required
 def returns_list():
-    notes = db.query("""
-        SELECT cn.*, s.invoice_number, c.customer_name, c.phone
+    today = get_app_today()
+    search = request.args.get('search', '').strip()
+    date_filter = request.args.get('date', '').strip()
+
+    query_sql = """
+        SELECT cn.*, cn.created_at as issue_date,
+               s.invoice_number, s.sale_date, s.grand_total as original_amount, s.amount_paid as original_paid, s.payment_method,
+               c.customer_name, c.phone, c.address, c.city,
+               u.full_name as processed_by_name, u.role as processed_by_role
         FROM CREDIT_NOTE cn
         JOIN SALE s ON cn.sale_id = s.sale_id
         LEFT JOIN CUSTOMER c ON cn.customer_id = c.customer_id
-        ORDER BY cn.credit_note_id DESC
+        LEFT JOIN USER u ON s.user_id = u.user_id
+        WHERE 1=1
+    """
+    params = []
+    if search:
+        query_sql += """ AND (
+            cn.credit_note_number LIKE %s OR 
+            s.invoice_number LIKE %s OR 
+            c.customer_name LIKE %s OR 
+            c.phone LIKE %s OR 
+            cn.reason LIKE %s
+        )"""
+        s_wild = f"%{search}%"
+        params.extend([s_wild, s_wild, s_wild, s_wild, s_wild])
+
+    if date_filter:
+        query_sql += " AND DATE(cn.created_at) = %s"
+        params.append(date_filter)
+
+    query_sql += " ORDER BY cn.credit_note_id DESC"
+    notes = db.query(query_sql, tuple(params))
+
+    # Fetch returned items for each credit note
+    for cn in notes:
+        cn['sale_items'] = db.query("""
+            SELECT si.*, p.product_name, p.product_code, p.image_url
+            FROM SALE_ITEM si
+            JOIN PRODUCT p ON si.product_id = p.product_id
+            WHERE si.sale_id = %s
+        """, (cn['sale_id'],))
+        cn['total_items_qty'] = sum(it.get('quantity', 0) for it in cn['sale_items'])
+
+    # KPI Statistics
+    all_notes = db.query("SELECT refund_amount, created_at, sale_id FROM CREDIT_NOTE")
+    total_refunded = sum(float(n['refund_amount'] or 0.0) for n in all_notes)
+
+    restocked_cnt_row = db.query_one("""
+        SELECT COALESCE(SUM(quantity), 0) as total_units
+        FROM STOCK_MOVEMENT
+        WHERE movement_type = 'IN' AND reason = 'Customer Return'
     """)
-    return render_template('operations/returns.html', credit_notes=notes)
+    total_units_restocked = restocked_cnt_row['total_units'] if restocked_cnt_row else 0
+
+    cur_month_str = today.strftime('%Y-%m')
+    month_notes = [n for n in all_notes if str(n.get('created_at') or '')[:7] == cur_month_str]
+    month_refunded = sum(float(n['refund_amount'] or 0.0) for n in month_notes)
+
+    stats = {
+        'total_count': len(all_notes),
+        'total_refunded': total_refunded,
+        'month_count': len(month_notes),
+        'month_refunded': month_refunded,
+        'units_restocked': total_units_restocked
+    }
+
+    # Available sales eligible for return
+    available_sales = db.query("""
+        SELECT s.sale_id, s.invoice_number, s.sale_date, s.grand_total, s.amount_paid, s.payment_method, s.customer_id,
+               c.customer_name, c.phone, c.city
+        FROM SALE s
+        LEFT JOIN CUSTOMER c ON s.customer_id = c.customer_id
+        LEFT JOIN CREDIT_NOTE cn ON s.sale_id = cn.sale_id
+        WHERE cn.credit_note_id IS NULL AND s.payment_status != 'Refunded' AND s.amount_paid > 0
+        ORDER BY s.sale_id DESC
+        LIMIT 60
+    """)
+    for s in available_sales:
+        s['sale_items'] = db.query("""
+            SELECT si.product_id, si.quantity, si.unit_price, si.total_price, p.product_name, p.product_code
+            FROM SALE_ITEM si
+            JOIN PRODUCT p ON si.product_id = p.product_id
+            WHERE si.sale_id = %s
+        """, (s['sale_id'],))
+
+    return render_template('operations/returns.html',
+                           credit_notes=notes,
+                           stats=stats,
+                           available_sales=available_sales,
+                           current_search=search,
+                           current_date=date_filter,
+                           today=today)
+
+
+@app.route('/api/returns/invoice-lookup/<invoice_number>')
+@login_required
+def returns_invoice_lookup(invoice_number):
+    invoice_no = invoice_number.strip().upper()
+    sale = db.query_one("""
+        SELECT s.sale_id, s.invoice_number, s.sale_date, s.grand_total, s.amount_paid, s.payment_status,
+               s.payment_method, c.customer_name, c.phone, c.city
+        FROM SALE s
+        LEFT JOIN CUSTOMER c ON s.customer_id = c.customer_id
+        WHERE UPPER(s.invoice_number) = %s
+    """, (invoice_no,))
+
+    if not sale:
+        return jsonify({'found': False, 'error': f"Invoice '{invoice_no}' was not found in the sales register."}), 404
+
+    prior = db.query_one("SELECT credit_note_id, credit_note_number, refund_amount, created_at FROM CREDIT_NOTE WHERE sale_id = %s", (sale['sale_id'],))
+    if prior or sale['payment_status'] == 'Refunded':
+        return jsonify({
+            'found': True,
+            'eligible': False,
+            'error': f"Invoice {sale['invoice_number']} has already been returned/refunded under Credit Note {prior['credit_note_number'] if prior else 'CN'}."
+        }), 400
+
+    if (sale.get('amount_paid') or 0.0) <= 0:
+        return jsonify({
+            'found': True,
+            'eligible': False,
+            'error': f"Invoice {sale['invoice_number']} has 0 amount paid (unsettled credit sale)."
+        }), 400
+
+    items = db.query("""
+        SELECT si.product_id, si.quantity, si.unit_price, si.total_price, p.product_name, p.product_code
+        FROM SALE_ITEM si
+        JOIN PRODUCT p ON si.product_id = p.product_id
+        WHERE si.sale_id = %s
+    """, (sale['sale_id'],))
+
+    return jsonify({
+        'found': True,
+        'eligible': True,
+        'sale': sale,
+        'items': items,
+        'max_refund': float(sale['amount_paid'])
+    })
 
 
 def _next_sequence(tx, table, column, id_column, prefix):
@@ -2734,6 +2979,401 @@ def repair_ticket_update_status(ticket_id):
 
 
 # ==========================================================
+# STEP 4B: OPERATIONS - DELIVERY & LOGISTICS
+# ==========================================================
+
+@app.route('/deliveries')
+@login_required
+def deliveries():
+    today = get_app_today()
+    status_filter = request.args.get('status', '').strip()
+    assigned_filter = request.args.get('assigned_to', '').strip()
+    search = request.args.get('search', '').strip()
+    date_filter = request.args.get('date', '').strip()
+    my_only = request.args.get('my_only', '').strip()
+
+    user_role = session.get('role', '')
+    user_id = session.get('user_id')
+
+    if user_role == 'Delivery Staff' and not assigned_filter and not my_only:
+        my_only = '1'
+
+    query_sql = """
+        SELECT d.*, c.customer_name, c.phone as customer_phone, c.city as customer_city,
+               s.invoice_number, s.grand_total as sale_amount, s.sale_date,
+               u.full_name as assigned_staff_name, u.role as assigned_staff_role, u.phone as assigned_staff_phone
+        FROM DELIVERY_ORDER d
+        LEFT JOIN CUSTOMER c ON d.customer_id = c.customer_id
+        JOIN SALE s ON d.sale_id = s.sale_id
+        LEFT JOIN USER u ON d.assigned_to = u.user_id
+        WHERE 1=1
+    """
+    params = []
+
+    if status_filter:
+        query_sql += " AND d.status = %s"
+        params.append(status_filter)
+
+    if my_only == '1':
+        query_sql += " AND d.assigned_to = %s"
+        params.append(user_id)
+    elif assigned_filter:
+        if assigned_filter == 'unassigned':
+            query_sql += " AND d.assigned_to IS NULL"
+        else:
+            try:
+                query_sql += " AND d.assigned_to = %s"
+                params.append(int(assigned_filter))
+            except ValueError:
+                pass
+
+    if date_filter:
+        query_sql += " AND d.expected_date = %s"
+        params.append(date_filter)
+
+    if search:
+        query_sql += """ AND (
+            d.delivery_number LIKE %s OR 
+            s.invoice_number LIKE %s OR 
+            c.customer_name LIKE %s OR 
+            d.recipient_name LIKE %s OR 
+            d.recipient_phone LIKE %s OR 
+            d.delivery_address LIKE %s
+        )"""
+        s_wild = f"%{search}%"
+        params.extend([s_wild, s_wild, s_wild, s_wild, s_wild, s_wild])
+
+    query_sql += " ORDER BY d.delivery_id DESC"
+    deliveries_list = db.query(query_sql, tuple(params))
+
+    all_deliveries = db.query("SELECT status, delivery_charges FROM DELIVERY_ORDER")
+    stats = {
+        'total': len(all_deliveries),
+        'pending': sum(1 for d in all_deliveries if d['status'] == 'Pending'),
+        'assigned': sum(1 for d in all_deliveries if d['status'] == 'Assigned'),
+        'out_for_delivery': sum(1 for d in all_deliveries if d['status'] == 'Out for Delivery'),
+        'delivered': sum(1 for d in all_deliveries if d['status'] == 'Delivered'),
+        'failed': sum(1 for d in all_deliveries if d['status'] == 'Failed'),
+        'cancelled': sum(1 for d in all_deliveries if d['status'] == 'Cancelled'),
+        'total_charges': sum(float(d.get('delivery_charges') or 0.0) for d in all_deliveries),
+    }
+    completed_or_failed = stats['delivered'] + stats['failed']
+    stats['success_rate'] = round((stats['delivered'] / completed_or_failed * 100), 1) if completed_or_failed > 0 else 100.0
+
+    delivery_staff = db.query("""
+        SELECT user_id, full_name, username, role, phone, email, status,
+               (SELECT COUNT(*) FROM DELIVERY_ORDER WHERE assigned_to = USER.user_id AND status IN ('Assigned', 'Out for Delivery')) as active_deliveries_count,
+               (SELECT COUNT(*) FROM DELIVERY_ORDER WHERE assigned_to = USER.user_id AND status = 'Delivered') as completed_deliveries_count
+        FROM USER
+        WHERE status = 'Active' AND (role = 'Delivery Staff' OR role = 'Sales Staff' OR role LIKE '%Manager%' OR role LIKE '%Admin%' OR role LIKE '%Owner%')
+        ORDER BY CASE WHEN role = 'Delivery Staff' THEN 0 ELSE 1 END, full_name ASC
+    """)
+
+    available_sales = db.query("""
+        SELECT s.sale_id, s.invoice_number, s.sale_date, s.grand_total, s.customer_id,
+               c.customer_name, c.phone, c.address, c.city
+        FROM SALE s
+        LEFT JOIN CUSTOMER c ON s.customer_id = c.customer_id
+        ORDER BY s.sale_id DESC
+        LIMIT 60
+    """)
+
+    customers = db.query("SELECT customer_id, customer_name, phone, address, city FROM CUSTOMER ORDER BY customer_name ASC")
+
+    return render_template('operations/deliveries.html',
+                           deliveries=deliveries_list,
+                           stats=stats,
+                           delivery_staff=delivery_staff,
+                           available_sales=available_sales,
+                           customers=customers,
+                           current_status=status_filter,
+                           current_assigned=assigned_filter,
+                           current_search=search,
+                           current_date=date_filter,
+                           my_only=my_only,
+                           today=today)
+
+
+@app.route('/deliveries/create', methods=['POST'])
+@login_required
+def delivery_create():
+    today = get_app_today()
+    sale_id = request.form.get('sale_id')
+    recipient_name = request.form.get('recipient_name', '').strip()
+    recipient_phone = request.form.get('recipient_phone', '').strip()
+    delivery_address = request.form.get('delivery_address', '').strip()
+    charges = float(request.form.get('delivery_charges', 0.0) or 0.0)
+    expected_date = request.form.get('expected_date', '').strip() or (today + datetime.timedelta(days=1)).strftime('%Y-%m-%d')
+    assigned_to = request.form.get('assigned_to') or None
+    notes = request.form.get('tracking_notes', '').strip()
+
+    if not sale_id:
+        flash("Please select a valid POS invoice/sale.", "danger")
+        return redirect(url_for('deliveries'))
+
+    sale = db.query_one("SELECT s.*, c.customer_name, c.phone, c.address FROM SALE s LEFT JOIN CUSTOMER c ON s.customer_id = c.customer_id WHERE s.sale_id = %s", (sale_id,))
+    if not sale:
+        flash("Sale not found.", "danger")
+        return redirect(url_for('deliveries'))
+
+    if not recipient_name:
+        recipient_name = sale.get('customer_name') or 'Customer'
+    if not recipient_phone:
+        recipient_phone = sale.get('phone') or 'N/A'
+    if not delivery_address:
+        delivery_address = sale.get('address') or "Store Delivery / Standard Address"
+
+    count_row = db.query_one("SELECT COUNT(*) as c FROM DELIVERY_ORDER")
+    d_seq = (count_row['c'] if count_row else 0) + 1
+    del_number = f"DEL-{today.year}-{d_seq:04d}"
+
+    initial_status = 'Assigned' if assigned_to else 'Pending'
+
+    try:
+        db.execute("""
+            INSERT INTO DELIVERY_ORDER (
+                delivery_number, sale_id, customer_id, recipient_name, recipient_phone,
+                delivery_address, delivery_charges, expected_date, status, assigned_to, tracking_notes
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (del_number, sale_id, sale.get('customer_id'), recipient_name, recipient_phone,
+              delivery_address, charges, expected_date, initial_status, assigned_to, notes))
+
+        new_del = db.query_one("SELECT delivery_id FROM DELIVERY_ORDER WHERE delivery_number = %s", (del_number,))
+        del_id = new_del['delivery_id']
+
+        user_id = session.get('user_id')
+        db.execute("""
+            INSERT INTO DELIVERY_LOG (delivery_id, status, updated_by, remarks)
+            VALUES (%s, %s, %s, %s)
+        """, (del_id, 'Pending', user_id, f"Delivery order created for invoice {sale['invoice_number']}"))
+
+        if assigned_to:
+            staff = db.query_one("SELECT full_name FROM USER WHERE user_id = %s", (assigned_to,))
+            staff_name = staff['full_name'] if staff else 'Staff'
+            db.execute("""
+                INSERT INTO DELIVERY_LOG (delivery_id, status, updated_by, remarks)
+                VALUES (%s, %s, %s, %s)
+            """, (del_id, 'Assigned', user_id, f"Assigned to delivery executive {staff_name}"))
+
+        log_audit('CREATE_DELIVERY_ORDER', 'Operations', f"Created delivery order {del_number} for invoice {sale['invoice_number']}")
+        flash(f"Delivery order {del_number} created successfully.", "success")
+    except Exception as e:
+        flash(f"Error creating delivery order: {_public_error(e)}", "danger")
+
+    return redirect(url_for('deliveries'))
+
+
+@app.route('/deliveries/<int:delivery_id>/update-status', methods=['POST'])
+@login_required
+def delivery_update_status(delivery_id):
+    new_status = request.form.get('status', '').strip()
+    remarks = request.form.get('remarks', '').strip()
+    valid_statuses = ['Pending', 'Assigned', 'Out for Delivery', 'Delivered', 'Failed', 'Cancelled']
+
+    if new_status not in valid_statuses:
+        flash("Invalid status specified.", "danger")
+        return redirect(url_for('deliveries'))
+
+    delivery = db.query_one("SELECT * FROM DELIVERY_ORDER WHERE delivery_id = %s", (delivery_id,))
+    if not delivery:
+        flash("Delivery order not found.", "danger")
+        return redirect(url_for('deliveries'))
+
+    user_id = session.get('user_id')
+    user_role = session.get('role', '')
+
+    if user_role == 'Delivery Staff' and delivery['assigned_to'] != user_id:
+        flash("Access denied: You can only update deliveries assigned to you.", "danger")
+        return redirect(url_for('deliveries'))
+
+    try:
+        if new_status == 'Delivered':
+            db.execute("""
+                UPDATE DELIVERY_ORDER 
+                SET status = %s, delivered_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                WHERE delivery_id = %s
+            """, (new_status, delivery_id))
+        else:
+            db.execute("""
+                UPDATE DELIVERY_ORDER 
+                SET status = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE delivery_id = %s
+            """, (new_status, delivery_id))
+
+        db.execute("""
+            INSERT INTO DELIVERY_LOG (delivery_id, status, updated_by, remarks)
+            VALUES (%s, %s, %s, %s)
+        """, (delivery_id, new_status, user_id, remarks or f"Status updated from {delivery['status']} to {new_status}"))
+
+        log_audit('UPDATE_DELIVERY_STATUS', 'Operations', f"Updated {delivery['delivery_number']} status to {new_status}")
+        flash(f"Delivery {delivery['delivery_number']} updated to '{new_status}'.", "success")
+    except Exception as e:
+        flash(f"Error updating status: {_public_error(e)}", "danger")
+
+    return redirect(url_for('deliveries'))
+
+
+@app.route('/deliveries/<int:delivery_id>/assign', methods=['POST'])
+@login_required
+def delivery_assign(delivery_id):
+    if session.get('role') == 'Delivery Staff':
+        flash("Access denied.", "danger")
+        return redirect(url_for('deliveries'))
+
+    assigned_to = request.form.get('assigned_to') or None
+    remarks = request.form.get('remarks', '').strip()
+
+    delivery = db.query_one("SELECT * FROM DELIVERY_ORDER WHERE delivery_id = %s", (delivery_id,))
+    if not delivery:
+        flash("Delivery order not found.", "danger")
+        return redirect(url_for('deliveries'))
+
+    user_id = session.get('user_id')
+    try:
+        if assigned_to:
+            staff = db.query_one("SELECT full_name FROM USER WHERE user_id = %s", (assigned_to,))
+            staff_name = staff['full_name'] if staff else 'Staff'
+            new_status = 'Assigned' if delivery['status'] == 'Pending' else delivery['status']
+            db.execute("""
+                UPDATE DELIVERY_ORDER 
+                SET assigned_to = %s, status = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE delivery_id = %s
+            """, (assigned_to, new_status, delivery_id))
+            db.execute("""
+                INSERT INTO DELIVERY_LOG (delivery_id, status, updated_by, remarks)
+                VALUES (%s, %s, %s, %s)
+            """, (delivery_id, new_status, user_id, f"Assigned to {staff_name}. {remarks}".strip()))
+            flash(f"Delivery assigned to {staff_name}.", "success")
+        else:
+            db.execute("""
+                UPDATE DELIVERY_ORDER 
+                SET assigned_to = NULL, status = 'Pending', updated_at = CURRENT_TIMESTAMP
+                WHERE delivery_id = %s
+            """, (delivery_id,))
+            db.execute("""
+                INSERT INTO DELIVERY_LOG (delivery_id, status, updated_by, remarks)
+                VALUES (%s, 'Pending', %s, 'Unassigned from personnel.')
+            """, (delivery_id, user_id))
+            flash("Delivery marked as unassigned / Pending.", "info")
+
+        log_audit('ASSIGN_DELIVERY', 'Operations', f"Assignment update on delivery #{delivery_id}")
+    except Exception as e:
+        flash(f"Error assigning delivery: {_public_error(e)}", "danger")
+
+    return redirect(url_for('deliveries'))
+
+
+@app.route('/deliveries/<int:delivery_id>/edit', methods=['POST'])
+@login_required
+def delivery_edit(delivery_id):
+    if session.get('role') == 'Delivery Staff':
+        flash("Access denied.", "danger")
+        return redirect(url_for('deliveries'))
+
+    recipient_name = request.form.get('recipient_name', '').strip()
+    recipient_phone = request.form.get('recipient_phone', '').strip()
+    delivery_address = request.form.get('delivery_address', '').strip()
+    charges = float(request.form.get('delivery_charges', 0.0) or 0.0)
+    expected_date = request.form.get('expected_date', '').strip()
+    notes = request.form.get('tracking_notes', '').strip()
+
+    try:
+        db.execute("""
+            UPDATE DELIVERY_ORDER 
+            SET recipient_name = %s, recipient_phone = %s, delivery_address = %s,
+                delivery_charges = %s, expected_date = %s, tracking_notes = %s, updated_at = CURRENT_TIMESTAMP
+            WHERE delivery_id = %s
+        """, (recipient_name, recipient_phone, delivery_address, charges, expected_date, notes, delivery_id))
+
+        user_id = session.get('user_id')
+        db.execute("""
+            INSERT INTO DELIVERY_LOG (delivery_id, status, updated_by, remarks)
+            VALUES (%s, (SELECT status FROM DELIVERY_ORDER WHERE delivery_id = %s), %s, 'Delivery details/address edited')
+        """, (delivery_id, delivery_id, user_id))
+
+        log_audit('EDIT_DELIVERY', 'Operations', f"Updated delivery #{delivery_id} address/contact details")
+        flash("Delivery details updated successfully.", "success")
+    except Exception as e:
+        flash(f"Error editing delivery: {_public_error(e)}", "danger")
+
+    return redirect(url_for('deliveries'))
+
+
+@app.route('/deliveries/<int:delivery_id>/history')
+@login_required
+def delivery_history_json(delivery_id):
+    delivery = db.query_one("""
+        SELECT d.*, c.customer_name, c.phone as customer_phone, s.invoice_number, s.grand_total,
+               u.full_name as assigned_staff_name
+        FROM DELIVERY_ORDER d
+        LEFT JOIN CUSTOMER c ON d.customer_id = c.customer_id
+        JOIN SALE s ON d.sale_id = s.sale_id
+        LEFT JOIN USER u ON d.assigned_to = u.user_id
+        WHERE d.delivery_id = %s
+    """, (delivery_id,))
+    if not delivery:
+        return jsonify({'error': 'Delivery not found'}), 404
+
+    logs = db.query("""
+        SELECT l.*, u.full_name as user_name, u.role as user_role
+        FROM DELIVERY_LOG l
+        LEFT JOIN USER u ON l.updated_by = u.user_id
+        WHERE l.delivery_id = %s
+        ORDER BY l.log_id ASC
+    """, (delivery_id,))
+
+    items = db.query("""
+        SELECT si.*, p.product_name, p.product_code
+        FROM SALE_ITEM si
+        JOIN PRODUCT p ON si.product_id = p.product_id
+        WHERE si.sale_id = %s
+    """, (delivery['sale_id'],))
+
+    return jsonify({
+        'delivery': delivery,
+        'logs': logs,
+        'items': items
+    })
+
+
+@app.route('/deliveries/staff/create', methods=['POST'])
+@login_required
+def delivery_staff_create():
+    if session.get('role') not in ('System Administrator', 'Admin', 'Shop Owner', 'Owner', 'Shop Manager', 'Manager'):
+        flash("Only managers and administrators can add delivery personnel.", "danger")
+        return redirect(url_for('deliveries'))
+
+    username = request.form.get('username', '').strip().lower()
+    full_name = request.form.get('full_name', '').strip()
+    phone = request.form.get('phone', '').strip()
+    email = request.form.get('email', '').strip()
+    password = request.form.get('password', 'delivery123').strip()
+
+    if not username or not full_name:
+        flash("Username and Full Name are required.", "danger")
+        return redirect(url_for('deliveries'))
+
+    existing = db.query_one("SELECT user_id FROM USER WHERE username = %s", (username,))
+    if existing:
+        flash(f"Username '{username}' already exists.", "danger")
+        return redirect(url_for('deliveries'))
+
+    avatar = get_avatar(username, full_name)
+    try:
+        db.execute("""
+            INSERT INTO USER (username, password_hash, full_name, role, avatar, email, phone, status)
+            VALUES (%s, %s, %s, 'Delivery Staff', %s, %s, %s, 'Active')
+        """, (username, generate_password_hash(password), full_name, avatar, email, phone))
+        log_audit('CREATE_USER', 'Administration', f"Added delivery personnel {full_name} (@{username})")
+        flash(f"Delivery staff '{full_name}' (@{username}) added successfully.", "success")
+    except Exception as e:
+        flash(f"Error adding delivery staff: {_public_error(e)}", "danger")
+
+    return redirect(url_for('deliveries'))
+
+
+
+# ==========================================================
 # STEP 5: REPORTS & FINANCE (P&L, EXPENSES, GST, CLOSING)
 # ==========================================================
 
@@ -2781,17 +3421,30 @@ def reports():
             COALESCE(SUM(discount_amount), 0.0) as total_discount
         FROM SALE
     """)
-    units_row = db.query_one("SELECT COALESCE(SUM(quantity), 0) as units FROM SALE_ITEM")
+    ref_row = db.query_one("SELECT COALESCE(SUM(refund_amount), 0.0) as total_refunds FROM CREDIT_NOTE")
+    total_refunds = ref_row['total_refunds'] if ref_row else 0.0
+
+    units_row = db.query_one("""
+        SELECT COALESCE(SUM(si.quantity), 0) as units 
+        FROM SALE_ITEM si 
+        JOIN SALE s ON si.sale_id = s.sale_id 
+        WHERE s.payment_status <> 'Refunded'
+    """)
     total_units_val = units_row['units'] if units_row else 0
     if summary:
+        summary['gross_revenue'] = summary['total_revenue']
+        summary['total_revenue'] = max(0.0, summary['total_revenue'] - total_refunds)
+        summary['total_refunds'] = total_refunds
         summary['total_sales'] = summary['total_orders']
         summary['total_units'] = total_units_val
 
-    # Cost of goods sold (COGS)
+    # Cost of goods sold (COGS) - excluding refunded items returned to inventory
     cogs_row = db.query_one("""
         SELECT COALESCE(SUM(si.quantity * p.cost_price), 0.0) as cogs
         FROM SALE_ITEM si
         JOIN PRODUCT p ON si.product_id = p.product_id
+        JOIN SALE s ON si.sale_id = s.sale_id
+        WHERE s.payment_status <> 'Refunded'
     """)
     cogs = cogs_row['cogs'] if cogs_row else 0.0
     tot_rev = summary['total_revenue'] if summary else 0.0
@@ -2900,16 +3553,22 @@ def reports_profit_loss():
 
     net_revenue = max(0.0, revenue - total_refunds)
 
-    cogs_row = db.query_one("SELECT COALESCE(SUM(si.quantity * p.cost_price), 0.0) as cogs FROM SALE_ITEM si JOIN PRODUCT p ON si.product_id = p.product_id")
+    cogs_row = db.query_one("""
+        SELECT COALESCE(SUM(si.quantity * p.cost_price), 0.0) as cogs 
+        FROM SALE_ITEM si 
+        JOIN PRODUCT p ON si.product_id = p.product_id
+        JOIN SALE s ON si.sale_id = s.sale_id
+        WHERE s.payment_status <> 'Refunded'
+    """)
     cogs = cogs_row['cogs'] if cogs_row else 0.0
     gross_profit = net_revenue - cogs
-    gross_margin = (gross_profit / revenue * 100.0) if revenue > 0 else 0.0
+    gross_margin = (gross_profit / net_revenue * 100.0) if net_revenue > 0 else 0.0
 
     exp_row = db.query_one("SELECT COALESCE(SUM(amount), 0.0) as exp FROM EXPENSE")
     total_expenses = exp_row['exp'] if exp_row else 0.0
 
     net_profit = gross_profit - total_expenses
-    net_margin = (net_profit / revenue * 100.0) if revenue > 0 else 0.0
+    net_margin = (net_profit / net_revenue * 100.0) if net_revenue > 0 else 0.0
 
     # Best-sellers
     best_sellers = db.query("""
@@ -3338,6 +3997,10 @@ def settings():
                 # An empty banner is a valid way to clear it (previously it could never be cleared).
                 if 'offers_banner' in request.form:
                     db.upsert_setting('offers_banner', request.form.get('offers_banner', '').strip()[:500])
+                if 'store_address' in request.form:
+                    db.upsert_setting('store_address', request.form.get('store_address', '').strip()[:300])
+                if 'store_location' in request.form:
+                    db.upsert_setting('store_location', request.form.get('store_location', '').strip()[:300])
                 db.upsert_setting('emi_rate_3m', f"{emi_3:g}")
                 db.upsert_setting('emi_rate_6m', f"{emi_6:g}")
                 db.upsert_setting('emi_rate_9m', f"{emi_9:g}")
@@ -3533,16 +4196,39 @@ def users():
         ORDER BY u.user_id ASC
     """)
     matrix = [
-        {'module': 'Dashboard & Overview', 'desc': 'View KPI metrics, charts and alerts', 'roles': {'Shop Owner': True, 'System Administrator': True, 'Shop Manager': True, 'Sales Staff': True}},
-        {'module': 'POS & New Sale', 'desc': 'Barcode scan, billing, cart and invoices', 'roles': {'Shop Owner': True, 'System Administrator': True, 'Shop Manager': True, 'Sales Staff': True}},
-        {'module': 'Products Catalog', 'desc': 'View pricing, SKUs, models and warranties', 'roles': {'Shop Owner': True, 'System Administrator': True, 'Shop Manager': True, 'Sales Staff': True}},
-        {'module': 'Product CRUD & Pricing', 'desc': 'Create, edit, delete and modify pricing', 'roles': {'Shop Owner': True, 'System Administrator': True, 'Shop Manager': True, 'Sales Staff': False}},
-        {'module': 'Inventory Restock', 'desc': 'Manual stock in/out and adjustments', 'roles': {'Shop Owner': True, 'System Administrator': True, 'Shop Manager': True, 'Sales Staff': False}},
-        {'module': 'Warranty & Service', 'desc': 'Serial lookup and register warranty claims', 'roles': {'Shop Owner': True, 'System Administrator': True, 'Shop Manager': True, 'Sales Staff': True}},
-        {'module': 'Customer CRM', 'desc': 'Customer directory, history and ledger', 'roles': {'Shop Owner': True, 'System Administrator': True, 'Shop Manager': True, 'Sales Staff': True}},
-        {'module': 'Quotations & Returns', 'desc': 'Price estimates, credit notes and returns', 'roles': {'Shop Owner': True, 'System Administrator': True, 'Shop Manager': True, 'Sales Staff': False}},
-        {'module': 'Financial Reports & P&L', 'desc': 'Sales reports, GST, expenses, P&L', 'roles': {'Shop Owner': True, 'System Administrator': True, 'Shop Manager': True, 'Sales Staff': False}},
-        {'module': 'Settings & Audit Log', 'desc': 'Store settings, backup, date override', 'roles': {'Shop Owner': True, 'System Administrator': True, 'Shop Manager': False, 'Sales Staff': False}}
+        {'module': 'Dashboard & Overview', 'desc': 'View KPI metrics, charts and alerts',
+         'admin': True, 'owner': True, 'manager': True, 'staff': True, 'delivery': False,
+         'roles': {'System Administrator': True, 'Shop Owner': True, 'Shop Manager': True, 'Sales Staff': True, 'Delivery Staff': False}},
+        {'module': 'POS & New Sale', 'desc': 'Barcode scan, billing, real-time QR code & card processing',
+         'admin': True, 'owner': True, 'manager': True, 'staff': True, 'delivery': False,
+         'roles': {'System Administrator': True, 'Shop Owner': True, 'Shop Manager': True, 'Sales Staff': True, 'Delivery Staff': False}},
+        {'module': 'Products Catalog', 'desc': 'View pricing, SKUs, models and warranties',
+         'admin': True, 'owner': True, 'manager': True, 'staff': True, 'delivery': True,
+         'roles': {'System Administrator': True, 'Shop Owner': True, 'Shop Manager': True, 'Sales Staff': True, 'Delivery Staff': True}},
+        {'module': 'Product CRUD & Pricing', 'desc': 'Create, edit, delete and modify pricing',
+         'admin': True, 'owner': True, 'manager': True, 'staff': False, 'delivery': False,
+         'roles': {'System Administrator': True, 'Shop Owner': True, 'Shop Manager': True, 'Sales Staff': False, 'Delivery Staff': False}},
+        {'module': 'Inventory Restock', 'desc': 'Manual stock in/out and adjustments',
+         'admin': True, 'owner': True, 'manager': True, 'staff': False, 'delivery': False,
+         'roles': {'System Administrator': True, 'Shop Owner': True, 'Shop Manager': True, 'Sales Staff': False, 'Delivery Staff': False}},
+        {'module': 'Delivery Dispatch & Tracking', 'desc': 'Track deliveries, assign routes & verify OTPs',
+         'admin': True, 'owner': True, 'manager': True, 'staff': True, 'delivery': True,
+         'roles': {'System Administrator': True, 'Shop Owner': True, 'Shop Manager': True, 'Sales Staff': True, 'Delivery Staff': True}},
+        {'module': 'Warranty & Service', 'desc': 'Serial lookup and register warranty claims',
+         'admin': True, 'owner': True, 'manager': True, 'staff': True, 'delivery': False,
+         'roles': {'System Administrator': True, 'Shop Owner': True, 'Shop Manager': True, 'Sales Staff': True, 'Delivery Staff': False}},
+        {'module': 'Customer CRM', 'desc': 'Customer directory, history and ledger',
+         'admin': True, 'owner': True, 'manager': True, 'staff': True, 'delivery': False,
+         'roles': {'System Administrator': True, 'Shop Owner': True, 'Shop Manager': True, 'Sales Staff': True, 'Delivery Staff': False}},
+        {'module': 'Quotations & Returns', 'desc': 'Price estimates, credit notes and returns',
+         'admin': True, 'owner': True, 'manager': True, 'staff': False, 'delivery': False,
+         'roles': {'System Administrator': True, 'Shop Owner': True, 'Shop Manager': True, 'Sales Staff': False, 'Delivery Staff': False}},
+        {'module': 'Financial Reports & P&L', 'desc': 'Sales reports, GST, expenses, P&L',
+         'admin': True, 'owner': True, 'manager': True, 'staff': False, 'delivery': False,
+         'roles': {'System Administrator': True, 'Shop Owner': True, 'Shop Manager': True, 'Sales Staff': False, 'Delivery Staff': False}},
+        {'module': 'Settings & Audit Log', 'desc': 'Store settings, backup, date override',
+         'admin': True, 'owner': True, 'manager': False, 'staff': False, 'delivery': False,
+         'roles': {'System Administrator': True, 'Shop Owner': True, 'Shop Manager': False, 'Sales Staff': False, 'Delivery Staff': False}}
     ]
     return render_template('users.html', users=users_list, matrix=matrix)
 
@@ -3552,6 +4238,7 @@ ROLE_CANONICAL = {
     'Shop Owner': 'Shop Owner', 'Owner': 'Shop Owner',
     'Shop Manager': 'Shop Manager', 'Manager': 'Shop Manager',
     'Sales Staff': 'Sales Staff', 'Staff': 'Sales Staff',
+    'Delivery Staff': 'Delivery Staff', 'Delivery': 'Delivery Staff',
 }
 PRIVILEGED_ROLES = ('System Administrator', 'Admin', 'Shop Owner', 'Owner')
 

@@ -312,6 +312,40 @@ CREATE TABLE IF NOT EXISTS STORE_SETTING (
     setting_value TEXT NOT NULL,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- 21. DELIVERY_ORDER: Delivery & Logistics Management
+CREATE TABLE IF NOT EXISTS DELIVERY_ORDER (
+    delivery_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    delivery_number TEXT NOT NULL UNIQUE,
+    sale_id INTEGER NOT NULL,
+    customer_id INTEGER,
+    recipient_name TEXT NOT NULL,
+    recipient_phone TEXT NOT NULL,
+    delivery_address TEXT NOT NULL,
+    delivery_charges REAL NOT NULL DEFAULT 0.0,
+    expected_date DATE NOT NULL,
+    status TEXT NOT NULL DEFAULT 'Pending',
+    assigned_to INTEGER,
+    tracking_notes TEXT,
+    delivered_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (sale_id) REFERENCES SALE(sale_id) ON DELETE CASCADE,
+    FOREIGN KEY (customer_id) REFERENCES CUSTOMER(customer_id) ON DELETE SET NULL,
+    FOREIGN KEY (assigned_to) REFERENCES USER(user_id) ON DELETE SET NULL
+);
+
+-- 22. DELIVERY_LOG: Delivery History and Audit Timeline
+CREATE TABLE IF NOT EXISTS DELIVERY_LOG (
+    log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    delivery_id INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    updated_by INTEGER,
+    remarks TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (delivery_id) REFERENCES DELIVERY_ORDER(delivery_id) ON DELETE CASCADE,
+    FOREIGN KEY (updated_by) REFERENCES USER(user_id) ON DELETE SET NULL
+);
 """
 
 
@@ -339,7 +373,8 @@ def seed_database(cursor, is_mysql=False):
             ('admin', generate_password_hash('admin123'), 'Ram', 'System Administrator', 'RA', 'ram.admin@electrodesk.in', '+91 98480 11001', 'Active'),
             ('geetha', generate_password_hash('geetha123'), 'Geetha', 'Shop Manager', 'GE', 'geetha.mgr@electrodesk.in', '+91 98480 22002', 'Active'),
             ('sai', generate_password_hash('sai123'), 'Sai', 'Sales Staff', 'SA', 'sai.sales@electrodesk.in', '+91 98480 33003', 'Active'),
-            ('suresh', generate_password_hash('suresh123'), 'Suresh', 'Shop Owner', 'S', 'suresh.owner@electrodesk.in', '+91 98480 44004', 'Active')
+            ('suresh', generate_password_hash('suresh123'), 'Suresh', 'Shop Owner', 'S', 'suresh.owner@electrodesk.in', '+91 98480 44004', 'Active'),
+            ('vikram', generate_password_hash('delivery123'), 'Vikram', 'Delivery Staff', 'VI', 'vikram.delivery@electrodesk.in', '+91 98480 55005', 'Active')
         ]
         cursor.executemany(f"""
             INSERT INTO USER (username, password_hash, full_name, role, avatar, email, phone, status)
@@ -682,6 +717,7 @@ def seed_database(cursor, is_mysql=False):
             ('store_name', config.STORE_NAME),
             ('store_tagline', config.STORE_TAGLINE),
             ('store_address', config.STORE_ADDRESS),
+            ('store_location', getattr(config, 'STORE_LOCATION', 'Hitec City, Hyderabad')),
             ('store_phone', config.STORE_PHONE),
             ('store_email', config.STORE_EMAIL),
             ('store_tax_id', config.STORE_TAX_ID),
@@ -701,6 +737,80 @@ def seed_database(cursor, is_mysql=False):
             INSERT INTO STORE_SETTING (setting_key, setting_value)
             VALUES ({p}, {p})
         """, settings)
+
+    # 13. DELIVERY ORDERS & AUDIT LOGS
+    cursor.execute("SELECT COUNT(*) FROM DELIVERY_ORDER")
+    if cursor.fetchone()[0] == 0:
+        cursor.execute(f"SELECT user_id FROM USER WHERE username = {p}", ('vikram',))
+        v_row = cursor.fetchone()
+        vid = v_row[0] if v_row else 1
+
+        cursor.execute("SELECT sale_id, customer_id FROM SALE ORDER BY sale_id ASC")
+        sales_rows = cursor.fetchall()
+        s1 = sales_rows[0][0] if len(sales_rows) > 0 else 1
+        c1 = sales_rows[0][1] if len(sales_rows) > 0 else 1
+        s2 = sales_rows[1][0] if len(sales_rows) > 1 else s1
+        c2 = sales_rows[1][1] if len(sales_rows) > 1 else c1
+        s3 = sales_rows[2][0] if len(sales_rows) > 2 else s1
+        c3 = sales_rows[2][1] if len(sales_rows) > 2 else c1
+        s4 = sales_rows[3][0] if len(sales_rows) > 3 else s1
+        c4 = sales_rows[3][1] if len(sales_rows) > 3 else c1
+
+        deliv_date_yesterday = (today - datetime.timedelta(days=1)).strftime('%Y-%m-%d')
+        deliv_date_today = today.strftime('%Y-%m-%d')
+        deliv_date_tomorrow = (today + datetime.timedelta(days=1)).strftime('%Y-%m-%d')
+        deliv_date_next = (today + datetime.timedelta(days=2)).strftime('%Y-%m-%d')
+
+        deliveries_seed = [
+            ('DEL-2026-0001', s4, c4, 'Kavita Sundaram', '+91 98800 66778', '24, 100 Feet Road, Indiranagar, Bengaluru, Karnataka', 150.0, deliv_date_yesterday, 'Delivered', vid, 'Doorstep delivery completed with OTP verification', f"{deliv_date_yesterday} 16:45:00"),
+            ('DEL-2026-0002', s3, c3, 'Vikram Malhotra', '+91 98110 55667', 'D-48, Greater Kailash Part 1, New Delhi, Delhi', 200.0, deliv_date_today, 'Out for Delivery', vid, 'Dispatched with logistics van #4', None),
+            ('DEL-2026-0003', s2, c2, 'Ananya Reddy', '+91 98480 44556', 'Plot 108, Jubilee Hills, Road No. 36, Hyderabad, Telangana', 100.0, deliv_date_tomorrow, 'Assigned', vid, 'Fragile electronics item - handle with extra care', None),
+            ('DEL-2026-0004', s1, c1, 'Rajesh Iyer', '+91 98400 33445', '15/3, TTK Road, Alwarpet, Chennai, Tamil Nadu', 0.0, deliv_date_next, 'Pending', None, 'Free store delivery promotion applied', None),
+        ]
+        cursor.executemany(f"""
+            INSERT INTO DELIVERY_ORDER (
+                delivery_number, sale_id, customer_id, recipient_name, recipient_phone,
+                delivery_address, delivery_charges, expected_date, status, assigned_to,
+                tracking_notes, delivered_at
+            ) VALUES ({p}, {p}, {p}, {p}, {p}, {p}, {p}, {p}, {p}, {p}, {p}, {p})
+        """, deliveries_seed)
+
+        cursor.execute("SELECT delivery_id, delivery_number FROM DELIVERY_ORDER ORDER BY delivery_id ASC")
+        del_rows = {row[1]: row[0] for row in cursor.fetchall()}
+
+        d1 = del_rows.get('DEL-2026-0001')
+        d2 = del_rows.get('DEL-2026-0002')
+        d3 = del_rows.get('DEL-2026-0003')
+        d4 = del_rows.get('DEL-2026-0004')
+
+        logs_seed = []
+        if d1:
+            logs_seed.extend([
+                (d1, 'Pending', 1, 'Delivery order initiated from POS invoice', f"{deliv_date_yesterday} 10:00:00"),
+                (d1, 'Assigned', 1, 'Assigned to delivery executive Vikram', f"{deliv_date_yesterday} 11:30:00"),
+                (d1, 'Out for Delivery', vid, 'Out for morning delivery run', f"{deliv_date_yesterday} 14:00:00"),
+                (d1, 'Delivered', vid, 'Package handed over to customer. OTP verified.', f"{deliv_date_yesterday} 16:45:00")
+            ])
+        if d2:
+            logs_seed.extend([
+                (d2, 'Pending', 1, 'Delivery order registered', f"{deliv_date_yesterday} 15:30:00"),
+                (d2, 'Assigned', 1, 'Assigned to Vikram for Delhi South route', f"{deliv_date_today} 09:00:00"),
+                (d2, 'Out for Delivery', vid, 'Dispatched with morning van route', f"{deliv_date_today} 09:30:00")
+            ])
+        if d3:
+            logs_seed.extend([
+                (d3, 'Pending', 1, 'Order created from POS invoice', f"{deliv_date_yesterday} 16:00:00"),
+                (d3, 'Assigned', 1, 'Assigned to Vikram for Jubilee Hills slot', f"{deliv_date_today} 14:00:00")
+            ])
+        if d4:
+            logs_seed.extend([
+                (d4, 'Pending', 1, 'Awaiting dispatch schedule allocation', f"{deliv_date_today} 11:00:00")
+            ])
+
+        cursor.executemany(f"""
+            INSERT INTO DELIVERY_LOG (delivery_id, status, updated_by, remarks, created_at)
+            VALUES ({p}, {p}, {p}, {p}, {p})
+        """, logs_seed)
 
 
 def init_sqlite_db():

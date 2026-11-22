@@ -296,3 +296,43 @@ CREATE TABLE IF NOT EXISTS STORE_SETTING (
     setting_value TEXT NOT NULL,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
+
+-- 21. DELIVERY_ORDER: Delivery & Logistics Management
+CREATE TABLE IF NOT EXISTS DELIVERY_ORDER (
+    delivery_id INT AUTO_INCREMENT PRIMARY KEY,
+    delivery_number VARCHAR(30) NOT NULL UNIQUE,
+    sale_id INT NOT NULL,
+    customer_id INT NULL,
+    recipient_name VARCHAR(100) NOT NULL,
+    recipient_phone VARCHAR(20) NOT NULL,
+    delivery_address TEXT NOT NULL,
+    delivery_charges DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+    expected_date DATE NOT NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'Pending',
+    assigned_to INT NULL,
+    tracking_notes TEXT NULL,
+    delivered_at DATETIME NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_del_sale (sale_id),
+    INDEX idx_del_customer (customer_id),
+    INDEX idx_del_status (status),
+    INDEX idx_del_assigned (assigned_to),
+    CONSTRAINT fk_del_sale FOREIGN KEY (sale_id) REFERENCES SALE(sale_id) ON DELETE CASCADE,
+    CONSTRAINT fk_del_customer FOREIGN KEY (customer_id) REFERENCES CUSTOMER(customer_id) ON DELETE SET NULL,
+    CONSTRAINT fk_del_assigned FOREIGN KEY (assigned_to) REFERENCES USER(user_id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+-- 22. DELIVERY_LOG: Delivery History and Audit Timeline
+CREATE TABLE IF NOT EXISTS DELIVERY_LOG (
+    log_id INT AUTO_INCREMENT PRIMARY KEY,
+    delivery_id INT NOT NULL,
+    status VARCHAR(30) NOT NULL,
+    updated_by INT NULL,
+    remarks TEXT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_dellog_delivery (delivery_id),
+    CONSTRAINT fk_dellog_delivery FOREIGN KEY (delivery_id) REFERENCES DELIVERY_ORDER(delivery_id) ON DELETE CASCADE,
+    CONSTRAINT fk_dellog_user FOREIGN KEY (updated_by) REFERENCES USER(user_id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+

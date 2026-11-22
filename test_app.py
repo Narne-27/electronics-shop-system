@@ -442,7 +442,7 @@ class TestMySQLScriptSplitter(unittest.TestCase):
     def test_all_tables_survive_comment_stripping(self):
         with open(os.path.join(config.BASE_DIR, 'schema_mysql.sql'), encoding='utf-8') as fh:
             stmts = init_db._split_mysql_script(fh.read())
-        self.assertEqual(sum(1 for s in stmts if s.upper().startswith('CREATE TABLE')), 20)
+        self.assertEqual(sum(1 for s in stmts if s.upper().startswith('CREATE TABLE')), 22)
         self.assertFalse(any(s.startswith('--') for s in stmts))
         sale = next(s for s in stmts if 'CREATE TABLE IF NOT EXISTS SALE (' in s)
         self.assertIn('cgst_amount', sale)
