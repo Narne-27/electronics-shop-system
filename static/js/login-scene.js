@@ -55,7 +55,7 @@
         // 1. Scene, Camera, Renderer
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(36, width / height, 0.1, 100);
-        camera.position.set(5.0, 4.4, 5.5);
+        camera.position.set(5.2, 4.4, 5.6);
         camera.lookAt(0, 0.35, 0);
 
         let renderer;
@@ -146,44 +146,45 @@
 
         // 3. Grounding: ShadowMaterial Floor + Soft Cyan Radial Ground Glow
         const shadowFloor = new THREE.Mesh(
-            new THREE.PlaneGeometry(12, 10),
-            new THREE.ShadowMaterial({ opacity: 0.40 })
+            new THREE.PlaneGeometry(16, 14),
+            new THREE.ShadowMaterial({ opacity: 0.42 })
         );
         shadowFloor.rotation.x = -Math.PI / 2;
-        shadowFloor.position.y = -0.36;
+        shadowFloor.position.y = -0.405;
         shadowFloor.receiveShadow = true;
         scene.add(shadowFloor);
 
         // Procedural radial cyan glow texture for floor
         function generateFloorGlowTexture() {
             const glowCanvas = document.createElement('canvas');
-            glowCanvas.width = 256;
-            glowCanvas.height = 256;
+            glowCanvas.width = 512;
+            glowCanvas.height = 512;
             const ctx = glowCanvas.getContext('2d');
-            const grad = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
-            grad.addColorStop(0, 'rgba(34, 211, 238, 0.35)');
-            grad.addColorStop(0.35, 'rgba(34, 211, 238, 0.15)');
-            grad.addColorStop(0.70, 'rgba(56, 189, 248, 0.04)');
+            const grad = ctx.createRadialGradient(256, 256, 15, 256, 256, 250);
+            grad.addColorStop(0, 'rgba(34, 211, 238, 0.40)');
+            grad.addColorStop(0.30, 'rgba(34, 211, 238, 0.20)');
+            grad.addColorStop(0.60, 'rgba(56, 189, 248, 0.06)');
             grad.addColorStop(1, 'rgba(11, 18, 36, 0)');
             ctx.fillStyle = grad;
-            ctx.fillRect(0, 0, 256, 256);
+            ctx.fillRect(0, 0, 512, 512);
             const tex = new THREE.CanvasTexture(glowCanvas);
+            tex.generateMipmaps = true;
             return tex;
         }
 
         const floorGlowTex = generateFloorGlowTexture();
         const floorGlowMesh = new THREE.Mesh(
-            new THREE.PlaneGeometry(5.4, 5.4),
+            new THREE.PlaneGeometry(7.5, 7.5),
             new THREE.MeshBasicMaterial({
                 map: floorGlowTex,
                 transparent: true,
-                opacity: 0.22,
+                opacity: 0.32,
                 blending: THREE.AdditiveBlending,
                 depthWrite: false
             })
         );
         floorGlowMesh.rotation.x = -Math.PI / 2;
-        floorGlowMesh.position.y = -0.355;
+        floorGlowMesh.position.y = -0.40;
         scene.add(floorGlowMesh);
 
         // 4. Natural Lighting Rig (No overbright point lights on the PCB)
@@ -191,19 +192,19 @@
         scene.add(ambientLight);
 
         // Directional Key Light with Soft Shadow
-        const keyLight = new THREE.DirectionalLight(0xffffff, 1.85);
-        keyLight.position.set(5.5, 9.0, 5.0);
+        const keyLight = new THREE.DirectionalLight(0xffffff, 1.95);
+        keyLight.position.set(6.0, 10.0, 5.5);
         keyLight.castShadow = true;
-        keyLight.shadow.mapSize.width = 1024;
-        keyLight.shadow.mapSize.height = 1024;
+        keyLight.shadow.mapSize.width = 2048;
+        keyLight.shadow.mapSize.height = 2048;
         keyLight.shadow.camera.near = 0.5;
-        keyLight.shadow.camera.far = 25;
-        keyLight.shadow.camera.left = -3.8;
-        keyLight.shadow.camera.right = 3.8;
-        keyLight.shadow.camera.top = 3.8;
-        keyLight.shadow.camera.bottom = -3.8;
-        keyLight.shadow.bias = -0.0004;
-        keyLight.shadow.radius = 2.2;
+        keyLight.shadow.camera.far = 30;
+        keyLight.shadow.camera.left = -4.5;
+        keyLight.shadow.camera.right = 4.5;
+        keyLight.shadow.camera.top = 4.5;
+        keyLight.shadow.camera.bottom = -4.5;
+        keyLight.shadow.bias = -0.0003;
+        keyLight.shadow.radius = 2.4;
         scene.add(keyLight);
 
         // Cyan Rim Light (High Specular Edge Definition)
@@ -410,13 +411,19 @@
             bCtx.fillText('GPIO 40-PIN', 640, 140);
             bCtx.fillText('PIN 1', 580, 140);
 
+            const maxAnisotropy = (renderer && renderer.capabilities) ? renderer.capabilities.getMaxAnisotropy() : 4;
+
             const cTex = new THREE.CanvasTexture(cCanvas);
             cTex.generateMipmaps = true;
-            cTex.anisotropy = 4;
+            cTex.minFilter = THREE.LinearMipmapLinearFilter;
+            cTex.magFilter = THREE.LinearFilter;
+            cTex.anisotropy = maxAnisotropy;
 
             const bTex = new THREE.CanvasTexture(bCanvas);
             bTex.generateMipmaps = true;
-            bTex.anisotropy = 4;
+            bTex.minFilter = THREE.LinearMipmapLinearFilter;
+            bTex.magFilter = THREE.LinearFilter;
+            bTex.anisotropy = maxAnisotropy;
 
             return { colorMap: cTex, bumpMap: bTex };
         }
@@ -459,8 +466,12 @@
                 }
             }
 
+            const maxAnisotropy = (renderer && renderer.capabilities) ? renderer.capabilities.getMaxAnisotropy() : 4;
             const tex = new THREE.CanvasTexture(canvas);
             tex.generateMipmaps = true;
+            tex.minFilter = THREE.LinearMipmapLinearFilter;
+            tex.magFilter = THREE.LinearFilter;
+            tex.anisotropy = maxAnisotropy;
             return tex;
         }
 
@@ -474,10 +485,13 @@
                 metalness: 0.82,
                 roughness: 0.32
             }),
+            // Pale base substrate sheet: transparency opacity ~0.85
             basePlate: new THREE.MeshStandardMaterial({
-                color: 0xd8dee9,
-                metalness: 0.10,
-                roughness: 0.65
+                color: 0xf1f5f9,
+                metalness: 0.12,
+                roughness: 0.40,
+                transparent: true,
+                opacity: 0.85
             }),
             copperTrace: new THREE.MeshStandardMaterial({
                 color: 0xe08238,
@@ -489,18 +503,18 @@
                 metalness: 1.0,
                 roughness: 0.25
             }),
-            // Deep Green #14532d, MeshPhysicalMaterial roughness 0.45, clearcoat 0.70
+            // Deep Green #14532d, MeshPhysicalMaterial with lower bumpScale to eliminate aliasing
             pcbGreenClearcoat: new THREE.MeshPhysicalMaterial({
                 color: 0x14532d,
                 map: pcbColorMap,
                 bumpMap: pcbBumpMap,
-                bumpScale: 0.015,
+                bumpScale: 0.005,
                 roughness: 0.45,
                 metalness: 0.0,
                 clearcoat: 0.70,
                 clearcoatRoughness: 0.12
             }),
-            // Chips near-black #15181c with canvas-engraved markings
+            // Chips near-black #15181c with canvas-engraved markings (no tint)
             chipCpu: new THREE.MeshStandardMaterial({
                 color: 0x15181c,
                 map: cpuMarkingTex,
@@ -524,15 +538,22 @@
                 metalness: 0.92,
                 roughness: 0.25
             }),
-            // Brushed steel ports (metalness 1, roughness 0.35)
+            // Brushed steel ports: metalness 1, roughness 0.35, envMapIntensity 1.2
             portBrushedSteel: new THREE.MeshStandardMaterial({
                 color: 0xcbd5e1,
                 metalness: 1.0,
-                roughness: 0.35
+                roughness: 0.35,
+                envMapIntensity: 1.2
+            }),
+            portInteriorDark: new THREE.MeshStandardMaterial({
+                color: 0x07090e,
+                roughness: 0.88,
+                metalness: 0.10
             }),
             portTongueBlue: new THREE.MeshStandardMaterial({
-                color: 0x0284c7, // USB 3.0 Blue
-                roughness: 0.45
+                color: 0x0077d4, // Vivid USB 3.0 Blue
+                roughness: 0.40,
+                metalness: 0.05
             }),
             pinGold: new THREE.MeshStandardMaterial({
                 color: 0xf59e0b,
@@ -567,8 +588,9 @@
             })
         };
 
-        // 9. Root Board Group
+        // 9. Root Board Group (Increased by 25% and centered)
         const boardRoot = new THREE.Group();
+        boardRoot.scale.set(1.25, 1.25, 1.25);
         boardRoot.rotation.x = 0.22;
         boardRoot.rotation.y = -0.48;
         scene.add(boardRoot);
@@ -756,48 +778,121 @@
             compGroup.add(ram);
         });
 
-        // Stacked Dual USB 3.0 Housing (Brushed Steel with Blue USB3 Tongues)
+        // Stacked Dual USB 3.0 Housing (Brushed Steel with Blue USB3 Tongues & Dark Cavities)
         const usbBlock = new THREE.Mesh(
-            createRoundedBox(0.68, 0.54, 0.76, 0.02),
+            createRoundedBox(0.70, 0.56, 0.78, 0.02),
             materials.portBrushedSteel
         );
         usbBlock.castShadow = true;
         usbBlock.receiveShadow = true;
 
         [-0.13, 0.13].forEach(yOff => {
-            const tongue = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.05, 0.28), materials.portTongueBlue);
-            tongue.position.set(-0.35, yOff, 0);
+            // Dark interior cavity slot
+            const usbCavity = new THREE.Mesh(
+                new THREE.BoxGeometry(0.24, 0.18, 0.54),
+                materials.portInteriorDark
+            );
+            usbCavity.position.set(-0.25, yOff, 0);
+            usbBlock.add(usbCavity);
+
+            // Blue USB 3.0 Tongue inside the dark cavity
+            const tongue = new THREE.Mesh(
+                new THREE.BoxGeometry(0.18, 0.04, 0.42),
+                materials.portTongueBlue
+            );
+            tongue.position.set(-0.27, yOff - 0.045, 0);
             usbBlock.add(tongue);
+
+            // 4 Tiny Gold Contact Pins on the tongue
+            for (let p = 0; p < 4; p++) {
+                const pin = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.12, 0.012, 0.045),
+                    materials.pinGold
+                );
+                pin.position.set(-0.27, yOff - 0.02, -0.15 + p * 0.10);
+                usbBlock.add(pin);
+            }
         });
         usbBlock.position.set(-1.62, 0.20, 0.85);
         compGroup.add(usbBlock);
 
-        // RJ-45 Gigabit Ethernet Housing (Brushed Steel) with Status LEDs
+        // RJ-45 Gigabit Ethernet Housing (Brushed Steel) with Dark Interior & Status LEDs
         const ethBlock = new THREE.Mesh(
-            createRoundedBox(0.74, 0.58, 0.82, 0.02),
+            createRoundedBox(0.76, 0.60, 0.84, 0.02),
             materials.portBrushedSteel
         );
         ethBlock.castShadow = true;
         ethBlock.receiveShadow = true;
 
+        // Dark Interior Cavity on the Ethernet Jack
+        const ethCavity = new THREE.Mesh(
+            new THREE.BoxGeometry(0.28, 0.44, 0.64),
+            materials.portInteriorDark
+        );
+        ethCavity.position.set(-0.26, -0.04, 0);
+        ethBlock.add(ethCavity);
+
+        // 8 Tiny Angled Gold Contact Wires inside Ethernet interior
+        for (let i = 0; i < 8; i++) {
+            const wire = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.008, 0.008, 0.14, 8),
+                materials.pinGold
+            );
+            wire.rotation.z = Math.PI / 4;
+            wire.position.set(-0.28, 0.10, -0.21 + i * 0.06);
+            ethBlock.add(wire);
+        }
+
+        // Ethernet clip tab cutout detail at bottom
+        const ethTab = new THREE.Mesh(
+            new THREE.BoxGeometry(0.14, 0.08, 0.22),
+            materials.portInteriorDark
+        );
+        ethTab.position.set(-0.32, -0.24, 0);
+        ethBlock.add(ethTab);
+
+        // RJ-45 Activity & Link Status LEDs
         const ethLed1 = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.06), materials.ledCyan);
-        ethLed1.position.set(-0.37, 0.24, -0.22);
+        ethLed1.position.set(-0.38, 0.24, -0.24);
         ethBlock.add(ethLed1);
         const ethLed2 = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.06), materials.ledAmber);
-        ethLed2.position.set(-0.37, 0.24, 0.22);
+        ethLed2.position.set(-0.38, 0.24, 0.24);
         ethBlock.add(ethLed2);
 
         ethBlock.position.set(-1.62, 0.22, -0.55);
         compGroup.add(ethBlock);
 
-        // HDMI Output Port (Brushed Steel)
+        // HDMI Output Port (Brushed Steel with Dark Interior)
         const hdmiPort = new THREE.Mesh(
-            createRoundedBox(0.55, 0.22, 0.38, 0.02),
+            createRoundedBox(0.56, 0.22, 0.40, 0.02),
             materials.portBrushedSteel
         );
         hdmiPort.position.set(0.35, 0.06, -1.25);
         hdmiPort.castShadow = true;
+
+        const hdmiCavity = new THREE.Mesh(
+            new THREE.BoxGeometry(0.38, 0.10, 0.18),
+            materials.portInteriorDark
+        );
+        hdmiCavity.position.set(0, 0, -0.12);
+        hdmiPort.add(hdmiCavity);
         compGroup.add(hdmiPort);
+
+        // USB-C Power/Data Port (Brushed Steel with Dark Interior)
+        const usbcPort = new THREE.Mesh(
+            createRoundedBox(0.38, 0.16, 0.24, 0.02),
+            materials.portBrushedSteel
+        );
+        usbcPort.position.set(-0.65, 0.06, -1.28);
+        usbcPort.castShadow = true;
+
+        const usbcCavity = new THREE.Mesh(
+            new THREE.BoxGeometry(0.24, 0.06, 0.12),
+            materials.portInteriorDark
+        );
+        usbcCavity.position.set(0, 0, -0.07);
+        usbcPort.add(usbcCavity);
+        compGroup.add(usbcPort);
 
         // 40-Pin GPIO Header Strip (Dual-Row Gold Pins: Metalness 1, Roughness 0.25)
         const gpioBase = new THREE.Mesh(
