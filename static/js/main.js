@@ -110,6 +110,36 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // 2b. Reduce Motion & Visual Effects Toggle
+    const reduceEffectsBtn = document.getElementById('reduceEffectsToggle');
+    const effectsIcon = document.getElementById('effectsIcon');
+    const isReducedEffects = localStorage.getItem('electrodesk-reduce-effects') === 'true';
+
+    if (isReducedEffects) {
+        document.documentElement.classList.add('reduce-effects');
+        if (effectsIcon) {
+            effectsIcon.className = 'bi bi-lightning-slash-fill text-warning';
+        }
+        if (reduceEffectsBtn) {
+            reduceEffectsBtn.classList.add('active');
+        }
+    }
+
+    if (reduceEffectsBtn) {
+        reduceEffectsBtn.addEventListener('click', function() {
+            const active = document.documentElement.classList.toggle('reduce-effects');
+            localStorage.setItem('electrodesk-reduce-effects', active ? 'true' : 'false');
+            if (effectsIcon) {
+                effectsIcon.className = active ? 'bi bi-lightning-slash-fill text-warning' : 'bi bi-speedometer2';
+            }
+            if (active) {
+                reduceEffectsBtn.classList.add('active');
+            } else {
+                reduceEffectsBtn.classList.remove('active');
+            }
+        });
+    }
+
     // 3. Global Search (Ctrl + K)
     document.addEventListener('keydown', function(e) {
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {

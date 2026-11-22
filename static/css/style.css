@@ -1686,3 +1686,224 @@ body:not(.modal-open) {
     border: 1px solid rgba(143, 230, 255, 0.3) !important;
     font-weight: 600 !important;
 }
+
+/* ========================================================
+   Issue 17: Reduce Motion & Visual Effects Mode
+   ======================================================== */
+.reduce-effects #scene,
+.reduce-effects #tunnel-overlay,
+.reduce-effects #vignette-overlay {
+    display: none !important;
+}
+
+.reduce-effects *,
+.reduce-effects *::before,
+.reduce-effects *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+}
+
+/* ========================================================
+   Issue 17: POS & Invoice Enhanced Text Contrast
+   ======================================================== */
+/* POS Product Cards Text Contrast */
+.pos-product-card {
+    background: rgba(15, 23, 42, 0.75) !important;
+    border: 1px solid rgba(143, 230, 255, 0.2) !important;
+    color: #f8fafc !important;
+}
+
+.pos-product-card .text-dark,
+.pos-product-card h6 {
+    color: #f8fafc !important;
+}
+
+.pos-product-card .text-muted {
+    color: #94a3b8 !important;
+}
+
+.pos-product-card .text-secondary {
+    color: #cbd5e1 !important;
+}
+
+.pos-product-card .fs-5.text-dark {
+    color: #38bdf8 !important;
+}
+
+.pos-cart-panel {
+    background: rgba(15, 23, 42, 0.85) !important;
+    border: 1px solid rgba(143, 230, 255, 0.25) !important;
+}
+
+/* POS Product Cards & Search Integrated Theme */
+.pos-product-card {
+    background: rgba(10, 5, 36, 0.65) !important;
+    backdrop-filter: blur(14px) !important;
+    -webkit-backdrop-filter: blur(14px) !important;
+    border: 1px solid rgba(143, 230, 255, 0.2) !important;
+    border-radius: 16px !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 20px rgba(5, 1, 15, 0.35) !important;
+    transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.pos-product-card:hover {
+    background: rgba(15, 23, 42, 0.8) !important;
+    border-color: rgba(43, 240, 255, 0.55) !important;
+    transform: translateY(-3px) !important;
+    box-shadow: 0 8px 30px rgba(43, 240, 255, 0.22) !important;
+}
+
+.pos-product-card .text-dark,
+.pos-product-card h6,
+.pos-product-card .fw-bold {
+    color: #ffffff !important;
+}
+
+.pos-product-card .text-muted {
+    color: rgba(226, 232, 240, 0.75) !important;
+}
+
+.pos-product-card .text-secondary {
+    color: rgba(203, 213, 225, 0.85) !important;
+}
+
+.pos-product-card .fs-5 {
+    color: #38bdf8 !important;
+    font-weight: 700 !important;
+}
+
+.pos-product-card .border-top {
+    border-color: rgba(143, 230, 255, 0.15) !important;
+}
+
+.pos-stock-badge-active {
+    background: rgba(43, 240, 255, 0.12) !important;
+    color: #8fe6ff !important;
+    border: 1px solid rgba(143, 230, 255, 0.28) !important;
+    font-weight: 600 !important;
+}
+
+/* POS Search & Filters Bar */
+.pos-search-card {
+    background: rgba(10, 5, 36, 0.65) !important;
+    backdrop-filter: blur(14px) !important;
+    -webkit-backdrop-filter: blur(14px) !important;
+    border: 1px solid rgba(143, 230, 255, 0.2) !important;
+}
+
+.pos-search-card .input-group-text {
+    background: rgba(15, 23, 42, 0.75) !important;
+    border-color: rgba(143, 230, 255, 0.25) !important;
+    color: #38bdf8 !important;
+}
+
+.pos-search-card .form-control {
+    background: rgba(15, 23, 42, 0.7) !important;
+    border-color: rgba(143, 230, 255, 0.25) !important;
+    color: #ffffff !important;
+}
+
+.pos-search-card .form-control:focus {
+    background: rgba(15, 23, 42, 0.85) !important;
+    border-color: #38bdf8 !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 12px rgba(56, 189, 248, 0.3) !important;
+}
+
+.pos-search-card .form-control::placeholder {
+    color: #94a3b8 !important;
+}
+
+.pos-search-card .form-select {
+    background-color: rgba(15, 23, 42, 0.85) !important;
+    border-color: rgba(143, 230, 255, 0.25) !important;
+    color: #ffffff !important;
+}
+
+/* POS Cart Panel Integrated Theme */
+.pos-cart-panel {
+    background: rgba(10, 5, 36, 0.75) !important;
+    backdrop-filter: blur(16px) !important;
+    -webkit-backdrop-filter: blur(16px) !important;
+    border: 1px solid rgba(143, 230, 255, 0.25) !important;
+    box-shadow: 0 12px 36px rgba(5, 1, 15, 0.45) !important;
+}
+
+.pos-cart-panel .pos-cart-header {
+    background: rgba(15, 23, 42, 0.88) !important;
+    border-bottom: 1px solid rgba(143, 230, 255, 0.2) !important;
+}
+
+.pos-cart-panel .pos-cart-title {
+    color: #ffffff !important;
+}
+
+.pos-cart-panel .pos-customer-box {
+    background: rgba(15, 23, 42, 0.6) !important;
+    border-bottom: 1px solid rgba(143, 230, 255, 0.15) !important;
+}
+
+.pos-cart-panel .pos-tradein-box {
+    background: rgba(15, 23, 42, 0.6) !important;
+    border: 1px solid rgba(143, 230, 255, 0.2) !important;
+}
+
+.pos-cart-panel .pos-payment-box {
+    background: rgba(15, 23, 42, 0.7) !important;
+    border: 1px solid rgba(143, 230, 255, 0.2) !important;
+}
+
+.pos-cart-panel .pos-qr-outer-box {
+    background: rgba(10, 5, 36, 0.6) !important;
+    border-color: rgba(143, 230, 255, 0.2) !important;
+}
+
+.pos-cart-panel .pos-cart-footer {
+    background: rgba(10, 5, 36, 0.8) !important;
+    border-top: 1px solid rgba(143, 230, 255, 0.2) !important;
+}
+
+.pos-cart-panel .text-dark,
+.pos-cart-panel strong {
+    color: #ffffff !important;
+}
+
+.pos-cart-panel .text-muted {
+    color: #94a3b8 !important;
+}
+
+.pos-cart-panel .text-secondary {
+    color: #cbd5e1 !important;
+}
+
+.pos-cart-panel .border-top {
+    border-color: rgba(143, 230, 255, 0.15) !important;
+}
+
+.pos-cart-panel .form-control,
+.pos-cart-panel .form-select {
+    background-color: rgba(15, 23, 42, 0.8) !important;
+    border-color: rgba(143, 230, 255, 0.25) !important;
+    color: #ffffff !important;
+}
+
+/* Export CSV High-Contrast Styling */
+.export-csv-btn {
+    border-color: #475569 !important;
+    color: #0f172a !important;
+    font-weight: 600 !important;
+}
+
+[data-theme="dark"] .export-csv-btn {
+    border-color: rgba(255, 255, 255, 0.3) !important;
+    color: #f8fafc !important;
+    background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+[data-theme="dark"] .export-csv-btn:hover {
+    background-color: rgba(255, 255, 255, 0.16) !important;
+    color: #38bdf8 !important;
+    border-color: #38bdf8 !important;
+}

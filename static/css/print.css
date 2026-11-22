@@ -115,12 +115,39 @@
         overflow: visible !important;
     }
 
-    /* Invoice container: Full width, no shadow, no border-radius, no fixed/sticky */
-    #a4InvoiceView,
-    .invoice-container,
-    .invoice {
+    /* Explicit Print View Isolation */
+    #a4InvoiceView.d-none,
+    .d-none#a4InvoiceView,
+    body.print-thermal #a4InvoiceView,
+    html.print-thermal #a4InvoiceView {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        width: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+    }
+
+    #thermalInvoiceView.d-none,
+    .d-none#thermalInvoiceView,
+    body:not(.print-thermal) #thermalInvoiceView,
+    html:not(.print-thermal) #thermalInvoiceView {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        width: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+    }
+
+    /* A4 Invoice container: Full width, no shadow, no border-radius */
+    body:not(.print-thermal) #a4InvoiceView:not(.d-none),
+    body:not(.print-thermal) .invoice-container:not(#thermalInvoiceView):not(.d-none) {
         position: static !important;
         display: block !important;
+        visibility: visible !important;
         width: 100% !important;
         max-width: 100% !important;
         margin: 0 !important;
@@ -135,11 +162,6 @@
         overflow: visible !important;
         page-break-after: avoid !important;
         break-after: avoid !important;
-    }
-
-    /* Hide thermal view when in A4 mode */
-    #thermalInvoiceView.d-none {
-        display: none !important;
     }
 
     /* ========================================================
@@ -243,8 +265,10 @@
        6. BILL TO & SALE DETAILS INFO BOXES
        ======================================================== */
     .invoice-bill-to-box,
-    .invoice-info-box {
-        background-color: #fafafa !important;
+    .invoice-info-box,
+    .invoice-totals-box {
+        background-color: #ffffff !important;
+        background: #ffffff !important;
         border: 1px solid #e5e7eb !important;
         border-radius: 6px !important;
         padding: 10px 12px !important;
@@ -395,28 +419,85 @@
     }
 
     /* ========================================================
-       10. THERMAL RECEIPT PRINT SUPPORT (IF SWITCHED)
+       10. THERMAL RECEIPT PRINT SUPPORT (80mm Paper Roll)
        ======================================================== */
-    body.print-thermal {
+    body.print-thermal,
+    html.print-thermal {
         width: 80mm !important;
+        max-width: 80mm !important;
         margin: 0 auto !important;
         padding: 0 !important;
+        background: #ffffff !important;
+        background-color: #ffffff !important;
+    }
+
+    body.print-thermal .main-wrapper,
+    body.print-thermal .content-wrapper,
+    body.print-thermal .content-body,
+    body.print-thermal .container,
+    body.print-thermal .container-fluid,
+    body.print-thermal main {
+        width: 80mm !important;
+        max-width: 80mm !important;
+        margin: 0 auto !important;
+        padding: 0 !important;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
     }
 
     body.print-thermal #a4InvoiceView {
         display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        width: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
     }
 
     body.print-thermal #thermalInvoiceView,
     body.print-thermal .thermal-receipt-container {
         display: block !important;
-        width: 100% !important;
+        visibility: visible !important;
+        width: 76mm !important;
         max-width: 80mm !important;
-        margin: 0 !important;
-        padding: 4mm !important;
+        margin: 0 auto !important;
+        padding: 2mm 3mm !important;
         border: none !important;
         box-shadow: none !important;
         color: #000000 !important;
         background: #ffffff !important;
+        background-color: #ffffff !important;
+        font-family: 'Courier New', Courier, monospace, monospace !important;
+        font-size: 11px !important;
+        line-height: 1.25 !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+    }
+
+    body.print-thermal #thermalInvoiceView *,
+    body.print-thermal .thermal-receipt-container * {
+        color: #000000 !important;
+        background: transparent !important;
+        background-color: transparent !important;
+        box-shadow: none !important;
+        text-shadow: none !important;
+    }
+
+    body.print-thermal #thermalInvoiceView .border-top,
+    body.print-thermal #thermalInvoiceView .border-bottom,
+    body.print-thermal #thermalInvoiceView tr.border-bottom {
+        border-color: #000000 !important;
+        border-top-color: #000000 !important;
+        border-bottom-color: #000000 !important;
+        border-style: dashed !important;
+    }
+
+    body.print-thermal #thermalInvoiceView svg rect[fill="#ffffff"] {
+        fill: #ffffff !important;
+    }
+    body.print-thermal #thermalInvoiceView svg rect[fill="#000000"] {
+        fill: #000000 !important;
     }
 }

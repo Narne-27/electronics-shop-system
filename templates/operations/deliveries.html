@@ -162,7 +162,7 @@
             <i class="bi bi-truck text-primary"></i>
             <span>Logistics & Shipment Registry</span>
         </div>
-        <span class="badge bg-secondary-subtle text-secondary">{{ deliveries|length }} Order(s)</span>
+        <span class="badge bg-secondary text-white fw-semibold px-2 py-1 shadow-sm">{{ deliveries|length }} Order(s)</span>
     </div>
     <div class="card-body p-0">
         <div class="table-responsive">
@@ -184,7 +184,7 @@
                     <tr>
                         <td class="ps-4">
                             <span class="fw-bold font-monospace text-primary">{{ d.delivery_number }}</span>
-                            <div class="text-muted small" style="font-size: 0.75rem;">Created: {{ d.created_at[:10] }}</div>
+                            <div class="text-muted small" style="font-size: 0.75rem;">Created: {{ d.created_at|date_in }}</div>
                         </td>
                         <td>
                             <a href="{{ url_for('invoice_view', sale_id=d.sale_id) }}" class="fw-semibold text-decoration-none">
@@ -200,9 +200,9 @@
                             </div>
                         </td>
                         <td>
-                            <div class="fw-semibold text-dark">{{ d.expected_date }}</div>
+                            <div class="fw-semibold text-dark">{{ d.expected_date|date_in }}</div>
                             {% if d.status == 'Delivered' and d.delivered_at %}
-                            <small class="text-success" style="font-size: 0.75rem;"><i class="bi bi-check-circle me-1"></i>Delivered {{ d.delivered_at[:10] }}</small>
+                            <small class="text-success" style="font-size: 0.75rem;"><i class="bi bi-check-circle me-1"></i>Delivered {{ d.delivered_at|date_in }}</small>
                             {% endif %}
                         </td>
                         <td>
@@ -210,36 +210,36 @@
                         </td>
                         <td>
                             {% if d.assigned_staff_name %}
-                            <span class="badge bg-light text-dark border d-inline-flex align-items-center gap-1">
+                            <span class="badge bg-light text-dark border d-inline-flex align-items-center gap-1 shadow-sm">
                                 <i class="bi bi-person-fill text-secondary"></i> {{ d.assigned_staff_name }}
                             </span>
                             {% else %}
-                            <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Unassigned</span>
+                            <span class="badge px-2 py-1 shadow-sm" style="background: rgba(245, 158, 11, 0.2); color: #b45309; border: 1px solid #f59e0b; font-weight: 700;">Unassigned</span>
                             {% endif %}
                         </td>
                         <td>
                             {% if d.status == 'Delivered' %}
-                            <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
+                            <span class="badge bg-success text-white px-2 py-1 shadow-sm fw-semibold">
                                 <i class="bi bi-check-circle-fill me-1"></i>Delivered
                             </span>
                             {% elif d.status == 'Out for Delivery' %}
-                            <span class="badge bg-warning-subtle text-warning border border-warning-subtle px-2 py-1">
+                            <span class="badge bg-warning text-dark px-2 py-1 shadow-sm fw-bold">
                                 <i class="bi bi-truck me-1"></i>In Transit
                             </span>
                             {% elif d.status == 'Assigned' %}
-                            <span class="badge bg-info-subtle text-info border border-info-subtle px-2 py-1">
-                                <i class="bi bi-person-check me-1"></i>Assigned
+                            <span class="badge px-2 py-1 shadow-sm" style="background: rgba(14, 165, 233, 0.2); color: #0369a1; border: 1px solid #0284c7; font-weight: 700;">
+                                <i class="bi bi-person-check-fill me-1"></i>Assigned
                             </span>
                             {% elif d.status == 'Pending' %}
-                            <span class="badge bg-secondary-subtle text-secondary border px-2 py-1">
+                            <span class="badge bg-secondary text-white px-2 py-1 shadow-sm fw-semibold">
                                 <i class="bi bi-clock me-1"></i>Pending
                             </span>
                             {% elif d.status == 'Failed' %}
-                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1">
+                            <span class="badge bg-danger text-white px-2 py-1 shadow-sm fw-semibold">
                                 <i class="bi bi-x-circle me-1"></i>Failed
                             </span>
                             {% else %}
-                            <span class="badge bg-dark-subtle text-dark border px-2 py-1">
+                            <span class="badge bg-dark text-white px-2 py-1 shadow-sm">
                                 {{ d.status }}
                             </span>
                             {% endif %}

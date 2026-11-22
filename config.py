@@ -47,7 +47,8 @@ APP_TODAY = datetime.date.today()
 # Store Branding & Details for Invoices & Receipts
 STORE_NAME = os.environ.get('STORE_NAME', 'Electrodesk')
 STORE_TAGLINE = 'Smart Electronics & Digital Retail Hub'
-STORE_ADDRESS = '#42, Tech Boulevard, Hitec City, Hyderabad, Telangana 500081'
+STORE_ADDRESS = os.environ.get('STORE_ADDRESS', '#42, Tech Boulevard, Hitec City, Hyderabad, Telangana 500081')
+STORE_LOCATION = os.environ.get('STORE_LOCATION', 'Hitec City, Hyderabad')
 STORE_PHONE = '+91 (040) 4890-2800 / +91 98480 12345'
 STORE_EMAIL = 'support@electrodesk.in'
 STORE_WEBSITE = 'www.electrodesk.in'
@@ -56,6 +57,9 @@ DEFAULT_TAX_RATE = 18.0  # GST 18% (CGST 9% + SGST 9%)
 CGST_RATE = 9.0
 SGST_RATE = 9.0
 CURRENCY_SYMBOL = '₹'
+
+# Quick Demo login toggle (enabled by default; set DEMO_MODE=false to disable)
+DEMO_MODE = os.environ.get('DEMO_MODE', 'true').lower() in ('true', '1', 'yes')
 
 # Financing & EMI Defaults (Annual Interest Rates)
 EMI_PLANS = {

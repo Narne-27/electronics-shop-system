@@ -89,6 +89,20 @@
                         </div>
                     </div>
 
+                    <!-- Store Location & Address Configuration -->
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Store Address (Invoice Header)</label>
+                            <input type="text" name="store_address" class="form-control" value="{{ settings.get('store_address', store.address) }}">
+                            <small class="text-muted">Printed on top header of A4 & Thermal Invoices</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Store Location (Sale Details)</label>
+                            <input type="text" name="store_location" class="form-control" value="{{ settings.get('store_location', store.location) }}">
+                            <small class="text-muted">Printed under Store Location in invoice metadata</small>
+                        </div>
+                    </div>
+
                     <!-- Store Profile Readonly Reference -->
                     <div class="p-3 bg-light rounded-3 mb-4 border">
                         <h6 class="fw-bold text-dark mb-2"><i class="bi bi-shop text-secondary me-1"></i>Store Identity & Statutory GST Details</h6>
@@ -97,7 +111,8 @@
                             <div class="col-6">GSTIN: <strong class="text-dark">36AAACE4812K1Z8</strong></div>
                             <div class="col-6">Tax Slab: <strong class="text-dark">GST 18% (CGST 9% + SGST 9%)</strong></div>
                             <div class="col-6">Invoice Format: <strong class="text-dark">INV-YYYY-XXXX</strong></div>
-                            <div class="col-12">Address: <strong class="text-dark">{{ store.address }}</strong></div>
+                            <div class="col-12">Current Address: <strong class="text-dark">{{ store.address }}</strong></div>
+                            <div class="col-12">Store Location: <strong class="text-dark">{{ store.location }}</strong></div>
                         </div>
                     </div>
 

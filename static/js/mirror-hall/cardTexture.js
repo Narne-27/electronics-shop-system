@@ -130,14 +130,14 @@ export function createCardTexture(section, index) {
     const bx = w - 38 - bWidth;
     const by = 80;
 
-    // Glowing Pill Background
-    ctx.fillStyle = 'rgba(244, 63, 94, 0.85)';
+    // Glowing Pill Background - High contrast vivid red
+    ctx.fillStyle = '#dc2626';
     ctx.beginPath();
     ctx.roundRect(bx, by, bWidth, bHeight, 14);
     ctx.fill();
 
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.8;
     ctx.stroke();
 
     ctx.fillStyle = '#ffffff';

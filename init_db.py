@@ -717,6 +717,7 @@ def seed_database(cursor, is_mysql=False):
             ('store_name', config.STORE_NAME),
             ('store_tagline', config.STORE_TAGLINE),
             ('store_address', config.STORE_ADDRESS),
+            ('store_location', getattr(config, 'STORE_LOCATION', 'Hitec City, Hyderabad')),
             ('store_phone', config.STORE_PHONE),
             ('store_email', config.STORE_EMAIL),
             ('store_tax_id', config.STORE_TAX_ID),

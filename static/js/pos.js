@@ -345,10 +345,10 @@ function recalculateCart() {
     const taxRate = taxSelect ? parseFloat(taxSelect.value || 0) : 18;
 
     const taxableBase = Math.max(0, subtotal - discount - exchangeVal);
-    const cgstAmount = Math.round(taxableBase * ((taxRate / 2) / 100));
-    const sgstAmount = Math.round(taxableBase * ((taxRate / 2) / 100));
-    const totalGst = cgstAmount + sgstAmount;
-    const grandTotal = Math.max(0, Math.round(taxableBase + totalGst));
+    const cgstAmount = Math.round(taxableBase * ((taxRate / 2) / 100) * 100) / 100;
+    const sgstAmount = Math.round(taxableBase * ((taxRate / 2) / 100) * 100) / 100;
+    const totalGst = Math.round((cgstAmount + sgstAmount) * 100) / 100;
+    const grandTotal = Math.max(0, Math.round((taxableBase + totalGst) * 100) / 100);
 
     // Update Summary UI
     if (document.getElementById('summarySubtotal')) document.getElementById('summarySubtotal').innerText = formatINR(subtotal);

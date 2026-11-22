@@ -4,43 +4,91 @@
 
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/print.css') }}" media="print">
-<style>
+<style id="dynamicPageStyle">
 @page {
-    size: A4;
-    margin: 12mm;
+    size: A4 portrait;
+    margin: 10mm;
 }
-
+</style>
+<style>
 @media print {
-    /* Critical print isolation */
+    /* Critical print isolation - Pure white background on print */
     :root,
     [data-theme="dark"],
     [data-theme="light"],
     html,
-    body {
+    body,
+    .main-wrapper,
+    .content-wrapper,
+    .content-body,
+    .container,
+    .container-fluid,
+    main {
         --body-bg: #ffffff !important;
         --card-bg: #ffffff !important;
         --card-border: #cccccc !important;
-        --text-primary: #111111 !important;
-        --text-muted: #555555 !important;
+        --text-primary: #000000 !important;
+        --text-muted: #444444 !important;
         --bs-body-bg: #ffffff !important;
-        --bs-body-color: #111111 !important;
+        --bs-body-color: #000000 !important;
         background: #ffffff !important;
         background-color: #ffffff !important;
-        color: #111111 !important;
+        color: #000000 !important;
     }
 
-    #a4InvoiceView {
-        width: 100% !important;
-        max-width: 100% !important;
+    /* Isolated print visibility controls */
+    #a4InvoiceView.d-none,
+    body.print-thermal #a4InvoiceView,
+    html.print-thermal #a4InvoiceView {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        width: 0 !important;
         margin: 0 !important;
         padding: 0 !important;
-        border: none !important;
-        border-radius: 0 !important;
-        box-shadow: none !important;
-        -webkit-box-shadow: none !important;
+        overflow: hidden !important;
+    }
+
+    #thermalInvoiceView.d-none,
+    body:not(.print-thermal) #thermalInvoiceView,
+    html:not(.print-thermal) #thermalInvoiceView {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        width: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+    }
+
+    /* A4 View Layout in Print */
+    body:not(.print-thermal) #a4InvoiceView:not(.d-none),
+    body:not(.print-thermal) .invoice-bill-to-box,
+    body:not(.print-thermal) .invoice-info-box,
+    body:not(.print-thermal) .invoice-totals-box,
+    body:not(.print-thermal) .table,
+    body:not(.print-thermal) .table > :not(caption) > * > * {
         background: #ffffff !important;
         background-color: #ffffff !important;
-        color: #111111 !important;
+        color: #000000 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    /* Thermal View Layout in Print */
+    body.print-thermal #thermalInvoiceView:not(.d-none) {
+        display: block !important;
+        visibility: visible !important;
+        width: 76mm !important;
+        max-width: 80mm !important;
+        margin: 0 auto !important;
+        padding: 2mm 3mm !important;
+        border: none !important;
+        box-shadow: none !important;
+        background: #ffffff !important;
+        background-color: #ffffff !important;
+        color: #000000 !important;
+        font-family: 'Courier New', Courier, monospace, monospace !important;
     }
 }
 </style>
@@ -50,102 +98,162 @@
 <style>
 @media screen {
 /* ========================================================
-   FIX 1: Scoped Contrast Fix for Invoice White Boxes (Screen)
+   On-Screen Integrated Dark-Glass Invoice Styling
    ======================================================== */
-.invoice-bill-to-box,
-.invoice-info-box,
-.invoice-totals-box {
-    background-color: #ffffff !important;
-    border-color: #e2e8f0 !important;
-    color: #1a1a2e !important;
+.invoice-container,
+#a4InvoiceView {
+    background: rgba(10, 5, 36, 0.78) !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+    border: 1px solid rgba(143, 230, 255, 0.25) !important;
+    box-shadow: 0 16px 48px rgba(5, 1, 15, 0.65) !important;
+    color: #f8fafc !important;
 }
 
+.thermal-receipt-container,
+#thermalInvoiceView {
+    background: rgba(10, 5, 36, 0.85) !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+    border: 1px solid rgba(143, 230, 255, 0.25) !important;
+    box-shadow: 0 16px 48px rgba(5, 1, 15, 0.65) !important;
+    color: #f8fafc !important;
+}
+
+.invoice-header {
+    border-color: rgba(143, 230, 255, 0.2) !important;
+}
+
+.invoice-container h3,
+.invoice-container h4,
+.invoice-container h5,
+.invoice-container h6,
+.invoice-container .text-dark {
+    color: #ffffff !important;
+}
+
+.invoice-container .text-muted {
+    color: #94a3b8 !important;
+}
+
+.invoice-container .text-secondary {
+    color: #cbd5e1 !important;
+}
+
+/* Metadata Sub-Boxes */
 .invoice-bill-to-box,
 .invoice-info-box,
 .invoice-totals-box,
-.invoice-bill-to-box p,
-.invoice-bill-to-box span,
-.invoice-bill-to-box div,
+.invoice-verification-box {
+    background: rgba(15, 23, 42, 0.65) !important;
+    border: 1px solid rgba(143, 230, 255, 0.2) !important;
+    color: #f8fafc !important;
+}
+
+.invoice-bill-to-box h6,
+.invoice-info-box h6 {
+    color: #38bdf8 !important;
+}
+
 .invoice-bill-to-box strong,
-.invoice-bill-to-box h1, .invoice-bill-to-box h2, .invoice-bill-to-box h3, .invoice-bill-to-box h4, .invoice-bill-to-box h5, .invoice-bill-to-box h6,
-.invoice-bill-to-box label,
-.invoice-bill-to-box td,
-.invoice-bill-to-box th,
-.invoice-info-box p,
-.invoice-info-box span,
-.invoice-info-box div,
-.invoice-info-box strong,
-.invoice-info-box h1, .invoice-info-box h2, .invoice-info-box h3, .invoice-info-box h4, .invoice-info-box h5, .invoice-info-box h6,
-.invoice-info-box label,
-.invoice-info-box td,
-.invoice-info-box th,
-.invoice-totals-box p,
-.invoice-totals-box span,
-.invoice-totals-box div,
-.invoice-totals-box strong,
-.invoice-totals-box h1, .invoice-totals-box h2, .invoice-totals-box h3, .invoice-totals-box h4, .invoice-totals-box h5, .invoice-totals-box h6,
-.invoice-totals-box label,
-.invoice-totals-box td,
-.invoice-totals-box th {
-    color: #1a1a2e !important;
+.invoice-info-box strong {
+    color: #ffffff !important;
 }
 
-/* Labels / Headings: muted dark gray #555 */
-.invoice-bill-to-box h6.text-secondary,
-.invoice-info-box h6.text-secondary,
-.invoice-bill-to-box .text-secondary,
-.invoice-info-box .text-secondary,
-.invoice-totals-box .text-secondary,
-.invoice-bill-to-box .text-muted,
-.invoice-info-box .text-muted,
-.invoice-totals-box .text-muted,
-.invoice-bill-to-box label,
-.invoice-info-box label,
-.invoice-totals-box label {
-    color: #555555 !important;
+/* Products Table */
+.invoice-table {
+    background: transparent !important;
+    color: #f8fafc !important;
+    border-color: rgba(143, 230, 255, 0.2) !important;
 }
 
-/* Values & Strong elements: #111 */
-.invoice-bill-to-box strong,
-.invoice-info-box strong,
-.invoice-totals-box strong,
-.invoice-bill-to-box h6.text-dark,
-.invoice-info-box h6.text-dark,
-.invoice-bill-to-box .text-dark,
-.invoice-info-box .text-dark,
-.invoice-totals-box .text-dark,
-.invoice-totals-box .fw-semibold {
-    color: #111111 !important;
+.invoice-table thead th,
+.invoice-table .table-light {
+    background: rgba(15, 23, 42, 0.8) !important;
+    color: #38bdf8 !important;
+    border-color: rgba(143, 230, 255, 0.25) !important;
 }
 
-/* Totals Box: Subtotal, GST, Grand Total */
+.invoice-table tbody td {
+    background: rgba(10, 5, 36, 0.4) !important;
+    color: #f8fafc !important;
+    border-color: rgba(143, 230, 255, 0.15) !important;
+}
+
+.invoice-table tbody td code {
+    background: rgba(43, 240, 255, 0.12) !important;
+    color: #38bdf8 !important;
+    border: 1px solid rgba(43, 240, 255, 0.25) !important;
+}
+
+/* Financial Totals Breakdown */
 .invoice-totals-box span.text-secondary {
-    color: #555555 !important;
+    color: #cbd5e1 !important;
 }
 
 .invoice-totals-box span.fw-semibold,
 .invoice-totals-box span.fw-bold {
-    color: #111111 !important;
+    color: #ffffff !important;
 }
 
 .invoice-totals-box .border-top {
-    border-color: #cbd5e1 !important;
+    border-color: rgba(143, 230, 255, 0.2) !important;
 }
 
-/* Grand Total: dark, with Grand Total bold */
 .invoice-totals-box .fs-5 .fw-bold {
-    color: #111111 !important;
-    font-weight: 700 !important;
+    color: #ffffff !important;
 }
 
 .invoice-totals-box .fs-5 .text-primary {
-    color: #0b1b3a !important;
-    font-weight: 700 !important;
+    color: #38bdf8 !important;
 }
 
 .invoice-totals-box .text-danger,
 .invoice-totals-box .text-danger * {
-    color: #dc2626 !important;
+    color: #f87171 !important;
+}
+
+.invoice-totals-box .text-success,
+.invoice-totals-box .text-success * {
+    color: #34d399 !important;
+}
+
+/* Policy & Signatures */
+.invoice-terms-policy {
+    border-color: rgba(143, 230, 255, 0.2) !important;
+    color: #94a3b8 !important;
+}
+
+.invoice-terms-policy h6 {
+    color: #38bdf8 !important;
+}
+
+.signature-container .border-top {
+    border-color: rgba(143, 230, 255, 0.3) !important;
+}
+
+.signature-container small {
+    color: #e2e8f0 !important;
+}
+
+/* Thermal Receipt Styling */
+.thermal-receipt-container {
+    color: #f8fafc !important;
+}
+
+.thermal-receipt-container table th {
+    border-color: rgba(143, 230, 255, 0.3) !important;
+    color: #38bdf8 !important;
+}
+
+.thermal-receipt-container table td {
+    border-color: rgba(143, 230, 255, 0.15) !important;
+    color: #f8fafc !important;
+}
+
+.thermal-receipt-container .border-top,
+.thermal-receipt-container .border-bottom {
+    border-color: rgba(143, 230, 255, 0.25) !important;
 }
 }
 </style>
@@ -173,9 +281,9 @@
         <a href="{{ url_for('pos') }}" class="btn invoice-toolbar-btn btn-sm">
             <i class="bi bi-plus-circle"></i> New Sale
         </a>
-        <button type="button" class="btn invoice-toolbar-btn invoice-btn-primary btn-sm d-flex align-items-center gap-2 shadow-sm" onclick="window.print()">
+        <button type="button" class="btn invoice-toolbar-btn invoice-btn-primary btn-sm d-flex align-items-center gap-2 shadow-sm" id="btnPrintInvoice" onclick="triggerPrint()">
             <i class="bi bi-printer-fill fs-6"></i>
-            <span class="fw-semibold">Print / Save PDF</span>
+            <span class="fw-semibold" id="btnPrintInvoiceText">Print A4 Invoice</span>
         </button>
     </div>
 </div>
@@ -183,7 +291,7 @@
 <!-- ========================================== -->
 <!-- 1. STANDARD A4 TAX INVOICE VIEW -->
 <!-- ========================================== -->
-<div id="a4InvoiceView" class="invoice-container rounded-4 shadow-sm border-0 bg-white p-4 p-md-5 mb-4">
+<div id="a4InvoiceView" class="invoice-container rounded-4 shadow-sm border-0 p-4 p-md-5 mb-4">
     <!-- Invoice Header -->
     <div class="invoice-header pb-4 mb-4 border-bottom">
         <div class="row align-items-center">
@@ -240,7 +348,7 @@
                 <div class="text-muted small">
                     <div><strong>Sold By:</strong> {{ sale.staff_name }} ({{ sale.staff_role }})</div>
                     <div><strong>Transaction Ref:</strong> #SALE-{{ sale.sale_id }}</div>
-                    <div><strong>Store Location:</strong> Road No. 36, Jubilee Hills, Hyderabad</div>
+                    <div><strong>Store Location:</strong> {{ store.location or store.address }}</div>
                     {% if sale.notes %}
                     <div class="mt-2 text-dark"><strong>Remarks:</strong> {{ sale.notes }}</div>
                     {% endif %}
@@ -300,7 +408,7 @@
         <div class="col-md-6 col-lg-7 text-center text-md-start mb-3 mb-md-0">
             <div class="d-flex align-items-center gap-3">
                 <!-- QR Code Box for Invoice Verification -->
-                <div class="p-2 border rounded-3 bg-light text-center" style="width: 110px;">
+                <div class="p-2 border rounded-3 text-center invoice-verification-box" style="width: 110px;">
                     <svg viewBox="0 0 100 100" width="90" height="90">
                         <rect width="100" height="100" fill="#ffffff"/>
                         <!-- QR Simulation Pattern -->
@@ -326,7 +434,7 @@
                 </div>
                 <div class="small text-muted">
                     <div class="fw-bold text-dark">Digital Verification QR</div>
-                    <div>IRN / E-Invoice Ready</div>
+                    <div>Tax Invoice &bull; GST Compliant</div>
                     <div>GSTIN: 36AAACE4812K1Z8</div>
                 </div>
             </div>
@@ -335,8 +443,25 @@
         <div class="col-md-6 col-lg-5">
             <div class="p-3 bg-light rounded-3 border invoice-totals-box">
                 <div class="d-flex justify-content-between text-secondary mb-2">
-                    <span>Taxable Subtotal</span>
+                    <span>Base Subtotal</span>
                     <span class="fw-semibold text-dark">{{ sale.subtotal|inr }}</span>
+                </div>
+                {% if sale.discount_amount > 0 %}
+                <div class="d-flex justify-content-between text-danger mb-2">
+                    <span>Discount Applied</span>
+                    <span class="fw-semibold">-{{ sale.discount_amount|inr }}</span>
+                </div>
+                {% endif %}
+                {% if sale.exchange_value and sale.exchange_value > 0 %}
+                <div class="d-flex justify-content-between text-success mb-2">
+                    <span>Trade-in ({{ sale.exchange_device or 'Exchange' }})</span>
+                    <span class="fw-semibold">-{{ sale.exchange_value|inr }}</span>
+                </div>
+                {% endif %}
+                {% set net_taxable = sale.subtotal - sale.discount_amount - (sale.exchange_value or 0) %}
+                <div class="d-flex justify-content-between text-secondary mb-2 pt-1 border-top">
+                    <span>Net Taxable Amount</span>
+                    <span class="fw-semibold text-dark">{{ net_taxable|inr }}</span>
                 </div>
                 {% set half_tax = (sale.tax_amount / 2)|round %}
                 <div class="d-flex justify-content-between text-secondary mb-1 small">
@@ -351,12 +476,6 @@
                     <span>Total GST (18%)</span>
                     <span class="fw-semibold text-dark">{{ sale.tax_amount|inr }}</span>
                 </div>
-                {% if sale.discount_amount > 0 %}
-                <div class="d-flex justify-content-between text-danger mb-2">
-                    <span>Discount Applied</span>
-                    <span class="fw-semibold">-{{ sale.discount_amount|inr }}</span>
-                </div>
-                {% endif %}
                 <div class="d-flex justify-content-between border-top pt-2 fs-5">
                     <span class="fw-bold text-dark">Grand Total</span>
                     <span class="fw-bold text-primary">{{ sale.grand_total|inr }}</span>
@@ -393,7 +512,7 @@
 <!-- ========================================== -->
 <!-- 2. 80MM POS THERMAL RECEIPT VIEW -->
 <!-- ========================================== -->
-<div id="thermalInvoiceView" class="thermal-receipt-container d-none mx-auto bg-white p-3 border shadow-sm my-4 font-monospace" style="max-width: 320px; font-size: 0.8rem; line-height: 1.3;">
+<div id="thermalInvoiceView" class="thermal-receipt-container d-none mx-auto p-3 border shadow-sm my-4 font-monospace" style="max-width: 320px; font-size: 0.8rem; line-height: 1.3;">
     <div class="text-center mb-2">
         <h5 class="fw-bold mb-0">{{ store.name }}</h5>
         <div style="font-size: 0.72rem;">{{ store.address }}</div>
@@ -402,8 +521,8 @@
 
     <div class="border-top border-bottom py-1 my-2" style="font-size: 0.75rem;">
         <div>INV: <strong>{{ sale.invoice_number }}</strong></div>
-        <div>Date: {{ sale.sale_date }} | Mode: {{ sale.payment_method }}</div>
-        <div>Billed to: {{ sale.customer_name or 'Retail Buyer' }}</div>
+        <div>Date: {{ sale.sale_date|date_in }} | Mode: {{ sale.payment_method }}</div>
+        <div>Billed to: {{ sale.customer_name or 'Walk-in Customer' }}</div>
     </div>
 
     <table class="w-100 mb-2" style="font-size: 0.75rem;">
@@ -474,6 +593,27 @@
 
 {% block scripts %}
 <script>
+function updatePrintStyles(isThermal) {
+    let pageStyle = document.getElementById('dynamicPageStyle');
+    if (!pageStyle) {
+        pageStyle = document.createElement('style');
+        pageStyle.id = 'dynamicPageStyle';
+        document.head.appendChild(pageStyle);
+    }
+    const printText = document.getElementById('btnPrintInvoiceText');
+    if (isThermal) {
+        document.body.classList.add('print-thermal');
+        document.documentElement.classList.add('print-thermal');
+        pageStyle.textContent = '@page { size: 80mm auto; margin: 2mm; }';
+        if (printText) printText.textContent = 'Print Thermal Receipt (80mm)';
+    } else {
+        document.body.classList.remove('print-thermal');
+        document.documentElement.classList.remove('print-thermal');
+        pageStyle.textContent = '@page { size: A4 portrait; margin: 10mm; }';
+        if (printText) printText.textContent = 'Print A4 Tax Invoice';
+    }
+}
+
 function switchView(view) {
     const a4 = document.getElementById('a4InvoiceView');
     const thermal = document.getElementById('thermalInvoiceView');
@@ -485,12 +625,37 @@ function switchView(view) {
         thermal.classList.remove('d-none');
         btnThermal.classList.add('active');
         btnA4.classList.remove('active');
+        updatePrintStyles(true);
     } else {
         thermal.classList.add('d-none');
         a4.classList.remove('d-none');
         btnA4.classList.add('active');
         btnThermal.classList.remove('active');
+        updatePrintStyles(false);
     }
 }
+
+function triggerPrint() {
+    const isThermal = document.getElementById('btnViewThermal') && document.getElementById('btnViewThermal').classList.contains('active');
+    updatePrintStyles(isThermal);
+    setTimeout(function() {
+        window.print();
+    }, 40);
+}
+
+window.addEventListener('beforeprint', function() {
+    const isThermal = (document.getElementById('btnViewThermal') && document.getElementById('btnViewThermal').classList.contains('active')) ||
+                      (document.getElementById('thermalInvoiceView') && !document.getElementById('thermalInvoiceView').classList.contains('d-none'));
+    updatePrintStyles(isThermal);
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('format') === 'thermal' || {{ 'true' if is_thermal else 'false' }}) {
+        switchView('thermal');
+    } else {
+        updatePrintStyles(false);
+    }
+});
 </script>
 {% endblock %}

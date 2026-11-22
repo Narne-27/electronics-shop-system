@@ -86,7 +86,7 @@
                 <div>
                     <div class="text-muted small text-uppercase fw-semibold" style="letter-spacing: 0.5px;">This Month</div>
                     <h3 class="fw-bold mb-0 text-info">{{ stats.month_refunded|inr }}</h3>
-                    <small class="text-muted" style="font-size: 0.75rem;">{{ stats.month_count }} credit note(s) issued</small>
+                    <small class="text-muted" style="font-size: 0.75rem;">{{ stats.month_count }} credit note{{ '' if stats.month_count == 1 else 's' }} issued</small>
                 </div>
                 <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style="width: 48px; height: 48px; background: rgba(14, 165, 233, 0.12);">
                     <i class="bi bi-calendar2-month fs-4 text-info"></i>
@@ -140,7 +140,7 @@
             <i class="bi bi-receipt-cutoff text-primary"></i>
             <span>Credit Notes Issued</span>
         </div>
-        <span class="badge bg-secondary-subtle text-secondary">{{ credit_notes|length }} Record(s)</span>
+        <span class="badge bg-secondary text-white fw-semibold px-2 py-1 shadow-sm">{{ credit_notes|length }} Record(s)</span>
     </div>
     <div class="card-body p-0">
         <div class="table-responsive">
@@ -162,8 +162,8 @@
                     {% for cn in credit_notes %}
                     <tr>
                         <td class="ps-4">
-                            <a href="javascript:void(0)" class="text-decoration-none" data-bs-toggle="modal" data-bs-target="#creditNoteModal{{ cn.credit_note_id }}" title="Click to view full credit note">
-                                <span class="badge bg-dark font-monospace px-2 py-1">{{ cn.credit_note_number }}</span>
+                            <a href="javascript:void(0)" class="text-decoration-none" data-bs-toggle="collapse" data-bs-target="#cnDetailRow{{ cn.credit_note_id }}" aria-expanded="false" title="Click to expand credit note details">
+                                <span class="badge bg-dark font-monospace px-2 py-1">{{ cn.credit_note_number }} <i class="bi bi-chevron-down ms-1 small"></i></span>
                             </a>
                         </td>
                         <td>
@@ -199,25 +199,25 @@
                             </span>
                         </td>
                         <td class="text-end pe-4">
-                            <button type="button" class="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1 shadow-sm" data-bs-toggle="modal" data-bs-target="#creditNoteModal{{ cn.credit_note_id }}" title="View Credit Note Details">
+                            <button type="button" class="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1 shadow-sm" data-bs-toggle="collapse" data-bs-target="#cnDetailRow{{ cn.credit_note_id }}" aria-expanded="false" title="Toggle Credit Note Details">
                                 <i class="bi bi-eye"></i>
-                                <span>View</span>
+                                <span>Details</span>
                             </button>
                         </td>
                     </tr>
 
-                    <!-- Individual Credit Note Modal -->
-                    <div class="modal fade text-start" id="creditNoteModal{{ cn.credit_note_id }}" tabindex="-1" aria-hidden="true">
-                        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-                            <div class="modal-content rounded-4 border-0 shadow">
-                                <div class="modal-header border-0 pb-0">
+                    <!-- Expandable Credit Note Details Row -->
+                    <tr class="collapse bg-light-subtle" id="cnDetailRow{{ cn.credit_note_id }}">
+                        <td colspan="9" class="p-3">
+                            <div class="card border rounded-4 shadow-sm bg-white overflow-hidden">
+                                <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
                                     <div class="d-flex align-items-center gap-2">
-                                        <span class="badge bg-dark font-monospace fs-6">{{ cn.credit_note_number }}</span>
-                                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle">GST Credit Note</span>
+                                        <span class="badge bg-dark font-monospace fs-6 px-2 py-1">{{ cn.credit_note_number }}</span>
+                                        <span class="badge bg-danger text-white fw-bold px-2 py-1">GST Credit Note</span>
                                     </div>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                    <button type="button" class="btn-close" data-bs-toggle="collapse" data-bs-target="#cnDetailRow{{ cn.credit_note_id }}" aria-label="Close"></button>
                                 </div>
-                                <div class="modal-body p-4">
+                                <div class="card-body p-4">
                                     <!-- Meta Row -->
                                     <div class="row g-3 mb-4">
                                         <div class="col-md-6">
@@ -274,7 +274,7 @@
                                             <small class="text-muted">Ledger reversal &bull; Customer balance settled to ₹0</small>
                                         </div>
                                         <div class="text-end">
-                                            <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2">
+                                            <span class="badge bg-success text-white fw-bold px-3 py-2 shadow-sm">
                                                 <i class="bi bi-box-arrow-in-down-left me-1"></i>Stock Restored to Inventory
                                             </span>
                                         </div>
@@ -287,7 +287,7 @@
                                     </div>
 
                                     <!-- Restocked Products Table -->
-                                    <div class="card border rounded-4 overflow-hidden">
+                                    <div class="card border rounded-4 overflow-hidden mb-3">
                                         <div class="card-header bg-white border-bottom py-2">
                                             <div class="small fw-bold text-dark d-flex align-items-center gap-2">
                                                 <i class="bi bi-boxes text-primary"></i>
@@ -330,21 +330,22 @@
                                             </table>
                                         </div>
                                     </div>
-                                </div>
-                                <div class="modal-footer border-0 pt-0 px-4 pb-3">
-                                    <button type="button" class="btn btn-outline-secondary d-flex align-items-center gap-1" onclick="window.print();">
-                                        <i class="bi bi-printer"></i>
-                                        <span>Print Credit Note</span>
-                                    </button>
-                                    <a href="{{ url_for('invoice_view', sale_id=cn.sale_id) }}" class="btn btn-outline-primary d-flex align-items-center gap-1">
-                                        <i class="bi bi-receipt"></i>
-                                        <span>View Invoice</span>
-                                    </a>
-                                    <button type="button" class="btn btn-navy" data-bs-dismiss="modal">Close</button>
+
+                                    <!-- Clean Action Buttons inside the card -->
+                                    <div class="d-flex justify-content-end align-items-center gap-2 pt-3 border-top">
+                                        <button type="button" class="btn btn-outline-dark btn-sm fw-semibold d-inline-flex align-items-center gap-1 shadow-sm" onclick="window.print();">
+                                            <i class="bi bi-printer-fill text-primary"></i>
+                                            <span>Print Credit Note</span>
+                                        </button>
+                                        <a href="{{ url_for('invoice_view', sale_id=cn.sale_id) }}" class="btn btn-primary btn-sm fw-semibold d-inline-flex align-items-center gap-1 shadow-sm">
+                                            <i class="bi bi-receipt"></i>
+                                            <span>View Invoice</span>
+                                        </a>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    </div>
+                        </td>
+                    </tr>
                     {% else %}
                     <tr>
                         <td colspan="9" class="text-center py-5 text-muted">

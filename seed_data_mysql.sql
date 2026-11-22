@@ -38,3 +38,25 @@ VALUES
 (4, 2, 'Pending', 'Assigned', 1, 'Assigned to Vikram for Delhi South route', '2026-11-22 09:00:00'),
 (5, 2, 'Assigned', 'Out for Delivery', 5, 'Dispatched with morning van route', '2026-11-22 09:30:00'),
 (6, 3, 'Pending', 'Assigned', 1, 'Assigned to Vikram for Jubilee Hills slot', '2026-11-22 14:00:00');
+
+-- Store Settings
+INSERT IGNORE INTO STORE_SETTING (setting_key, setting_value)
+VALUES
+('store_name', 'Electrodesk'),
+('store_tagline', 'Smart Electronics & Digital Retail Hub'),
+('store_address', '#42, Tech Boulevard, Hitec City, Hyderabad, Telangana 500081'),
+('store_location', 'Hitec City, Hyderabad'),
+('store_phone', '+91 (040) 4890-2800 / +91 98480 12345'),
+('store_email', 'support@electrodesk.in'),
+('store_tax_id', 'GSTIN: 36AAACE4812K1Z8 / PAN: AAACE4812K'),
+('default_tax_rate', '18.0'),
+('cgst_rate', '9.0'),
+('sgst_rate', '9.0'),
+('low_stock_threshold', '5'),
+('invoice_prefix', 'INV-'),
+('invoice_next_number', '1017'),
+('emi_rate_3m', '0.0'),
+('emi_rate_6m', '12.0'),
+('emi_rate_9m', '14.0'),
+('theme', 'light'),
+('offers_banner', 'Festival Special: Up to 15% Off with Code FESTIVE10 + No Cost EMI on HDFC & ICICI Cards!');

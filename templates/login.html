@@ -66,87 +66,33 @@
                         </button>
                     </form>
 
-                    <!-- Quick Demo Trigger & 4 Roles Collapse -->
-                    <div class="border-top pt-3">
-                        <button type="button" 
-                                class="btn btn-outline-secondary w-100 py-2 px-3 d-flex justify-content-between align-items-center rounded-3 shadow-none border" 
-                                id="quickDemoBtn" 
-                                data-bs-toggle="collapse" 
-                                data-bs-target="#quickDemoRolesCollapse" 
-                                aria-expanded="false" 
-                                aria-controls="quickDemoRolesCollapse"
-                                onclick="toggleQuickDemoSection()">
-                            <div class="d-flex align-items-center gap-2">
-                                <span class="badge bg-warning text-dark rounded-circle p-1 d-inline-flex align-items-center justify-content-center" style="width: 24px; height: 24px;">
-                                    <i class="bi bi-lightning-charge-fill" style="font-size: 0.8rem;"></i>
-                                </span>
-                                <span class="fw-semibold text-dark">Quick Demo</span>
-                            </div>
-                            <div class="d-flex align-items-center gap-2">
-                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1">4 Roles</span>
-                                <i class="bi bi-chevron-down text-muted" id="quickDemoChevron" style="transition: transform 0.25s ease;"></i>
-                            </div>
-                        </button>
-
-                        <!-- The 4 Roles - Hidden until Quick Demo is clicked -->
-                        <div class="collapse mt-2" id="quickDemoRolesCollapse">
-                            <div class="card card-body bg-light border p-3 rounded-3 shadow-sm">
-                                <div class="d-flex align-items-center justify-content-between mb-2">
-                                    <span class="text-muted small fw-bold text-uppercase" style="letter-spacing: 0.05em; font-size: 0.72rem;">1-Click Quick Demo Sign In</span>
-                                    <span class="badge bg-white text-muted border">Select a Role</span>
-                                </div>
-                                <div class="d-grid gap-2">
-                                    <!-- Ram - System Administrator -->
-                                    <button type="button" class="btn btn-outline-dark btn-sm text-start d-flex justify-content-between align-items-center p-2 rounded-2" onclick="fillDemo('admin', 'admin123')">
-                                        <div class="d-flex align-items-center gap-2">
-                                            <div class="user-avatar-circle" style="width: 30px; height: 30px; font-size: 0.75rem; background: #0B1B3A;">RA</div>
-                                            <div>
-                                                <strong class="d-block text-dark lh-1">Ram</strong>
-                                                <small class="text-muted" style="font-size: 0.7rem;">System Administrator</small>
-                                            </div>
-                                        </div>
-                                        <span class="badge bg-primary">Full Control</span>
-                                    </button>
-
-                                    <!-- Geetha - Shop Manager -->
-                                    <button type="button" class="btn btn-outline-dark btn-sm text-start d-flex justify-content-between align-items-center p-2 rounded-2" onclick="fillDemo('geetha', 'geetha123')">
-                                        <div class="d-flex align-items-center gap-2">
-                                            <div class="user-avatar-circle" style="width: 30px; height: 30px; font-size: 0.75rem; background: #0284C7;">GE</div>
-                                            <div>
-                                                <strong class="d-block text-dark lh-1">Geetha</strong>
-                                                <small class="text-muted" style="font-size: 0.7rem;">Shop Manager</small>
-                                            </div>
-                                        </div>
-                                        <span class="badge bg-info text-white">Stock &amp; Catalog</span>
-                                    </button>
-
-                                    <!-- Sai - Sales Staff -->
-                                    <button type="button" class="btn btn-outline-dark btn-sm text-start d-flex justify-content-between align-items-center p-2 rounded-2" onclick="fillDemo('sai', 'sai123')">
-                                        <div class="d-flex align-items-center gap-2">
-                                            <div class="user-avatar-circle" style="width: 30px; height: 30px; font-size: 0.75rem; background: #059669;">SA</div>
-                                            <div>
-                                                <strong class="d-block text-dark lh-1">Sai</strong>
-                                                <small class="text-muted" style="font-size: 0.7rem;">Sales Staff</small>
-                                            </div>
-                                        </div>
-                                        <span class="badge bg-success">POS &amp; Billing</span>
-                                    </button>
-
-                                    <!-- Suresh - Shop Owner -->
-                                    <button type="button" class="btn btn-outline-dark btn-sm text-start d-flex justify-content-between align-items-center p-2 rounded-2" onclick="fillDemo('suresh', 'suresh123')">
-                                        <div class="d-flex align-items-center gap-2">
-                                            <div class="user-avatar-circle" style="width: 30px; height: 30px; font-size: 0.75rem; background: #4338CA;">S</div>
-                                            <div>
-                                                <strong class="d-block text-dark lh-1">Suresh</strong>
-                                                <small class="text-muted" style="font-size: 0.7rem;">Shop Owner</small>
-                                            </div>
-                                        </div>
-                                        <span class="badge" style="background: #4338CA; color: white;">Business Owner</span>
-                                    </button>
-                                </div>
-                            </div>
+                    <!-- Quick Demo Role Pills Directly on Login Card -->
+                    {% if demo_mode %}
+                    <div class="border-top pt-3 mt-2">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <span class="text-muted small fw-bold text-uppercase" style="letter-spacing: 0.05em; font-size: 0.72rem;">
+                                <i class="bi bi-lightning-charge-fill text-warning me-1"></i>Quick Demo:
+                            </span>
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle" style="font-size: 0.65rem;">1-Click Fill</span>
+                        </div>
+                        
+                        <!-- Direct Role Pills directly clickable on the login card -->
+                        <div class="d-flex flex-wrap gap-2 justify-content-center">
+                            <button type="button" class="btn btn-outline-primary btn-sm rounded-pill px-3 py-1 fw-semibold d-inline-flex align-items-center gap-1 shadow-sm" onclick="fillDemo('admin', 'admin123')" title="Admin - Ram (System Administrator)">
+                                <i class="bi bi-shield-lock-fill"></i> Admin
+                            </button>
+                            <button type="button" class="btn btn-outline-info btn-sm rounded-pill px-3 py-1 fw-semibold d-inline-flex align-items-center gap-1 shadow-sm" onclick="fillDemo('geetha', 'geetha123')" title="Manager - Geetha (Shop Manager)">
+                                <i class="bi bi-briefcase-fill"></i> Manager
+                            </button>
+                            <button type="button" class="btn btn-outline-success btn-sm rounded-pill px-3 py-1 fw-semibold d-inline-flex align-items-center gap-1 shadow-sm" onclick="fillDemo('sai', 'sai123')" title="Sales - Sai (Sales Staff)">
+                                <i class="bi bi-cart-check-fill"></i> Sales
+                            </button>
+                            <button type="button" class="btn btn-outline-warning btn-sm rounded-pill px-3 py-1 fw-semibold d-inline-flex align-items-center gap-1 shadow-sm" onclick="fillDemo('suresh', 'suresh123')" title="Owner - Suresh (Shop Owner)">
+                                <i class="bi bi-person-badge-fill"></i> Owner
+                            </button>
                         </div>
                     </div>
+                    {% endif %}
                 </div>
                 <!-- Dark Footer (Eliminates beige/cream strip) -->
                 <div class="card-footer login-card-footer-dark text-center py-3 border-0">
@@ -175,7 +121,7 @@
     }
   }
 </script>
-<script src="{{ url_for('static', filename='js/login-scene.js') }}"></script>
+<script src="{{ url_for('static', filename='js/circuit-board.js') }}"></script>
 
 <script>
 let submitting = false;
@@ -198,41 +144,7 @@ function fillDemo(username, password) {
     }
 }
 
-function toggleQuickDemoSection() {
-    const el = document.getElementById('quickDemoRolesCollapse');
-    const chev = document.getElementById('quickDemoChevron');
-    const btn = document.getElementById('quickDemoBtn');
-    if (!el) return;
-
-    // If bootstrap collapse is present, Bootstrap handles toggle via data-bs-toggle
-    if (typeof bootstrap !== 'undefined' && bootstrap.Collapse) {
-        return;
-    }
-
-    // Fallback if Bootstrap JS is not loaded
-    if (el.classList.contains('show')) {
-        el.classList.remove('show');
-        if (chev) chev.style.transform = 'rotate(0deg)';
-        if (btn) btn.setAttribute('aria-expanded', 'false');
-    } else {
-        el.classList.add('show');
-        if (chev) chev.style.transform = 'rotate(180deg)';
-        if (btn) btn.setAttribute('aria-expanded', 'true');
-    }
-}
-
 document.addEventListener('DOMContentLoaded', function() {
-    const el = document.getElementById('quickDemoRolesCollapse');
-    const chev = document.getElementById('quickDemoChevron');
-    if (el && chev) {
-        el.addEventListener('show.bs.collapse', function () {
-            chev.style.transform = 'rotate(180deg)';
-        });
-        el.addEventListener('hide.bs.collapse', function () {
-            chev.style.transform = 'rotate(0deg)';
-        });
-    }
-
     const toggleBtn = document.getElementById('togglePasswordBtn');
     if (toggleBtn) {
         toggleBtn.addEventListener('click', function() {

@@ -436,3 +436,35 @@
     border-radius: 8px;
     padding: 2px;
 }
+
+/* ========================================================
+   Dark Theme Support for "What's New" Carousel Banner
+   ======================================================== */
+[data-theme="dark"] .pc-carousel-section {
+    background: #0f172a !important;
+    border: 1px solid rgba(143, 230, 255, 0.2);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5) !important;
+}
+
+[data-theme="dark"] .pc-header-eyebrow {
+    color: #38bdf8 !important;
+}
+
+[data-theme="dark"] .pc-header-title {
+    color: #f8fafc !important;
+}
+
+[data-theme="dark"] .pc-header-subtitle {
+    color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .pc-nav-btn {
+    background: #1e293b !important;
+    color: #f8fafc !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+}
+
+[data-theme="dark"] .pc-nav-btn:hover:not(:disabled) {
+    background: #334155 !important;
+    color: #38bdf8 !important;
+}

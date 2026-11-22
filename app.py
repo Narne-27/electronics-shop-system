@@ -27,6 +27,7 @@ app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE='Lax',
     MAX_CONTENT_LENGTH=16 * 1024 * 1024,   # 16 MB upload cap (CSV import / JSON restore)
+    TEMPLATES_AUTO_RELOAD=True,
 )
 
 # Ensure database is initialized on startup
@@ -168,23 +169,32 @@ def block_cross_site_posts():
 # SHARED FORMATTERS: INR CURRENCY & DATES
 # ==========================================================
 
-def format_inr(value):
+def format_inr(value, decimals=0):
     """
     Formats a number as Indian Currency (INR):
-    e.g. 3172747 -> ₹31,72,747 (maximumFractionDigits: 0)
+    e.g. 3172747 -> ₹31,72,747
+    353752 -> ₹3,53,752
     Matches: Intl.NumberFormat('en-IN', {style:'currency', currency:'INR', maximumFractionDigits:0})
     """
     if value is None:
         return '₹0'
     try:
-        val = round(float(value))
+        val = float(value)
         is_neg = val < 0
-        s = str(abs(val))
-        if len(s) <= 3:
-            formatted = s
+        val = abs(val)
+        if decimals > 0:
+            val_rounded = round(val, decimals)
+            parts = f"{val_rounded:.{decimals}f}".split('.')
+            int_part = parts[0]
+            dec_part = '.' + parts[1]
         else:
-            last_three = s[-3:]
-            remaining = s[:-3]
+            int_part = str(round(val))
+            dec_part = ''
+        if len(int_part) <= 3:
+            formatted = int_part
+        else:
+            last_three = int_part[-3:]
+            remaining = int_part[:-3]
             groups = []
             while len(remaining) > 2:
                 groups.insert(0, remaining[-2:])
@@ -192,31 +202,47 @@ def format_inr(value):
             if remaining:
                 groups.insert(0, remaining)
             formatted = ','.join(groups) + ',' + last_three
-        return f"{'-' if is_neg else ''}₹{formatted}"
+        return f"{'-' if is_neg else ''}₹{formatted}{dec_part}"
     except Exception:
         return f"₹{value}"
 
 
 def format_date_in(value):
     """
-    Formats a date string or object like: '19 Nov 2026'
+    Formats a date string or object like: '22 Nov 2026'
     """
     if not value:
         return ''
     if isinstance(value, str):
         try:
             d = datetime.datetime.fromisoformat(value[:19])
-            return d.strftime('%d %b %Y').lstrip('0')
+            return d.strftime('%d %b %Y')
         except Exception:
             try:
                 parts = value[:10].split('-')
                 dt = datetime.date(int(parts[0]), int(parts[1]), int(parts[2]))
-                return dt.strftime('%d %b %Y').lstrip('0')
+                return dt.strftime('%d %b %Y')
             except Exception:
                 return value
     elif isinstance(value, (datetime.date, datetime.datetime)):
-        return value.strftime('%d %b %Y').lstrip('0')
+        return value.strftime('%d %b %Y')
     return str(value)
+
+
+def get_customer_dues_summary(database=None):
+    """
+    Shared query for Customer Dues metrics across Sidebar badge, Hub card, and Ledger.
+    Single source of truth for unpaid balance totals and active dues count.
+    """
+    d = database or db
+    try:
+        row = d.query_one("SELECT COALESCE(SUM(balance_due), 0.0) as amt, COUNT(*) as cnt FROM SALE WHERE balance_due > 0")
+        return {
+            'amt': float(row['amt']) if row else 0.0,
+            'cnt': int(row['cnt']) if row else 0
+        }
+    except Exception:
+        return {'amt': 0.0, 'cnt': 0}
 
 
 app.jinja_env.filters['inr'] = format_inr
@@ -405,16 +431,30 @@ def inject_global_context():
             pass
 
         try:
-            dc = db.query_one("SELECT COUNT(*) as cnt FROM SALE WHERE balance_due > 0")
-            dues_count = dc['cnt'] if dc else 0
+            dues_summary = get_customer_dues_summary(db)
+            dues_count = dues_summary['cnt']
         except Exception:
             pass
+
+    # Read store address & store location dynamically from settings
+    store_addr = config.STORE_ADDRESS
+    store_loc = getattr(config, 'STORE_LOCATION', 'Hitec City, Hyderabad')
+    try:
+        s_addr = db.query_one("SELECT setting_value FROM STORE_SETTING WHERE setting_key = 'store_address'")
+        if s_addr and s_addr.get('setting_value'):
+            store_addr = s_addr['setting_value']
+        s_loc = db.query_one("SELECT setting_value FROM STORE_SETTING WHERE setting_key = 'store_location'")
+        if s_loc and s_loc.get('setting_value'):
+            store_loc = s_loc['setting_value']
+    except Exception:
+        pass
 
     return {
         'store': {
             'name': config.STORE_NAME,
             'tagline': config.STORE_TAGLINE,
-            'address': config.STORE_ADDRESS,
+            'address': store_addr,
+            'location': store_loc,
             'phone': config.STORE_PHONE,
             'email': config.STORE_EMAIL,
             'website': config.STORE_WEBSITE,
@@ -433,7 +473,7 @@ def inject_global_context():
             'email': session.get('email')
         } if 'user_id' in session else None,
         'app_today': today,
-        'app_today_formatted': today.strftime('%d %b %Y').lstrip('0'),
+        'app_today_formatted': today.strftime('%d %b %Y'),
         'today_weekday': today.strftime('%A'),
         'low_stock_count': low_stock_count,
         'expiring_warranties_count': expiring_warranties_count,
@@ -478,7 +518,7 @@ def login():
         else:
             flash('Invalid username or password. Please try again.', 'danger')
 
-    return render_template('login.html')
+    return render_template('login.html', demo_mode=config.DEMO_MODE)
 
 
 @app.route('/logout')
@@ -518,15 +558,18 @@ def get_hub_sections_data(user_role):
     cust_cnt = db.query_one("SELECT COUNT(*) as cnt FROM CUSTOMER")
     total_cust = cust_cnt['cnt'] if cust_cnt else 0
 
-    dues_data = db.query_one("SELECT COALESCE(SUM(grand_total), 0.0) as amt, COUNT(*) as cnt FROM SALE WHERE payment_status = 'Pending'")
-    pending_dues_amt = dues_data['amt'] if dues_data else 0.0
-    pending_dues_cnt = dues_data['cnt'] if dues_data else 0
+    # Single shared query for customer dues
+    dues_data = get_customer_dues_summary(db)
+    pending_dues_amt = dues_data['amt']
+    pending_dues_cnt = dues_data['cnt']
 
     quote_cnt = db.query_one("SELECT COUNT(*) as cnt FROM QUOTATION")
     total_quotes = quote_cnt['cnt'] if quote_cnt else 0
 
     today_rev = db.query_one("SELECT COALESCE(SUM(grand_total), 0.0) as rev, COUNT(*) as cnt FROM SALE WHERE DATE(sale_date) = %s", (today_str,))
-    today_sales_val = today_rev['rev'] if today_rev else 0.0
+    today_refund_data = db.query_one("SELECT COALESCE(SUM(refund_amount), 0.0) as ref FROM CREDIT_NOTE WHERE DATE(created_at) = %s", (today_str,))
+    today_refund_amt = today_refund_data['ref'] if today_refund_data else 0.0
+    today_sales_val = max(0.0, (today_rev['rev'] if today_rev else 0.0) - today_refund_amt)
     today_orders_cnt = today_rev['cnt'] if today_rev else 0
 
     sale_cnt = db.query_one("SELECT COUNT(*) as cnt FROM SALE")
@@ -565,7 +608,7 @@ def get_hub_sections_data(user_role):
             'eyebrow': 'SHOP OVERVIEW',
             'icon': 'bi-grid-1x2-fill',
             'route': '/dashboard',
-            'metric': f"₹{today_sales_val:,.0f} Today" if today_sales_val > 0 else "Active Today",
+            'metric': f"{format_inr(today_sales_val)} Today" if today_sales_val > 0 else "Active Today",
             'badge': None,
             'accent': '#2bf0ff',
             'warm_accent': '#38bdf8',
@@ -653,7 +696,7 @@ def get_hub_sections_data(user_role):
             'eyebrow': 'COLLECTIONS',
             'icon': 'bi-wallet2',
             'route': '/customer-dues',
-            'metric': f"₹{pending_dues_amt:,.0f} Pending" if pending_dues_amt > 0 else "All Settled",
+            'metric': f"{format_inr(pending_dues_amt)} Pending" if pending_dues_amt > 0 else "All Settled",
             'badge': f"{pending_dues_cnt} Due" if pending_dues_cnt > 0 else None,
             'accent': '#f97316',
             'warm_accent': '#fb923c',
@@ -667,7 +710,7 @@ def get_hub_sections_data(user_role):
             'eyebrow': 'PROPOSALS',
             'icon': 'bi-file-earmark-text-fill',
             'route': '/quotations',
-            'metric': f"{total_quotes} Estimates",
+            'metric': f"{total_quotes} {'Estimate' if total_quotes == 1 else 'Estimates'}",
             'badge': None,
             'accent': '#6366f1',
             'warm_accent': '#818cf8',
@@ -709,7 +752,7 @@ def get_hub_sections_data(user_role):
             'eyebrow': 'REFUNDS',
             'icon': 'bi-arrow-return-left',
             'route': '/returns',
-            'metric': f"{total_returns_cnt} Credit Notes",
+            'metric': f"{total_returns_cnt} {'Credit Note' if total_returns_cnt == 1 else 'Credit Notes'}",
             'badge': None,
             'accent': '#ec4899',
             'warm_accent': '#f472b6',
@@ -755,7 +798,7 @@ def get_hub_sections_data(user_role):
             'eyebrow': 'FINANCIALS',
             'icon': 'bi-pie-chart-fill',
             'route': '/reports/profit-loss',
-            'metric': f"₹{today_sales_val:,.0f} Rev Today" if today_sales_val > 0 else "Net P&L Reports",
+            'metric': f"{format_inr(today_sales_val)} Rev Today" if today_sales_val > 0 else "Net P&L Reports",
             'badge': None,
             'accent': '#8b5cf6',
             'warm_accent': '#a78bfa',
@@ -769,7 +812,7 @@ def get_hub_sections_data(user_role):
             'eyebrow': 'OUTFLOWS',
             'icon': 'bi-cash-coin',
             'route': '/expenses',
-            'metric': f"₹{total_expenses:,.0f} Recorded",
+            'metric': f"{format_inr(total_expenses)} Recorded",
             'badge': None,
             'accent': '#f43f5e',
             'warm_accent': '#fb7185',
@@ -921,17 +964,21 @@ def dashboard():
     # Derived inventory valuation
     inv_totals = get_inventory_derived_totals()
 
-    # Sales metrics
+    # Sales metrics (net of credit notes & customer returns)
     today_sales = db.query_one("""
         SELECT COALESCE(SUM(grand_total), 0.0) as revenue, COUNT(*) as count 
         FROM SALE 
         WHERE DATE(sale_date) = %s
     """, (today_str,))
-    today_revenue = today_sales['revenue'] if today_sales else 0.0
+    today_refund_data = db.query_one("SELECT COALESCE(SUM(refund_amount), 0.0) as ref FROM CREDIT_NOTE WHERE DATE(created_at) = %s", (today_str,))
+    today_refund_amt = today_refund_data['ref'] if today_refund_data else 0.0
+    today_revenue = max(0.0, (today_sales['revenue'] if today_sales else 0.0) - today_refund_amt)
     today_orders = today_sales['count'] if today_sales else 0
 
     all_time = db.query_one("SELECT COALESCE(SUM(grand_total), 0.0) as rev, COUNT(*) as count FROM SALE")
-    total_revenue = all_time['rev'] if all_time else 0.0
+    all_refund_data = db.query_one("SELECT COALESCE(SUM(refund_amount), 0.0) as ref FROM CREDIT_NOTE")
+    all_refund_amt = all_refund_data['ref'] if all_refund_data else 0.0
+    total_revenue = max(0.0, (all_time['rev'] if all_time else 0.0) - all_refund_amt)
     total_sales_count = all_time['count'] if all_time else 0
 
     # Low-stock items
@@ -1891,6 +1938,9 @@ def pos_checkout():
                     (pid,))
                 if not prod:
                     raise CheckoutError(f'Product #{pid} not found.')
+
+                if prod['stock_quantity'] <= 0:
+                    raise CheckoutError(f"'{prod['product_name']}' is out of stock (0 available). Cannot sell items with 0 stock.")
 
                 reserved[pid] = reserved.get(pid, 0) + qty
                 if prod['stock_quantity'] < reserved[pid]:
@@ -3371,17 +3421,30 @@ def reports():
             COALESCE(SUM(discount_amount), 0.0) as total_discount
         FROM SALE
     """)
-    units_row = db.query_one("SELECT COALESCE(SUM(quantity), 0) as units FROM SALE_ITEM")
+    ref_row = db.query_one("SELECT COALESCE(SUM(refund_amount), 0.0) as total_refunds FROM CREDIT_NOTE")
+    total_refunds = ref_row['total_refunds'] if ref_row else 0.0
+
+    units_row = db.query_one("""
+        SELECT COALESCE(SUM(si.quantity), 0) as units 
+        FROM SALE_ITEM si 
+        JOIN SALE s ON si.sale_id = s.sale_id 
+        WHERE s.payment_status <> 'Refunded'
+    """)
     total_units_val = units_row['units'] if units_row else 0
     if summary:
+        summary['gross_revenue'] = summary['total_revenue']
+        summary['total_revenue'] = max(0.0, summary['total_revenue'] - total_refunds)
+        summary['total_refunds'] = total_refunds
         summary['total_sales'] = summary['total_orders']
         summary['total_units'] = total_units_val
 
-    # Cost of goods sold (COGS)
+    # Cost of goods sold (COGS) - excluding refunded items returned to inventory
     cogs_row = db.query_one("""
         SELECT COALESCE(SUM(si.quantity * p.cost_price), 0.0) as cogs
         FROM SALE_ITEM si
         JOIN PRODUCT p ON si.product_id = p.product_id
+        JOIN SALE s ON si.sale_id = s.sale_id
+        WHERE s.payment_status <> 'Refunded'
     """)
     cogs = cogs_row['cogs'] if cogs_row else 0.0
     tot_rev = summary['total_revenue'] if summary else 0.0
@@ -3490,16 +3553,22 @@ def reports_profit_loss():
 
     net_revenue = max(0.0, revenue - total_refunds)
 
-    cogs_row = db.query_one("SELECT COALESCE(SUM(si.quantity * p.cost_price), 0.0) as cogs FROM SALE_ITEM si JOIN PRODUCT p ON si.product_id = p.product_id")
+    cogs_row = db.query_one("""
+        SELECT COALESCE(SUM(si.quantity * p.cost_price), 0.0) as cogs 
+        FROM SALE_ITEM si 
+        JOIN PRODUCT p ON si.product_id = p.product_id
+        JOIN SALE s ON si.sale_id = s.sale_id
+        WHERE s.payment_status <> 'Refunded'
+    """)
     cogs = cogs_row['cogs'] if cogs_row else 0.0
     gross_profit = net_revenue - cogs
-    gross_margin = (gross_profit / revenue * 100.0) if revenue > 0 else 0.0
+    gross_margin = (gross_profit / net_revenue * 100.0) if net_revenue > 0 else 0.0
 
     exp_row = db.query_one("SELECT COALESCE(SUM(amount), 0.0) as exp FROM EXPENSE")
     total_expenses = exp_row['exp'] if exp_row else 0.0
 
     net_profit = gross_profit - total_expenses
-    net_margin = (net_profit / revenue * 100.0) if revenue > 0 else 0.0
+    net_margin = (net_profit / net_revenue * 100.0) if net_revenue > 0 else 0.0
 
     # Best-sellers
     best_sellers = db.query("""
@@ -3928,6 +3997,10 @@ def settings():
                 # An empty banner is a valid way to clear it (previously it could never be cleared).
                 if 'offers_banner' in request.form:
                     db.upsert_setting('offers_banner', request.form.get('offers_banner', '').strip()[:500])
+                if 'store_address' in request.form:
+                    db.upsert_setting('store_address', request.form.get('store_address', '').strip()[:300])
+                if 'store_location' in request.form:
+                    db.upsert_setting('store_location', request.form.get('store_location', '').strip()[:300])
                 db.upsert_setting('emi_rate_3m', f"{emi_3:g}")
                 db.upsert_setting('emi_rate_6m', f"{emi_6:g}")
                 db.upsert_setting('emi_rate_9m', f"{emi_9:g}")

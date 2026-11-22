@@ -100,9 +100,14 @@
                         </td>
                         <td class="fw-bold text-dark">{{ inv.grand_total|inr }}</td>
                         <td class="text-end pe-4">
-                            <a href="{{ url_for('invoice_view', sale_id=inv.sale_id) }}" class="btn btn-sm btn-outline-primary" title="Print Invoice">
-                                <i class="bi bi-printer-fill me-1"></i> Print
-                            </a>
+                            <div class="btn-group btn-group-sm">
+                                <a href="{{ url_for('invoice_view', sale_id=inv.sale_id) }}" class="btn btn-outline-primary" title="View & Print A4 Invoice">
+                                    <i class="bi bi-file-earmark-text me-1"></i> A4
+                                </a>
+                                <a href="{{ url_for('invoice_view', sale_id=inv.sale_id, format='thermal') }}" class="btn btn-outline-secondary" title="View & Print 80mm Thermal Receipt">
+                                    <i class="bi bi-receipt me-1"></i> Thermal
+                                </a>
+                            </div>
                         </td>
                     </tr>
                     {% else %}
