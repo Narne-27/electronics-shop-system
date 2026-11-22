@@ -288,7 +288,8 @@ def roles_required(*allowed_roles):
         'Shop Owner': ['Shop Owner', 'Owner'],
         'System Administrator': ['System Administrator', 'Admin'],
         'Shop Manager': ['Shop Manager', 'Manager'],
-        'Sales Staff': ['Sales Staff', 'Staff']
+        'Sales Staff': ['Sales Staff', 'Staff'],
+        'Delivery Staff': ['Delivery Staff', 'Delivery']
     }
 
     expanded = set()
@@ -1835,6 +1836,32 @@ def pos_checkout():
     emi_months = parse_int(data.get('emi_months'), 'EMI months', 0, minimum=0)
     owner_pin = str(data.get('owner_pin') or '').strip()
     notes = str(data.get('notes') or 'Retail counter sale').strip()[:500]
+    upi_ref = str(data.get('upi_ref') or '').strip()[:50]
+    card_last4 = str(data.get('card_last4') or '').strip()[:10]
+    card_brand = str(data.get('card_brand') or '').strip()[:20]
+    card_auth = str(data.get('card_auth') or '').strip()[:30]
+    cash_tendered = parse_float(data.get('cash_tendered'), 'Cash tendered', 0.0, minimum=0.0)
+
+    payment_details = []
+    if payment_method == 'UPI' and upi_ref:
+        payment_details.append(f"UPI Ref: {upi_ref}")
+    elif payment_method == 'Card':
+        card_desc = f"Card •••• {card_last4}" if card_last4 else "Card Payment"
+        if card_brand:
+            card_desc += f" ({card_brand})"
+        if card_auth:
+            card_desc += f" [Auth: {card_auth}]"
+        payment_details.append(card_desc)
+    elif payment_method == 'Cash' and cash_tendered > 0:
+        payment_details.append(f"Cash Tendered: ₹{cash_tendered:,.2f}")
+
+    if payment_details:
+        detail_str = " | ".join(payment_details)
+        if notes and notes != 'Retail counter sale':
+            notes = f"{notes} | {detail_str}"
+        else:
+            notes = detail_str
+
     today = get_app_today()
 
     emi_plans = get_emi_plans()
@@ -4096,16 +4123,39 @@ def users():
         ORDER BY u.user_id ASC
     """)
     matrix = [
-        {'module': 'Dashboard & Overview', 'desc': 'View KPI metrics, charts and alerts', 'roles': {'Shop Owner': True, 'System Administrator': True, 'Shop Manager': True, 'Sales Staff': True}},
-        {'module': 'POS & New Sale', 'desc': 'Barcode scan, billing, cart and invoices', 'roles': {'Shop Owner': True, 'System Administrator': True, 'Shop Manager': True, 'Sales Staff': True}},
-        {'module': 'Products Catalog', 'desc': 'View pricing, SKUs, models and warranties', 'roles': {'Shop Owner': True, 'System Administrator': True, 'Shop Manager': True, 'Sales Staff': True}},
-        {'module': 'Product CRUD & Pricing', 'desc': 'Create, edit, delete and modify pricing', 'roles': {'Shop Owner': True, 'System Administrator': True, 'Shop Manager': True, 'Sales Staff': False}},
-        {'module': 'Inventory Restock', 'desc': 'Manual stock in/out and adjustments', 'roles': {'Shop Owner': True, 'System Administrator': True, 'Shop Manager': True, 'Sales Staff': False}},
-        {'module': 'Warranty & Service', 'desc': 'Serial lookup and register warranty claims', 'roles': {'Shop Owner': True, 'System Administrator': True, 'Shop Manager': True, 'Sales Staff': True}},
-        {'module': 'Customer CRM', 'desc': 'Customer directory, history and ledger', 'roles': {'Shop Owner': True, 'System Administrator': True, 'Shop Manager': True, 'Sales Staff': True}},
-        {'module': 'Quotations & Returns', 'desc': 'Price estimates, credit notes and returns', 'roles': {'Shop Owner': True, 'System Administrator': True, 'Shop Manager': True, 'Sales Staff': False}},
-        {'module': 'Financial Reports & P&L', 'desc': 'Sales reports, GST, expenses, P&L', 'roles': {'Shop Owner': True, 'System Administrator': True, 'Shop Manager': True, 'Sales Staff': False}},
-        {'module': 'Settings & Audit Log', 'desc': 'Store settings, backup, date override', 'roles': {'Shop Owner': True, 'System Administrator': True, 'Shop Manager': False, 'Sales Staff': False}}
+        {'module': 'Dashboard & Overview', 'desc': 'View KPI metrics, charts and alerts',
+         'admin': True, 'owner': True, 'manager': True, 'staff': True, 'delivery': False,
+         'roles': {'System Administrator': True, 'Shop Owner': True, 'Shop Manager': True, 'Sales Staff': True, 'Delivery Staff': False}},
+        {'module': 'POS & New Sale', 'desc': 'Barcode scan, billing, real-time QR code & card processing',
+         'admin': True, 'owner': True, 'manager': True, 'staff': True, 'delivery': False,
+         'roles': {'System Administrator': True, 'Shop Owner': True, 'Shop Manager': True, 'Sales Staff': True, 'Delivery Staff': False}},
+        {'module': 'Products Catalog', 'desc': 'View pricing, SKUs, models and warranties',
+         'admin': True, 'owner': True, 'manager': True, 'staff': True, 'delivery': True,
+         'roles': {'System Administrator': True, 'Shop Owner': True, 'Shop Manager': True, 'Sales Staff': True, 'Delivery Staff': True}},
+        {'module': 'Product CRUD & Pricing', 'desc': 'Create, edit, delete and modify pricing',
+         'admin': True, 'owner': True, 'manager': True, 'staff': False, 'delivery': False,
+         'roles': {'System Administrator': True, 'Shop Owner': True, 'Shop Manager': True, 'Sales Staff': False, 'Delivery Staff': False}},
+        {'module': 'Inventory Restock', 'desc': 'Manual stock in/out and adjustments',
+         'admin': True, 'owner': True, 'manager': True, 'staff': False, 'delivery': False,
+         'roles': {'System Administrator': True, 'Shop Owner': True, 'Shop Manager': True, 'Sales Staff': False, 'Delivery Staff': False}},
+        {'module': 'Delivery Dispatch & Tracking', 'desc': 'Track deliveries, assign routes & verify OTPs',
+         'admin': True, 'owner': True, 'manager': True, 'staff': True, 'delivery': True,
+         'roles': {'System Administrator': True, 'Shop Owner': True, 'Shop Manager': True, 'Sales Staff': True, 'Delivery Staff': True}},
+        {'module': 'Warranty & Service', 'desc': 'Serial lookup and register warranty claims',
+         'admin': True, 'owner': True, 'manager': True, 'staff': True, 'delivery': False,
+         'roles': {'System Administrator': True, 'Shop Owner': True, 'Shop Manager': True, 'Sales Staff': True, 'Delivery Staff': False}},
+        {'module': 'Customer CRM', 'desc': 'Customer directory, history and ledger',
+         'admin': True, 'owner': True, 'manager': True, 'staff': True, 'delivery': False,
+         'roles': {'System Administrator': True, 'Shop Owner': True, 'Shop Manager': True, 'Sales Staff': True, 'Delivery Staff': False}},
+        {'module': 'Quotations & Returns', 'desc': 'Price estimates, credit notes and returns',
+         'admin': True, 'owner': True, 'manager': True, 'staff': False, 'delivery': False,
+         'roles': {'System Administrator': True, 'Shop Owner': True, 'Shop Manager': True, 'Sales Staff': False, 'Delivery Staff': False}},
+        {'module': 'Financial Reports & P&L', 'desc': 'Sales reports, GST, expenses, P&L',
+         'admin': True, 'owner': True, 'manager': True, 'staff': False, 'delivery': False,
+         'roles': {'System Administrator': True, 'Shop Owner': True, 'Shop Manager': True, 'Sales Staff': False, 'Delivery Staff': False}},
+        {'module': 'Settings & Audit Log', 'desc': 'Store settings, backup, date override',
+         'admin': True, 'owner': True, 'manager': False, 'staff': False, 'delivery': False,
+         'roles': {'System Administrator': True, 'Shop Owner': True, 'Shop Manager': False, 'Sales Staff': False, 'Delivery Staff': False}}
     ]
     return render_template('users.html', users=users_list, matrix=matrix)
 
@@ -4115,6 +4165,7 @@ ROLE_CANONICAL = {
     'Shop Owner': 'Shop Owner', 'Owner': 'Shop Owner',
     'Shop Manager': 'Shop Manager', 'Manager': 'Shop Manager',
     'Sales Staff': 'Sales Staff', 'Staff': 'Sales Staff',
+    'Delivery Staff': 'Delivery Staff', 'Delivery': 'Delivery Staff',
 }
 PRIVILEGED_ROLES = ('System Administrator', 'Admin', 'Shop Owner', 'Owner')
 

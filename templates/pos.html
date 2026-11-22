@@ -214,20 +214,185 @@
                 </div>
 
                 <!-- Payment Method Buttons -->
-                <div class="mb-3">
+                <div class="mb-2">
                     <label class="form-label small fw-bold text-secondary mb-1">Payment Method</label>
                     <div class="btn-group w-100 btn-group-sm" role="group">
-                        <input type="radio" class="btn-check" name="paymentMethod" id="payUPI" value="UPI" checked>
+                        <input type="radio" class="btn-check" name="paymentMethod" id="payUPI" value="UPI" checked onchange="switchPaymentPanel('UPI')">
                         <label class="btn btn-outline-secondary" for="payUPI"><i class="bi bi-qr-code"></i> UPI</label>
 
-                        <input type="radio" class="btn-check" name="paymentMethod" id="payCash" value="Cash">
-                        <label class="btn btn-outline-secondary" for="payCash"><i class="bi bi-cash"></i> Cash</label>
-
-                        <input type="radio" class="btn-check" name="paymentMethod" id="payCard" value="Card">
+                        <input type="radio" class="btn-check" name="paymentMethod" id="payCard" value="Card" onchange="switchPaymentPanel('Card')">
                         <label class="btn btn-outline-secondary" for="payCard"><i class="bi bi-credit-card"></i> Card</label>
 
-                        <input type="radio" class="btn-check" name="paymentMethod" id="payLater" value="Pay Later">
+                        <input type="radio" class="btn-check" name="paymentMethod" id="payCash" value="Cash" onchange="switchPaymentPanel('Cash')">
+                        <label class="btn btn-outline-secondary" for="payCash"><i class="bi bi-cash"></i> Cash</label>
+
+                        <input type="radio" class="btn-check" name="paymentMethod" id="payLater" value="Pay Later" onchange="switchPaymentPanel('Pay Later')">
                         <label class="btn btn-outline-secondary" for="payLater"><i class="bi bi-clock-history"></i> Credit</label>
+                    </div>
+                </div>
+
+                <!-- Dynamic Real-Time Payment Details Sub-Panels -->
+                <div id="paymentDetailsContainer" class="p-2 mb-3 bg-white rounded-3 border shadow-sm">
+                    <!-- 1. Real-Time Dynamic UPI / QR Code Panel -->
+                    <div id="panelUPI" class="payment-method-panel">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="small fw-bold text-dark"><i class="bi bi-qr-code-scan text-primary me-1"></i> Real-Time Dynamic UPI QR</span>
+                            <span class="badge bg-success-subtle text-success border border-success-subtle small" id="upiLiveStatus" style="font-size: 0.68rem;">
+                                <i class="bi bi-broadcast me-1"></i> Live Bill QR
+                            </span>
+                        </div>
+
+                        <div class="text-center py-2 bg-light rounded-3 border mb-2">
+                            <!-- Real-Time Generated QR Code Canvas -->
+                            <div class="position-relative d-inline-block p-2 bg-white rounded-3 shadow-sm border mb-1">
+                                <canvas id="upiQrCanvas" width="148" height="148" style="display:block; width:148px; height:148px;"></canvas>
+                                <div class="position-absolute top-50 start-50 translate-middle bg-white rounded-circle p-1 shadow-sm border" style="width:28px; height:28px; display:flex; align-items:center; justify-content:center;">
+                                    <i class="bi bi-lightning-charge-fill text-primary" style="font-size: 13px;"></i>
+                                </div>
+                            </div>
+                            <div class="small fw-bold text-dark mt-1 fs-6" id="qrAmountDisplay">₹0.00</div>
+                            <div class="text-muted" style="font-size: 0.70rem;">Scan with GPay, PhonePe, Paytm or Any UPI App</div>
+                        </div>
+
+                        <div class="row g-1 align-items-center mb-1">
+                            <div class="col-7">
+                                <label class="form-label text-muted mb-0" style="font-size: 0.65rem;">Merchant VPA / UPI ID</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="text" class="form-control form-control-sm font-monospace py-0" id="upiVpaInput" value="electrodesk@icici" readonly style="font-size: 0.72rem;">
+                                    <button class="btn btn-outline-secondary py-0" type="button" onclick="copyUpiVpa()" title="Copy UPI ID"><i class="bi bi-clipboard"></i></button>
+                                </div>
+                            </div>
+                            <div class="col-5">
+                                <label class="form-label text-muted mb-0" style="font-size: 0.65rem;">Customer UTR / Ref</label>
+                                <input type="text" class="form-control form-control-sm font-monospace py-0" id="upiUtrInput" placeholder="12-digit UTR" maxlength="20" style="font-size: 0.72rem;">
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center pt-1">
+                            <span class="text-muted font-monospace" style="font-size: 0.68rem;" id="upiTxnIdText">Txn: EDK-UPI-784910</span>
+                            <button type="button" class="btn btn-sm btn-outline-success py-0 px-2" style="font-size: 0.72rem;" onclick="simulateUpiConfirmation()">
+                                <i class="bi bi-check2-circle me-1"></i> Verify / Received
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 2. Interactive Card Payment Panel (Card Number in Card, Expiry, CVV) -->
+                    <div id="panelCard" class="payment-method-panel d-none">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="small fw-bold text-dark"><i class="bi bi-credit-card-2-front text-primary me-1"></i> Card Terminal Processing</span>
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle small" id="cardBrandBadge" style="font-size: 0.68rem;">
+                                <i class="bi bi-credit-card me-1"></i> RuPay / Visa / MC
+                            </span>
+                        </div>
+
+                        <!-- Stylized Virtual Card Mockup -->
+                        <div class="virtual-card-preview p-2 mb-2 rounded-3 text-white shadow-sm position-relative overflow-hidden" 
+                             style="background: linear-gradient(135deg, #091328 0%, #172554 50%, #0369a1 100%); border: 1px solid rgba(255,255,255,0.15);">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <div class="d-flex align-items-center gap-1">
+                                    <span class="badge bg-warning text-dark py-0 px-1 font-monospace" style="font-size: 0.60rem;">CHIP</span>
+                                    <i class="bi bi-wifi text-white-50" style="font-size: 0.75rem; transform: rotate(90deg);"></i>
+                                </div>
+                                <div class="fw-bold font-monospace text-uppercase" id="cardMockBrand" style="letter-spacing: 1px; font-size: 0.80rem;">RuPay</div>
+                            </div>
+
+                            <!-- Real-time Card Number inside the card -->
+                            <div class="font-monospace fw-bold text-center my-2" id="cardMockNumber" style="letter-spacing: 2.5px; font-size: 0.95rem; text-shadow: 0 1px 3px rgba(0,0,0,0.6);">
+                                •••• •••• •••• ••••
+                            </div>
+
+                            <div class="d-flex justify-content-between align-items-end pt-1" style="font-size: 0.68rem;">
+                                <div>
+                                    <span class="text-white-50 d-block" style="font-size: 0.55rem;">CARDHOLDER</span>
+                                    <span class="fw-semibold text-truncate d-inline-block text-uppercase" id="cardMockHolder" style="max-width: 140px;">VALUED CUSTOMER</span>
+                                </div>
+                                <div class="text-end">
+                                    <span class="text-white-50 d-block" style="font-size: 0.55rem;">EXPIRES</span>
+                                    <span class="fw-semibold font-monospace" id="cardMockExpiry">MM/YY</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card Input Form -->
+                        <div class="mb-1">
+                            <label class="form-label text-muted mb-0" style="font-size: 0.65rem;">Card Number *</label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text py-0"><i class="bi bi-credit-card text-muted"></i></span>
+                                <input type="text" class="form-control form-control-sm font-monospace py-0" id="cardNumberInput" placeholder="4532 8920 1284 4242" maxlength="19" oninput="formatCardNumber(this)" style="font-size: 0.78rem;">
+                                <button class="btn btn-outline-secondary py-0" type="button" onclick="autoFillDemoCard()" title="Autofill Test Card" style="font-size: 0.70rem;">Test</button>
+                            </div>
+                        </div>
+
+                        <div class="row g-1 mb-1">
+                            <div class="col-7">
+                                <label class="form-label text-muted mb-0" style="font-size: 0.65rem;">Cardholder Name</label>
+                                <input type="text" class="form-control form-control-sm text-uppercase py-0" id="cardHolderInput" placeholder="NAME ON CARD" oninput="updateCardMockHolder(this.value)" style="font-size: 0.72rem;">
+                            </div>
+                            <div class="col-3">
+                                <label class="form-label text-muted mb-0" style="font-size: 0.65rem;">Expiry</label>
+                                <input type="text" class="form-control form-control-sm font-monospace text-center py-0" id="cardExpiryInput" placeholder="MM/YY" maxlength="5" oninput="formatCardExpiry(this)" style="font-size: 0.72rem;">
+                            </div>
+                            <div class="col-2">
+                                <label class="form-label text-muted mb-0" style="font-size: 0.65rem;">CVV</label>
+                                <input type="password" class="form-control form-control-sm font-monospace text-center py-0" id="cardCvvInput" placeholder="•••" maxlength="4" style="font-size: 0.72rem;">
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center pt-1 border-top">
+                            <span class="text-muted font-monospace" style="font-size: 0.68rem;" id="cardAuthCodeDisplay">Auth: AUTH-829104</span>
+                            <span class="badge bg-success-subtle text-success border border-success-subtle py-0" style="font-size: 0.65rem;">
+                                <i class="bi bi-shield-check me-1"></i> POS Verified
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- 3. Cash Payment Panel with Change Calculator -->
+                    <div id="panelCash" class="payment-method-panel d-none">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="small fw-bold text-dark"><i class="bi bi-cash-stack text-success me-1"></i> Cash Counter Register</span>
+                            <span class="badge bg-light text-secondary border small" style="font-size: 0.68rem;">Direct Receipt</span>
+                        </div>
+                        <div class="row g-1 mb-1">
+                            <div class="col-6">
+                                <label class="form-label text-muted mb-0" style="font-size: 0.65rem;">Cash Received (₹)</label>
+                                <input type="number" class="form-control form-control-sm font-monospace text-end fw-bold py-0" id="cashReceivedInput" placeholder="0" min="0" oninput="calculateCashChange()" style="font-size: 0.85rem;">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label text-muted mb-0" style="font-size: 0.65rem;">Change Due (₹)</label>
+                                <div class="form-control form-control-sm font-monospace text-end fw-bold bg-light text-success py-0" id="cashChangeDisplay" style="font-size: 0.85rem;">₹0.00</div>
+                            </div>
+                        </div>
+                        <div class="d-flex gap-1 flex-wrap pt-1">
+                            <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size: 0.68rem;" onclick="setExactCash()">Exact Bill</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size: 0.68rem;" onclick="addCashDenom(100)">+ ₹100</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size: 0.68rem;" onclick="addCashDenom(500)">+ ₹500</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size: 0.68rem;" onclick="addCashDenom(2000)">+ ₹2,000</button>
+                        </div>
+                    </div>
+
+                    <!-- 4. Pay Later / Credit Ledger Panel -->
+                    <div id="panelPayLater" class="payment-method-panel d-none">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="small fw-bold text-dark"><i class="bi bi-clock-history text-warning me-1"></i> Customer Credit Ledger</span>
+                            <span class="badge bg-warning-subtle text-warning border border-warning-subtle small" style="font-size: 0.68rem;">Requires Customer</span>
+                        </div>
+                        <div class="p-1 bg-light rounded border text-secondary mb-1" style="font-size: 0.70rem;">
+                            <i class="bi bi-info-circle text-primary me-1"></i> Invoice marked as <strong>Pending</strong>. Customer dues ledger will be updated.
+                        </div>
+                        <div class="row g-1">
+                            <div class="col-6">
+                                <label class="form-label text-muted mb-0" style="font-size: 0.65rem;">Due Date</label>
+                                <input type="date" class="form-control form-control-sm py-0" id="creditDueDate" style="font-size: 0.72rem;">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label text-muted mb-0" style="font-size: 0.65rem;">Credit Terms</label>
+                                <select class="form-select form-select-sm py-0" id="creditTermsSelect" style="font-size: 0.72rem;">
+                                    <option value="Net 15">Net 15 Days</option>
+                                    <option value="Net 30" selected>Net 30 Days</option>
+                                    <option value="Net 45">Net 45 Days</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

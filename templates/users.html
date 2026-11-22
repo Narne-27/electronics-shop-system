@@ -175,11 +175,12 @@
             <table class="table table-bordered align-middle mb-0 perm-matrix-table">
                 <thead>
                     <tr>
-                        <th style="width: 36%;">Functional Module</th>
-                        <th class="text-center" style="width: 16%;">System Admin<br><small class="fw-normal text-white-50">(Ram)</small></th>
-                        <th class="text-center" style="width: 16%;">Shop Owner<br><small class="fw-normal text-white-50">(Suresh)</small></th>
-                        <th class="text-center" style="width: 16%;">Shop Manager<br><small class="fw-normal text-white-50">(Geetha)</small></th>
-                        <th class="text-center" style="width: 16%;">Sales Staff<br><small class="fw-normal text-white-50">(Sai)</small></th>
+                        <th style="width: 30%;">Functional Module</th>
+                        <th class="text-center" style="width: 14%;">System Admin<br><small class="fw-normal text-white-50">(Ram)</small></th>
+                        <th class="text-center" style="width: 14%;">Shop Owner<br><small class="fw-normal text-white-50">(Suresh)</small></th>
+                        <th class="text-center" style="width: 14%;">Shop Manager<br><small class="fw-normal text-white-50">(Geetha)</small></th>
+                        <th class="text-center" style="width: 14%;">Sales Staff<br><small class="fw-normal text-white-50">(Sai)</small></th>
+                        <th class="text-center" style="width: 14%;">Delivery Staff<br><small class="fw-normal text-white-50">(Dinesh)</small></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -217,6 +218,13 @@
                             <span class="perm-dash">&minus;</span>
                             {% endif %}
                         </td>
+                        <td class="text-center p-3">
+                            {% if row.delivery %}
+                            <span class="perm-check"><i class="bi bi-check-lg"></i></span>
+                            {% else %}
+                            <span class="perm-dash">&minus;</span>
+                            {% endif %}
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -247,6 +255,7 @@
                         <label class="form-label fw-semibold small">Role *</label>
                         <select name="role" class="form-select" required>
                             <option value="Sales Staff" selected>Sales Staff (POS, Billing, Customer CRM)</option>
+                            <option value="Delivery Staff">Delivery Staff (Dispatch & Order Fulfilment)</option>
                             <option value="Shop Manager">Shop Manager (Stock, Catalog, Reports)</option>
                             <option value="Shop Owner">Shop Owner (Strategic Financials & Audits)</option>
                             <option value="System Administrator">System Administrator (Full Control)</option>
