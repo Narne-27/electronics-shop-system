@@ -1,6 +1,6 @@
 /**
  * Electrodesk - Photorealistic 3D Exploded Circuit Board Intro Scene
- * Built strictly with Three.js BoxGeometry & CylinderGeometry.
+ * Built strictly with Three.js BoxGeometry, CylinderGeometry & ExtrudeGeometry (Bevels).
  * Scoped exclusively to the /login page.
  */
 
@@ -38,10 +38,9 @@
             return;
         }
 
-        // WebGL Fallback handling
         if (!isWebGLAvailable()) {
-            console.warn('WebGL is not supported in this browser. Falling back to gradient studio background.');
-            if (statusText) statusText.textContent = 'HARDWARE GRAPHICS ACCELERATION DISABLED';
+            console.warn('WebGL not supported. Displaying clean studio gradient.');
+            if (statusText) statusText.textContent = 'GRAPHICS ACCELERATION OFFLINE';
             return;
         }
 
@@ -74,11 +73,11 @@
 
         renderer.setSize(width, height);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-        renderer.setClearColor(0x000000, 0); // 100% transparent to blend with studio gradient
+        renderer.setClearColor(0x000000, 0); // 100% transparent canvas for studio gradient
 
-        // Tone Mapping & Color Management
+        // Tone Mapping & Exposure: ACESFilmicToneMapping, exposure ~0.9
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        renderer.toneMappingExposure = 1.15;
+        renderer.toneMappingExposure = 0.90;
 
         // Soft Shadows
         renderer.shadowMap.enabled = true;
@@ -90,61 +89,109 @@
             pmremGenerator.compileEquirectangularShader();
 
             const envScene = new THREE.Scene();
-            const envBox = new THREE.Mesh(
-                new THREE.BoxGeometry(20, 20, 20),
-                new THREE.MeshBasicMaterial({ color: 0x050814, side: THREE.BackSide })
-            );
-            envScene.add(envBox);
 
-            // Overhead soft white studio softbox
-            const softboxTop = new THREE.Mesh(
-                new THREE.PlaneGeometry(8, 8),
+            // Studio room interior box with grayscale roughness
+            const roomGeo = new THREE.BoxGeometry(24, 24, 24);
+            const roomMat = new THREE.MeshStandardMaterial({
+                color: 0x64748b,
+                roughness: 0.85,
+                metalness: 0.1,
+                side: THREE.BackSide
+            });
+            const room = new THREE.Mesh(roomGeo, roomMat);
+            envScene.add(room);
+
+            // Overhead softbox
+            const topSoftbox = new THREE.Mesh(
+                new THREE.PlaneGeometry(12, 12),
                 new THREE.MeshBasicMaterial({ color: 0xffffff })
             );
-            softboxTop.position.set(2, 8, 3);
-            softboxTop.lookAt(0, 0, 0);
-            envScene.add(softboxTop);
+            topSoftbox.position.set(0, 11.9, 0);
+            topSoftbox.rotation.x = Math.PI / 2;
+            envScene.add(topSoftbox);
 
-            // Cyan accent rim softbox
-            const softboxCyan = new THREE.Mesh(
-                new THREE.PlaneGeometry(6, 6),
+            // Key studio softbox
+            const keySoftbox = new THREE.Mesh(
+                new THREE.PlaneGeometry(10, 8),
+                new THREE.MeshBasicMaterial({ color: 0xf8fafc })
+            );
+            keySoftbox.position.set(7, 8, 7);
+            keySoftbox.lookAt(0, 0, 0);
+            envScene.add(keySoftbox);
+
+            // Cyan rim reflection panel
+            const cyanSoftbox = new THREE.Mesh(
+                new THREE.PlaneGeometry(8, 8),
                 new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
             );
-            softboxCyan.position.set(-6, 3, -5);
-            softboxCyan.lookAt(0, 0, 0);
-            envScene.add(softboxCyan);
+            cyanSoftbox.position.set(-8, 4, -7);
+            cyanSoftbox.lookAt(0, 0, 0);
+            envScene.add(cyanSoftbox);
 
-            // Warm copper floor reflection
-            const softboxWarm = new THREE.Mesh(
-                new THREE.PlaneGeometry(8, 4),
-                new THREE.MeshBasicMaterial({ color: 0xd97706 })
+            // Dark floor reflector
+            const floorReflector = new THREE.Mesh(
+                new THREE.PlaneGeometry(20, 20),
+                new THREE.MeshBasicMaterial({ color: 0x0b1329 })
             );
-            softboxWarm.position.set(0, -6, 2);
-            softboxWarm.lookAt(0, 0, 0);
-            envScene.add(softboxWarm);
+            floorReflector.position.set(0, -11.9, 0);
+            floorReflector.rotation.x = -Math.PI / 2;
+            envScene.add(floorReflector);
 
             const envTarget = pmremGenerator.fromScene(envScene, 0.04);
             scene.environment = envTarget.texture;
+            pmremGenerator.dispose();
         } catch (e) {
-            console.warn('Procedural PMREM environment generation bypassed:', e);
+            console.warn('RoomEnvironment PMREM generation bypassed:', e);
         }
 
-        // 3. Shadow-Catcher Floor
+        // 3. Grounding: ShadowMaterial Floor + Soft Cyan Radial Ground Glow
         const shadowFloor = new THREE.Mesh(
             new THREE.PlaneGeometry(12, 10),
-            new THREE.ShadowMaterial({ opacity: 0.45 })
+            new THREE.ShadowMaterial({ opacity: 0.40 })
         );
         shadowFloor.rotation.x = -Math.PI / 2;
         shadowFloor.position.y = -0.36;
         shadowFloor.receiveShadow = true;
         scene.add(shadowFloor);
 
-        // 4. Lighting Rig
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
+        // Procedural radial cyan glow texture for floor
+        function generateFloorGlowTexture() {
+            const glowCanvas = document.createElement('canvas');
+            glowCanvas.width = 256;
+            glowCanvas.height = 256;
+            const ctx = glowCanvas.getContext('2d');
+            const grad = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+            grad.addColorStop(0, 'rgba(34, 211, 238, 0.35)');
+            grad.addColorStop(0.35, 'rgba(34, 211, 238, 0.15)');
+            grad.addColorStop(0.70, 'rgba(56, 189, 248, 0.04)');
+            grad.addColorStop(1, 'rgba(11, 18, 36, 0)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 256, 256);
+            const tex = new THREE.CanvasTexture(glowCanvas);
+            return tex;
+        }
+
+        const floorGlowTex = generateFloorGlowTexture();
+        const floorGlowMesh = new THREE.Mesh(
+            new THREE.PlaneGeometry(5.4, 5.4),
+            new THREE.MeshBasicMaterial({
+                map: floorGlowTex,
+                transparent: true,
+                opacity: 0.22,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            })
+        );
+        floorGlowMesh.rotation.x = -Math.PI / 2;
+        floorGlowMesh.position.y = -0.355;
+        scene.add(floorGlowMesh);
+
+        // 4. Natural Lighting Rig (No overbright point lights on the PCB)
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.40);
         scene.add(ambientLight);
 
         // Directional Key Light with Soft Shadow
-        const keyLight = new THREE.DirectionalLight(0xffffff, 2.2);
+        const keyLight = new THREE.DirectionalLight(0xffffff, 1.85);
         keyLight.position.set(5.5, 9.0, 5.0);
         keyLight.castShadow = true;
         keyLight.shadow.mapSize.width = 1024;
@@ -156,270 +203,377 @@
         keyLight.shadow.camera.top = 3.8;
         keyLight.shadow.camera.bottom = -3.8;
         keyLight.shadow.bias = -0.0004;
-        keyLight.shadow.radius = 2.4;
+        keyLight.shadow.radius = 2.2;
         scene.add(keyLight);
 
-        // Cyan Rim Light (High specular edge definition)
-        const cyanRimLight = new THREE.DirectionalLight(0x22d3ee, 2.6);
+        // Cyan Rim Light (High Specular Edge Definition)
+        const cyanRimLight = new THREE.DirectionalLight(0x22d3ee, 2.3);
         cyanRimLight.position.set(-6.0, 3.8, -4.5);
         scene.add(cyanRimLight);
 
-        // Warm Copper Fill Light
-        const copperFillLight = new THREE.PointLight(0xf59e0b, 1.2, 14);
-        copperFillLight.position.set(2.0, -1.5, 2.0);
-        scene.add(copperFillLight);
+        // Subtle warm/neutral fill light from below
+        const fillLight = new THREE.DirectionalLight(0x94a3b8, 0.30);
+        fillLight.position.set(0, -4, 3);
+        scene.add(fillLight);
 
-        // Cyan Power-Pulse Traveling Light
-        const powerPulseLight = new THREE.PointLight(0x22d3ee, 0.0, 10);
-        powerPulseLight.position.set(0, 0.8, 0);
-        scene.add(powerPulseLight);
+        // 5. RoundedBoxGeometry Helper (Bevel ~0.02)
+        function createRoundedBox(w, h, d, bevel = 0.02) {
+            const b = Math.min(bevel, w * 0.2, h * 0.2, d * 0.2);
+            const shape = new THREE.Shape();
+            const hw = w / 2 - b;
+            const hh = h / 2 - b;
+            shape.moveTo(-hw, hh);
+            shape.lineTo(hw, hh);
+            shape.lineTo(hw, -hh);
+            shape.lineTo(-hw, -hh);
+            shape.closePath();
 
-        // 5. Procedural PCB Canvas Texture (Traces, Vias & Silkscreen)
-        function generateProceduralPcbTexture() {
-            const texCanvas = document.createElement('canvas');
-            texCanvas.width = 1024;
-            texCanvas.height = 1024;
-            const ctx = texCanvas.getContext('2d');
+            const extrudeSettings = {
+                depth: d - b * 2,
+                bevelEnabled: true,
+                bevelSegments: 2,
+                steps: 1,
+                bevelSize: b,
+                bevelThickness: b
+            };
+            const geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+            geo.center();
+            return geo;
+        }
 
-            // Deep Emerald Green Solder Mask Base
-            ctx.fillStyle = '#08482d';
-            ctx.fillRect(0, 0, 1024, 1024);
+        // 6. Procedural Textures: PCB Color Map + Bump Map
+        function generatePcbTextures() {
+            // Color Map Canvas
+            const cCanvas = document.createElement('canvas');
+            cCanvas.width = 1024;
+            cCanvas.height = 1024;
+            const cCtx = cCanvas.getContext('2d');
 
-            // Subtle PCB Fiber/Grid Weave Noise
-            ctx.fillStyle = 'rgba(10, 85, 52, 0.4)';
-            for (let i = 0; i < 1024; i += 8) {
-                ctx.fillRect(i, 0, 2, 1024);
-                ctx.fillRect(0, i, 1024, 2);
-            }
+            // Bump Map Canvas (Grayscale Height)
+            const bCanvas = document.createElement('canvas');
+            bCanvas.width = 1024;
+            bCanvas.height = 1024;
+            const bCtx = bCanvas.getContext('2d');
 
-            // Ground plane copper pour shapes
-            ctx.fillStyle = '#105e3b';
-            ctx.beginPath();
-            ctx.rect(60, 60, 904, 904);
-            ctx.fill();
+            // 1. Solder Mask Base: Deep Green #14532d
+            cCtx.fillStyle = '#14532d';
+            cCtx.fillRect(0, 0, 1024, 1024);
 
-            // Copper Circuit Traces (Metallic Gold / Copper lines with 45° bends)
-            ctx.strokeStyle = '#c68434';
-            ctx.lineWidth = 4;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
+            bCtx.fillStyle = '#000000'; // Base depth
+            bCtx.fillRect(0, 0, 1024, 1024);
 
-            const traces = [
-                // CPU to Memory bus lines
-                [[512, 512], [650, 512], [700, 420], [800, 420]],
-                [[512, 490], [640, 490], [680, 400], [800, 400]],
-                [[512, 534], [640, 534], [680, 600], [800, 600]],
-                [[512, 556], [650, 556], [700, 620], [800, 620]],
+            // Subtle copper ground pour pattern
+            cCtx.fillStyle = '#166534';
+            cCtx.fillRect(70, 70, 884, 884);
+            bCtx.fillStyle = '#222222';
+            bCtx.fillRect(70, 70, 884, 884);
+
+            // 2. Copper Circuit Traces (Tracks with 45° angled routing)
+            cCtx.strokeStyle = '#d97706';
+            cCtx.lineWidth = 4;
+            cCtx.lineCap = 'round';
+            cCtx.lineJoin = 'round';
+
+            bCtx.strokeStyle = '#777777'; // Raised trace relief
+            bCtx.lineWidth = 4;
+            bCtx.lineCap = 'round';
+            bCtx.lineJoin = 'round';
+
+            const tracePaths = [
+                // CPU to DRAM buses
+                [[512, 512], [650, 512], [700, 420], [820, 420]],
+                [[512, 490], [640, 490], [680, 400], [820, 400]],
+                [[512, 534], [640, 534], [680, 600], [820, 600]],
+                [[512, 556], [650, 556], [700, 620], [820, 620]],
                 // CPU to Ethernet & USB
-                [[480, 512], [320, 512], [260, 380], [160, 380]],
-                [[480, 490], [310, 490], [250, 360], [160, 360]],
-                [[480, 534], [310, 534], [250, 660], [160, 660]],
-                [[480, 556], [320, 556], [260, 680], [160, 680]],
+                [[480, 512], [320, 512], [260, 380], [150, 380]],
+                [[480, 490], [310, 490], [250, 360], [150, 360]],
+                [[480, 534], [310, 534], [250, 660], [150, 660]],
+                [[480, 556], [320, 556], [260, 680], [150, 680]],
                 // GPIO Header traces
                 [[512, 460], [512, 300], [600, 210], [780, 210]],
                 [[490, 460], [490, 290], [580, 190], [780, 190]],
                 [[534, 460], [534, 310], [620, 230], [780, 230]],
-                // Power distribution bus
-                [[250, 200], [350, 200], [420, 350], [420, 512]]
+                // Power distribution rails
+                [[250, 200], [350, 200], [420, 350], [420, 512]],
+                [[250, 800], [380, 800], [420, 680], [420, 512]]
             ];
 
-            traces.forEach(path => {
-                ctx.beginPath();
-                ctx.moveTo(path[0][0], path[0][1]);
+            tracePaths.forEach(path => {
+                cCtx.beginPath();
+                bCtx.beginPath();
+                cCtx.moveTo(path[0][0], path[0][1]);
+                bCtx.moveTo(path[0][0], path[0][1]);
                 for (let j = 1; j < path.length; j++) {
-                    ctx.lineTo(path[j][0], path[j][1]);
+                    cCtx.lineTo(path[j][0], path[j][1]);
+                    bCtx.lineTo(path[j][0], path[j][1]);
                 }
-                ctx.stroke();
+                cCtx.stroke();
+                bCtx.stroke();
             });
 
-            // Vias (Golden circular rings with dark hole centers)
+            // 3. Vias: Golden circular rings with black drill hole centers
             const vias = [
                 [700, 420], [680, 400], [700, 620], [680, 600],
                 [260, 380], [250, 360], [260, 680], [250, 660],
                 [600, 210], [580, 190], [620, 230], [420, 350],
                 [420, 700], [550, 720], [360, 750], [720, 750],
-                [180, 220], [200, 240], [840, 240], [820, 220]
+                [180, 220], [200, 240], [840, 240], [820, 220],
+                [400, 450], [620, 450], [400, 570], [620, 570]
             ];
 
             vias.forEach(v => {
-                ctx.fillStyle = '#eab308';
-                ctx.beginPath();
-                ctx.arc(v[0], v[1], 5, 0, Math.PI * 2);
-                ctx.fill();
+                cCtx.fillStyle = '#f59e0b';
+                cCtx.beginPath();
+                cCtx.arc(v[0], v[1], 5, 0, Math.PI * 2);
+                cCtx.fill();
 
-                ctx.fillStyle = '#051810';
-                ctx.beginPath();
-                ctx.arc(v[0], v[1], 2, 0, Math.PI * 2);
-                ctx.fill();
+                bCtx.fillStyle = '#aaaaaa';
+                bCtx.beginPath();
+                bCtx.arc(v[0], v[1], 5, 0, Math.PI * 2);
+                bCtx.fill();
+
+                cCtx.fillStyle = '#0a2215';
+                cCtx.beginPath();
+                cCtx.arc(v[0], v[1], 2, 0, Math.PI * 2);
+                cCtx.fill();
+
+                bCtx.fillStyle = '#000000';
+                bCtx.beginPath();
+                bCtx.arc(v[0], v[1], 2, 0, Math.PI * 2);
+                bCtx.fill();
             });
 
-            // Golden Surface Mount Contact Pads
-            ctx.fillStyle = '#f59e0b';
+            // 4. Surface Mount Pads (Gold metalness 1, roughness 0.25)
+            cCtx.fillStyle = '#fbbf24';
+            bCtx.fillStyle = '#bbbbbb';
             for (let x = 460; x <= 564; x += 16) {
-                ctx.fillRect(x, 440, 8, 12);
-                ctx.fillRect(x, 572, 8, 12);
+                cCtx.fillRect(x, 436, 8, 14);
+                cCtx.fillRect(x, 574, 8, 14);
+                bCtx.fillRect(x, 436, 8, 14);
+                bCtx.fillRect(x, 574, 8, 14);
             }
             for (let y = 460; y <= 564; y += 16) {
-                ctx.fillRect(440, y, 12, 8);
-                ctx.fillRect(572, y, 12, 8);
+                cCtx.fillRect(436, y, 14, 8);
+                cCtx.fillRect(574, y, 14, 8);
+                bCtx.fillRect(436, y, 14, 8);
+                bCtx.fillRect(574, y, 14, 8);
             }
 
-            // White Silkscreen Layer (Markings, Labels, Boundaries)
-            ctx.strokeStyle = '#f8fafc';
-            ctx.fillStyle = '#f8fafc';
-            ctx.lineWidth = 2.5;
+            // 5. White Silkscreen Layer (Crisp White Text & Outlines)
+            cCtx.fillStyle = '#ffffff';
+            cCtx.strokeStyle = '#ffffff';
+            cCtx.lineWidth = 2.5;
+
+            bCtx.fillStyle = '#ffffff'; // Silkscreen sits highest on the PCB
+            bCtx.strokeStyle = '#ffffff';
+            bCtx.lineWidth = 2.5;
 
             // SoC Component Outline
-            ctx.strokeRect(440, 440, 144, 144);
+            cCtx.strokeRect(436, 436, 152, 152);
+            bCtx.strokeRect(436, 436, 152, 152);
 
             // Memory Outlines
-            ctx.strokeRect(710, 360, 120, 150);
-            ctx.strokeRect(710, 540, 120, 150);
+            cCtx.strokeRect(710, 360, 120, 150);
+            cCtx.strokeRect(710, 540, 120, 150);
+            bCtx.strokeRect(710, 360, 120, 150);
+            bCtx.strokeRect(710, 540, 120, 150);
 
             // GPIO Header Outline
-            ctx.strokeRect(580, 150, 260, 60);
-
-            // Corner Clearances
-            ctx.beginPath();
-            ctx.arc(90, 90, 32, 0, Math.PI * 2);
-            ctx.arc(934, 90, 32, 0, Math.PI * 2);
-            ctx.arc(90, 934, 32, 0, Math.PI * 2);
-            ctx.arc(934, 934, 32, 0, Math.PI * 2);
-            ctx.stroke();
+            cCtx.strokeRect(580, 150, 260, 60);
+            bCtx.strokeRect(580, 150, 260, 60);
 
             // Silkscreen Typography
-            ctx.font = 'bold 20px monospace';
-            ctx.fillText('ELECTRODESK SBC-V2', 120, 140);
-            ctx.font = '14px monospace';
-            ctx.fillText('REV 2.4 // 64-BIT ARM', 120, 168);
-            ctx.fillText('U1 SoC', 480, 430);
-            ctx.fillText('U2 DRAM', 730, 350);
-            ctx.fillText('U3 FLASH', 730, 715);
-            ctx.fillText('USB 3.0', 100, 780);
-            ctx.fillText('GbE LAN', 100, 310);
-            ctx.fillText('GPIO 40-PIN', 640, 140);
-            ctx.fillText('PIN 1', 580, 140);
+            cCtx.font = 'bold 20px monospace';
+            cCtx.fillText('ELECTRODESK SBC-V2', 120, 135);
+            cCtx.font = '13px monospace';
+            cCtx.fillText('MODEL 4B // 64-BIT OCTA-CORE', 120, 160);
+            cCtx.fillText('REV 3.1 // 2026', 120, 180);
+            cCtx.fillText('U1 SoC', 485, 426);
+            cCtx.fillText('U2 DRAM', 730, 350);
+            cCtx.fillText('U3 FLASH', 730, 715);
+            cCtx.fillText('USB 3.0', 100, 780);
+            cCtx.fillText('GbE LAN', 100, 310);
+            cCtx.fillText('GPIO 40-PIN', 640, 140);
+            cCtx.fillText('PIN 1', 580, 140);
 
-            // Cyan Cyber Accents in Silkscreen
-            ctx.strokeStyle = '#22d3ee';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(432, 432, 160, 160);
+            bCtx.font = 'bold 20px monospace';
+            bCtx.fillText('ELECTRODESK SBC-V2', 120, 135);
+            bCtx.font = '13px monospace';
+            bCtx.fillText('MODEL 4B // 64-BIT OCTA-CORE', 120, 160);
+            bCtx.fillText('REV 3.1 // 2026', 120, 180);
+            bCtx.fillText('U1 SoC', 485, 426);
+            bCtx.fillText('U2 DRAM', 730, 350);
+            bCtx.fillText('U3 FLASH', 730, 715);
+            bCtx.fillText('USB 3.0', 100, 780);
+            bCtx.fillText('GbE LAN', 100, 310);
+            bCtx.fillText('GPIO 40-PIN', 640, 140);
+            bCtx.fillText('PIN 1', 580, 140);
 
-            const texture = new THREE.CanvasTexture(texCanvas);
-            texture.generateMipmaps = true;
-            texture.minFilter = THREE.LinearMipmapLinearFilter;
-            return texture;
+            const cTex = new THREE.CanvasTexture(cCanvas);
+            cTex.generateMipmaps = true;
+            cTex.anisotropy = 4;
+
+            const bTex = new THREE.CanvasTexture(bCanvas);
+            bTex.generateMipmaps = true;
+            bTex.anisotropy = 4;
+
+            return { colorMap: cTex, bumpMap: bTex };
         }
 
-        const pcbTexture = generateProceduralPcbTexture();
+        const { colorMap: pcbColorMap, bumpMap: pcbBumpMap } = generatePcbTextures();
 
-        // 6. PBR Material Library
+        // 7. Chip Laser-Engraved Procedural Textures
+        function generateChipMarkingTexture(line1, line2, line3) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+
+            // Near-black IC package body #15181c
+            ctx.fillStyle = '#15181c';
+            ctx.fillRect(0, 0, 512, 512);
+
+            // Laser-engraved silver/gray typography
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = 'bold 36px monospace';
+            ctx.fillText(line1, 60, 180);
+            ctx.font = '24px monospace';
+            ctx.fillStyle = '#64748b';
+            ctx.fillText(line2, 60, 240);
+            ctx.fillText(line3, 60, 280);
+
+            // Pin 1 laser-etched dot
+            ctx.fillStyle = '#475569';
+            ctx.beginPath();
+            ctx.arc(60, 60, 14, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 2D DataMatrix code in corner
+            ctx.fillStyle = '#94a3b8';
+            for (let r = 0; r < 6; r++) {
+                for (let c = 0; c < 6; c++) {
+                    if ((r + c) % 2 === 0 || (r === 0 && c === 5) || (r === 5 && c === 0)) {
+                        ctx.fillRect(360 + c * 14, 60 + r * 14, 11, 11);
+                    }
+                }
+            }
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.generateMipmaps = true;
+            return tex;
+        }
+
+        const cpuMarkingTex = generateChipMarkingTexture('ELECTRODESK', 'EDK-9900PRO // 64-BIT', 'ARM CORTEX-A78 // 2.8GHz');
+        const ramMarkingTex = generateChipMarkingTexture('ELECTRODESK', 'DRAM LPDDR5X 16GB', '8533 Mbps // SEC-2440');
+
+        // 8. PBR Material Library
         const materials = {
             standoffBlack: new THREE.MeshStandardMaterial({
                 color: 0x18181b,
-                metalness: 0.78,
-                roughness: 0.35
+                metalness: 0.82,
+                roughness: 0.32
             }),
             basePlate: new THREE.MeshStandardMaterial({
                 color: 0xd8dee9,
-                metalness: 0.12,
+                metalness: 0.10,
                 roughness: 0.65
             }),
             copperTrace: new THREE.MeshStandardMaterial({
                 color: 0xe08238,
-                metalness: 0.95,
-                roughness: 0.20
+                metalness: 1.0,
+                roughness: 0.25
             }),
             goldPad: new THREE.MeshStandardMaterial({
                 color: 0xf59e0b,
-                metalness: 0.98,
-                roughness: 0.18
+                metalness: 1.0,
+                roughness: 0.25
             }),
+            // Deep Green #14532d, MeshPhysicalMaterial roughness 0.45, clearcoat 0.70
             pcbGreenClearcoat: new THREE.MeshPhysicalMaterial({
-                map: pcbTexture,
-                color: 0xffffff,
-                roughness: 0.32,
-                metalness: 0.15,
-                clearcoat: 0.75,
+                color: 0x14532d,
+                map: pcbColorMap,
+                bumpMap: pcbBumpMap,
+                bumpScale: 0.015,
+                roughness: 0.45,
+                metalness: 0.0,
+                clearcoat: 0.70,
                 clearcoatRoughness: 0.12
             }),
+            // Chips near-black #15181c with canvas-engraved markings
+            chipCpu: new THREE.MeshStandardMaterial({
+                color: 0x15181c,
+                map: cpuMarkingTex,
+                metalness: 0.05,
+                roughness: 0.70
+            }),
+            chipRam: new THREE.MeshStandardMaterial({
+                color: 0x15181c,
+                map: ramMarkingTex,
+                metalness: 0.05,
+                roughness: 0.70
+            }),
             chipMatte: new THREE.MeshStandardMaterial({
-                color: 0x18181b,
-                metalness: 0.18,
-                roughness: 0.75
+                color: 0x15181c,
+                metalness: 0.05,
+                roughness: 0.70
             }),
-            chipHeatSpreader: new THREE.MeshStandardMaterial({
-                color: 0x94a3b8,
-                metalness: 0.88,
-                roughness: 0.22
-            }),
+            // Aluminum heatsink with 14 fins
             heatsinkAluminum: new THREE.MeshStandardMaterial({
                 color: 0xd1d5db,
                 metalness: 0.92,
-                roughness: 0.24
+                roughness: 0.25
             }),
-            portBrushedMetal: new THREE.MeshStandardMaterial({
-                color: 0xe2e8f0,
-                metalness: 0.94,
-                roughness: 0.22
+            // Brushed steel ports (metalness 1, roughness 0.35)
+            portBrushedSteel: new THREE.MeshStandardMaterial({
+                color: 0xcbd5e1,
+                metalness: 1.0,
+                roughness: 0.35
             }),
             portTongueBlue: new THREE.MeshStandardMaterial({
-                color: 0x0284c7,
+                color: 0x0284c7, // USB 3.0 Blue
                 roughness: 0.45
             }),
             pinGold: new THREE.MeshStandardMaterial({
                 color: 0xf59e0b,
-                metalness: 0.98,
-                roughness: 0.18
+                metalness: 1.0,
+                roughness: 0.25
             }),
             headerBaseBlack: new THREE.MeshStandardMaterial({
-                color: 0x18181b,
+                color: 0x15181c,
                 roughness: 0.85
-            }),
-            smdResistor: new THREE.MeshStandardMaterial({
-                color: 0x262626,
-                metalness: 0.5,
-                roughness: 0.4
             }),
             smdCapacitor: new THREE.MeshStandardMaterial({
                 color: 0x854d0e,
                 metalness: 0.65,
-                roughness: 0.3
+                roughness: 0.30
             }),
             screwSteel: new THREE.MeshStandardMaterial({
                 color: 0xcfd8dc,
                 metalness: 0.95,
-                roughness: 0.15
+                roughness: 0.18
             }),
             ledCyan: new THREE.MeshStandardMaterial({
                 color: 0x22d3ee,
                 emissive: 0x22d3ee,
-                emissiveIntensity: 1.2,
-                roughness: 0.2
+                emissiveIntensity: 0.85,
+                roughness: 0.25
             }),
             ledAmber: new THREE.MeshStandardMaterial({
                 color: 0xfbbf24,
                 emissive: 0xd97706,
-                emissiveIntensity: 0.8,
-                roughness: 0.2
-            }),
-            ledGreen: new THREE.MeshStandardMaterial({
-                color: 0x10b981,
-                emissive: 0x059669,
-                emissiveIntensity: 0.9,
-                roughness: 0.2
+                emissiveIntensity: 0.60,
+                roughness: 0.25
             })
         };
 
-        const pulsingLeds = [materials.ledCyan];
-
-        // 7. Root Board Group
+        // 9. Root Board Group
         const boardRoot = new THREE.Group();
         boardRoot.rotation.x = 0.22;
         boardRoot.rotation.y = -0.48;
         scene.add(boardRoot);
 
-        // Staggered Layer System for Bottom-to-Top Animation
+        // Staggered Layer System for Bottom-to-Top Assembly
         const layers = [];
 
         function addLayer(group, explodedY, assembledY, startFrac, endFrac, options = {}) {
@@ -445,11 +599,11 @@
             { x:  1.85, z:  1.22 }
         ];
 
-        // --- LAYER 1 (Bottom): 4 Black Standoff Feet ---
+        // --- LAYER 1: Four Black Standoff Feet ---
         const standoffsGroup = new THREE.Group();
         cornerPositions.forEach(pos => {
             const foot = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.14, 0.14, 0.32, 20),
+                new THREE.CylinderGeometry(0.14, 0.14, 0.32, 24),
                 materials.standoffBlack
             );
             foot.position.set(pos.x, 0, pos.z);
@@ -459,15 +613,16 @@
         });
         addLayer(standoffsGroup, -1.8, -0.16, 0.00, 0.50);
 
-        // --- LAYER 2: Pale Base Sheet ---
+        // --- LAYER 2: Pale Base Substrate Sheet (RoundedBox with 0.02 bevel) ---
         const baseSheetGroup = new THREE.Group();
         const baseSheet = new THREE.Mesh(
-            new THREE.BoxGeometry(4.2, 0.04, 2.8),
+            createRoundedBox(4.2, 0.04, 2.8, 0.02),
             materials.basePlate
         );
         baseSheet.castShadow = true;
         baseSheet.receiveShadow = true;
         baseSheetGroup.add(baseSheet);
+
         cornerPositions.forEach(pos => {
             const pad = new THREE.Mesh(
                 new THREE.CylinderGeometry(0.20, 0.20, 0.045, 16),
@@ -481,7 +636,7 @@
         // --- LAYER 3: Copper Traces & Ground Plane ---
         const copperLayerGroup = new THREE.Group();
         const socPad = new THREE.Mesh(
-            new THREE.BoxGeometry(1.2, 0.015, 1.2),
+            createRoundedBox(1.2, 0.015, 1.2, 0.01),
             materials.copperTrace
         );
         copperLayerGroup.add(socPad);
@@ -506,10 +661,10 @@
         });
         addLayer(copperLayerGroup, 0.35, 0.02, 0.18, 0.72);
 
-        // --- LAYER 4: Green Solder-Mask PCB with Clearcoat ---
+        // --- LAYER 4: Deep Green #14532d PCB (MeshPhysicalMaterial with Clearcoat & BumpMap) ---
         const pcbGroup = new THREE.Group();
         const pcbBoard = new THREE.Mesh(
-            new THREE.BoxGeometry(4.2, 0.06, 2.8),
+            createRoundedBox(4.2, 0.06, 2.8, 0.02),
             materials.pcbGreenClearcoat
         );
         pcbBoard.castShadow = true;
@@ -517,9 +672,9 @@
         pcbGroup.add(pcbBoard);
         addLayer(pcbGroup, 1.4, 0.06, 0.26, 0.80);
 
-        // --- LAYER 5: InstancedMesh for 48 SMD Components ---
-        const smdCount = 48;
-        const smdGeo = new THREE.BoxGeometry(0.12, 0.05, 0.07);
+        // --- LAYER 5: 60 Tiny SMD Resistors & Capacitors (InstancedMesh) ---
+        const smdCount = 60;
+        const smdGeo = createRoundedBox(0.12, 0.05, 0.07, 0.01);
         const smdInstanced = new THREE.InstancedMesh(smdGeo, materials.smdCapacitor, smdCount);
         smdInstanced.castShadow = true;
         smdInstanced.receiveShadow = true;
@@ -527,30 +682,30 @@
         const dummy = new THREE.Object3D();
         let idx = 0;
 
-        // Decoupling array around CPU
-        for (let x = -0.7; x <= 0.7; x += 0.28) {
-            dummy.position.set(x, 0.09, -0.65);
+        // Decoupling bypass ring around CPU
+        for (let x = -0.7; x <= 0.7; x += 0.22) {
+            dummy.position.set(x, 0.09, -0.68);
             dummy.rotation.y = 0;
             dummy.updateMatrix();
             smdInstanced.setMatrixAt(idx++, dummy.matrix);
 
-            dummy.position.set(x, 0.09, 0.65);
+            dummy.position.set(x, 0.09, 0.68);
             dummy.rotation.y = 0;
             dummy.updateMatrix();
             smdInstanced.setMatrixAt(idx++, dummy.matrix);
         }
 
-        // Filtering capacitors around RAM
-        for (let z = -0.7; z <= 0.7; z += 0.22) {
-            dummy.position.set(1.25, 0.09, z);
+        // Filtering capacitors around DRAM
+        for (let z = -0.75; z <= 0.75; z += 0.18) {
+            dummy.position.set(1.24, 0.09, z);
             dummy.rotation.y = Math.PI / 2;
             dummy.updateMatrix();
             smdInstanced.setMatrixAt(idx++, dummy.matrix);
         }
 
-        // Power rail SMD bank near USB/Ethernet
-        for (let z = -0.2; z <= 0.5; z += 0.18) {
-            dummy.position.set(-1.1, 0.09, z);
+        // Power rail bank near USB/Ethernet
+        for (let z = -0.3; z <= 0.55; z += 0.15) {
+            dummy.position.set(-1.12, 0.09, z);
             dummy.rotation.y = 0;
             dummy.updateMatrix();
             smdInstanced.setMatrixAt(idx++, dummy.matrix);
@@ -561,9 +716,9 @@
             smdInstanced.setMatrixAt(idx++, dummy.matrix);
         }
 
-        // Fill remaining instances across board
+        // Fill remaining instances across voltage regulators
         while (idx < smdCount) {
-            dummy.position.set(-0.4 + (idx % 4) * 0.2, 0.09, -0.85);
+            dummy.position.set(-0.45 + (idx % 5) * 0.18, 0.09, -0.88);
             dummy.rotation.y = 0;
             dummy.updateMatrix();
             smdInstanced.setMatrixAt(idx++, dummy.matrix);
@@ -574,34 +729,38 @@
         smdGroup.add(smdInstanced);
         addLayer(smdGroup, 2.5, 0.03, 0.34, 0.86);
 
-        // --- LAYER 6: IC Chips, Stacked Ports & Pin Header ---
+        // --- LAYER 6: IC Chips (Canvas-Engraved), Brushed Steel Ports & Pin Header ---
         const compGroup = new THREE.Group();
 
-        // Central SoC Processor
-        const cpuPkg = new THREE.Mesh(new THREE.BoxGeometry(1.02, 0.10, 1.02), materials.chipMatte);
+        // Central SoC (Near-Black #15181c with Laser-Engraved Markings)
+        const cpuPkg = new THREE.Mesh(
+            createRoundedBox(1.02, 0.10, 1.02, 0.02),
+            materials.chipCpu
+        );
         cpuPkg.castShadow = true;
         cpuPkg.receiveShadow = true;
         compGroup.add(cpuPkg);
-
-        const cpuSpreader = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.03, 0.86), materials.chipHeatSpreader);
-        cpuSpreader.position.set(0, 0.055, 0);
-        cpuSpreader.castShadow = true;
-        compGroup.add(cpuSpreader);
 
         const cpuStatusLed = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.04, 0.08), materials.ledCyan);
         cpuStatusLed.position.set(0.34, 0.065, 0.34);
         compGroup.add(cpuStatusLed);
 
-        // RAM Chips (2 Units)
+        // DRAM Memory ICs (Laser-Engraved)
         [-0.42, 0.42].forEach(z => {
-            const ram = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.08, 0.74), materials.chipMatte);
+            const ram = new THREE.Mesh(
+                createRoundedBox(0.55, 0.08, 0.74, 0.02),
+                materials.chipRam
+            );
             ram.position.set(0.85, 0, z);
             ram.castShadow = true;
             compGroup.add(ram);
         });
 
-        // Stacked Dual USB 3.0 Type-A Metal Block
-        const usbBlock = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.54, 0.76), materials.portBrushedMetal);
+        // Stacked Dual USB 3.0 Housing (Brushed Steel with Blue USB3 Tongues)
+        const usbBlock = new THREE.Mesh(
+            createRoundedBox(0.68, 0.54, 0.76, 0.02),
+            materials.portBrushedSteel
+        );
         usbBlock.castShadow = true;
         usbBlock.receiveShadow = true;
 
@@ -613,8 +772,11 @@
         usbBlock.position.set(-1.62, 0.20, 0.85);
         compGroup.add(usbBlock);
 
-        // RJ-45 Gigabit Ethernet Metal Block with Status LEDs
-        const ethBlock = new THREE.Mesh(new THREE.BoxGeometry(0.74, 0.58, 0.82), materials.portBrushedMetal);
+        // RJ-45 Gigabit Ethernet Housing (Brushed Steel) with Status LEDs
+        const ethBlock = new THREE.Mesh(
+            createRoundedBox(0.74, 0.58, 0.82, 0.02),
+            materials.portBrushedSteel
+        );
         ethBlock.castShadow = true;
         ethBlock.receiveShadow = true;
 
@@ -628,21 +790,27 @@
         ethBlock.position.set(-1.62, 0.22, -0.55);
         compGroup.add(ethBlock);
 
-        // HDMI Output Port
-        const hdmiPort = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.22, 0.38), materials.portBrushedMetal);
+        // HDMI Output Port (Brushed Steel)
+        const hdmiPort = new THREE.Mesh(
+            createRoundedBox(0.55, 0.22, 0.38, 0.02),
+            materials.portBrushedSteel
+        );
         hdmiPort.position.set(0.35, 0.06, -1.25);
         hdmiPort.castShadow = true;
         compGroup.add(hdmiPort);
 
-        // 40-Pin GPIO Header Strip (Dual-row gold pins on black insulator)
-        const gpioBase = new THREE.Mesh(new THREE.BoxGeometry(1.68, 0.12, 0.24), materials.headerBaseBlack);
+        // 40-Pin GPIO Header Strip (Dual-Row Gold Pins: Metalness 1, Roughness 0.25)
+        const gpioBase = new THREE.Mesh(
+            createRoundedBox(1.68, 0.12, 0.24, 0.01),
+            materials.headerBaseBlack
+        );
         gpioBase.position.set(0.65, 0.06, 1.15);
         gpioBase.castShadow = true;
         compGroup.add(gpioBase);
 
         for (let x = -0.72; x <= 0.72; x += 0.18) {
             [-0.06, 0.06].forEach(z => {
-                const pin = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, 0.38, 8), materials.pinGold);
+                const pin = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, 0.38, 12), materials.pinGold);
                 pin.position.set(0.65 + x, 0.25, 1.15 + z);
                 pin.castShadow = true;
                 compGroup.add(pin);
@@ -651,17 +819,26 @@
 
         addLayer(compGroup, 2.9, 0.14, 0.40, 0.92);
 
-        // --- LAYER 7: Extruded Finned Aluminum Heatsink ---
+        // --- LAYER 7: Extruded Aluminum Heatsink with 14 Thin Fins ---
         const heatsinkGroup = new THREE.Group();
-        const hsBase = new THREE.Mesh(new THREE.BoxGeometry(1.08, 0.08, 1.08), materials.heatsinkAluminum);
+        const hsBase = new THREE.Mesh(
+            createRoundedBox(1.08, 0.06, 1.08, 0.015),
+            materials.heatsinkAluminum
+        );
         hsBase.castShadow = true;
         hsBase.receiveShadow = true;
         heatsinkGroup.add(hsBase);
 
-        // 6 Vertical extruded cooling fins
-        for (let f = -0.42; f <= 0.42; f += 0.168) {
-            const fin = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.36, 1.06), materials.heatsinkAluminum);
-            fin.position.set(f, 0.21, 0);
+        // 14 thin extruded cooling fins (aluminum metalness 0.92, roughness 0.25)
+        const finCount = 14;
+        const finSpacing = 0.96 / (finCount - 1);
+        for (let i = 0; i < finCount; i++) {
+            const fX = -0.48 + i * finSpacing;
+            const fin = new THREE.Mesh(
+                new THREE.BoxGeometry(0.022, 0.38, 1.04),
+                materials.heatsinkAluminum
+            );
+            fin.position.set(fX, 0.22, 0);
             fin.castShadow = true;
             fin.receiveShadow = true;
             heatsinkGroup.add(fin);
@@ -702,7 +879,7 @@
             });
         });
 
-        // 8. Animation State & Timing
+        // 10. Animation & Lifecycle
         const START_DELAY_MS = 800;    // ~0.8s exploded float
         const ANIM_DURATION_MS = 3000; // ~3.0s assembly duration
         const startTime = performance.now();
@@ -716,7 +893,7 @@
             return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
         }
 
-        // Mouse Parallax Handling
+        // Parallax Tracking
         const mouseTarget = { x: 0, y: 0 };
         const mouseCurrent = { x: 0, y: 0 };
 
@@ -728,7 +905,6 @@
         }
         window.addEventListener('mousemove', onMouseMove, { passive: true });
 
-        // Responsive Resizing
         function onWindowResize() {
             if (!container || !renderer || !camera) return;
             const newW = Math.max(container.clientWidth || 0, 360);
@@ -743,17 +919,14 @@
         }
         window.addEventListener('resize', onWindowResize);
 
-        // Pause Rendering When Tab Is Hidden (Performance)
         document.addEventListener('visibilitychange', () => {
             isRunning = !document.hidden;
             if (isRunning) requestAnimationFrame(renderLoop);
         });
 
-        // Main Render Loop
         function renderLoop(now) {
             if (!isRunning) return;
 
-            // Dynamically detect container resize
             if (container && container.clientWidth > 0 && container.clientHeight > 0) {
                 if (Math.abs(container.clientWidth - width) > 8 || Math.abs(container.clientHeight - height) > 8) {
                     onWindowResize();
@@ -762,7 +935,7 @@
 
             const elapsed = now - startTime;
 
-            // Step 1: Bottom-to-Top Staggered Assembly
+            // Staggered Bottom-to-Top Assembly
             if (!prefersReducedMotion) {
                 if (elapsed < START_DELAY_MS) {
                     if (statusText) statusText.textContent = 'EXPLODED VIEW // STANDBY';
@@ -796,30 +969,24 @@
                 }
             }
 
-            // Step 2 & 3: Post-Assembly Power-On Pulse & Idle Motion
+            // Post-Assembly Subtle LED Blink & Idle Motion
             if (isAssembled) {
                 const idleTime = (now - assemblyFinishTime) * 0.001;
 
-                // Power-On Cyan Pulse along traces right after assembly
+                // Status text update right after assembly
                 if (idleTime < 1.6) {
                     const pulseT = idleTime / 1.6;
-                    powerPulseLight.intensity = Math.sin(pulseT * Math.PI) * 3.5;
-                    materials.ledCyan.emissiveIntensity = 1.0 + Math.sin(pulseT * Math.PI * 4) * 2.5;
-                    materials.ledAmber.emissiveIntensity = 0.5 + Math.cos(pulseT * Math.PI * 4) * 1.5;
+                    materials.ledCyan.emissiveIntensity = 0.85 + Math.sin(pulseT * Math.PI * 4) * 1.5;
+                    materials.ledAmber.emissiveIntensity = 0.5 + Math.cos(pulseT * Math.PI * 4) * 1.2;
                     if (statusText && idleTime > 0.8) {
                         statusText.textContent = 'ELECTRODESK SBC ONLINE // ALL SYSTEMS NOMINAL';
                     }
                 } else if (!isPoweringOn) {
-                    // Regular gentle pulse
-                    const pulse = 0.75 + 0.55 * Math.sin(idleTime * 3.2);
-                    pulsingLeds.forEach(mat => {
-                        mat.emissiveIntensity = pulse;
-                    });
-                    powerPulseLight.intensity = 0.5 + 0.45 * Math.sin(idleTime * 3.2);
+                    materials.ledCyan.emissiveIntensity = 0.70 + 0.35 * Math.sin(idleTime * 3.0);
                 }
 
-                // Smooth idle floating & gentle sway
-                boardRoot.position.y = Math.sin(idleTime * 1.15) * 0.08;
+                // Smooth idle float, gentle sway & mouse parallax
+                boardRoot.position.y = Math.sin(idleTime * 1.15) * 0.07;
 
                 mouseCurrent.x += (mouseTarget.x - mouseCurrent.x) * 0.045;
                 mouseCurrent.y += (mouseTarget.y - mouseCurrent.y) * 0.045;
@@ -834,7 +1001,7 @@
 
         requestAnimationFrame(renderLoop);
 
-        // 9. Login Submit Power-On Flash
+        // 11. Login Submit Power-On Flash
         window.triggerBoardPowerOn = function (callback) {
             if (isPoweringOn) {
                 if (callback) callback();
@@ -847,12 +1014,8 @@
             const overlay = document.getElementById('login-poweron-overlay');
             if (overlay) overlay.classList.add('login-poweron-active');
 
-            pulsingLeds.forEach(mat => {
-                mat.emissiveIntensity = 5.0;
-                mat.emissive.setHex(0x38bdf8);
-            });
-            powerPulseLight.intensity = 5.8;
-            powerPulseLight.color.setHex(0x38bdf8);
+            materials.ledCyan.emissiveIntensity = 4.5;
+            materials.ledCyan.emissive.setHex(0x38bdf8);
 
             camera.position.z -= 0.35;
             camera.position.y += 0.15;
@@ -862,7 +1025,7 @@
             }, 440);
         };
 
-        // 10. Disposal on Unload (Performance)
+        // 12. Resource Disposal on Unload (Performance)
         function disposeScene() {
             isRunning = false;
             window.removeEventListener('mousemove', onMouseMove);
@@ -879,7 +1042,11 @@
                 }
             });
 
-            if (pcbTexture) pcbTexture.dispose();
+            if (pcbColorMap) pcbColorMap.dispose();
+            if (pcbBumpMap) pcbBumpMap.dispose();
+            if (cpuMarkingTex) cpuMarkingTex.dispose();
+            if (ramMarkingTex) ramMarkingTex.dispose();
+            if (floorGlowTex) floorGlowTex.dispose();
 
             if (renderer) {
                 renderer.dispose();
