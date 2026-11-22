@@ -448,7 +448,9 @@ def inject_global_context():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    if 'user_id' in session:
+    if request.args.get('logout') or request.args.get('force'):
+        session.clear()
+    elif 'user_id' in session:
         return redirect(url_for('mirror_hall_hub'))
 
     if request.method == 'POST':
