@@ -4,6 +4,16 @@
 
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/login-scene.css') }}">
+<script>
+    document.documentElement.classList.add('login-page');
+    if (document.body) {
+        document.body.classList.add('login-page');
+    } else {
+        document.addEventListener('DOMContentLoaded', function() {
+            document.body.classList.add('login-page');
+        });
+    }
+</script>
 {% endblock %}
 
 {% block content %}
@@ -37,7 +47,7 @@
                             <label class="form-label fw-semibold text-secondary small">Username</label>
                             <div class="input-group">
                                 <span class="input-group-text bg-light border-end-0"><i class="bi bi-person text-muted"></i></span>
-                                <input type="text" name="username" id="usernameInput" class="form-control" placeholder="Enter username (e.g. admin, geetha, sai, suresh)" required autofocus>
+                                <input type="text" name="username" id="usernameInput" class="form-control" placeholder="Enter username" required autofocus>
                             </div>
                         </div>
                         <div class="mb-4">

@@ -1,5 +1,5 @@
 /**
- * Electrodesk - 3D Exploded Circuit Board Intro Scene
+ * Electrodesk - Photorealistic 3D Exploded Circuit Board Intro Scene
  * Built strictly with Three.js BoxGeometry & CylinderGeometry.
  * Scoped exclusively to the /login page.
  */
@@ -9,11 +9,22 @@
 
     let sceneInitialized = false;
 
+    // WebGL Capability Check
+    function isWebGLAvailable() {
+        try {
+            const canvas = document.createElement('canvas');
+            return !!(window.WebGLRenderingContext && (
+                canvas.getContext('webgl') || canvas.getContext('experimental-webgl')
+            ));
+        } catch (e) {
+            return false;
+        }
+    }
+
     function initScene() {
         if (sceneInitialized) return;
 
         if (typeof THREE === 'undefined') {
-            // Retry if Three.js is still loading asynchronously
             setTimeout(initScene, 60);
             return;
         }
@@ -21,185 +32,412 @@
         const canvas = document.getElementById('login-board-canvas');
         const container = document.getElementById('login-canvas-container');
         const statusText = document.getElementById('scene-status-text');
+
         if (!canvas || !container) {
             setTimeout(initScene, 60);
             return;
         }
 
+        // WebGL Fallback handling
+        if (!isWebGLAvailable()) {
+            console.warn('WebGL is not supported in this browser. Falling back to gradient studio background.');
+            if (statusText) statusText.textContent = 'HARDWARE GRAPHICS ACCELERATION DISABLED';
+            return;
+        }
+
         sceneInitialized = true;
 
-        // Check user preference for reduced motion
         const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-        // Determine dimensions safely (minimum 320x300)
+        // Container Dimensions
         let width = Math.max(container.clientWidth || 0, 360);
         let height = Math.max(container.clientHeight || 0, 340);
 
-        // Scene, Camera, Renderer
+        // 1. Scene, Camera, Renderer
         const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(38, width / height, 0.1, 100);
-        camera.position.set(5.2, 4.5, 5.6);
-        camera.lookAt(0, 0.4, 0);
+        const camera = new THREE.PerspectiveCamera(36, width / height, 0.1, 100);
+        camera.position.set(5.0, 4.4, 5.5);
+        camera.lookAt(0, 0.35, 0);
 
-        const renderer = new THREE.WebGLRenderer({
-            canvas: canvas,
-            alpha: true,
-            antialias: true,
-            powerPreference: 'high-performance'
-        });
+        let renderer;
+        try {
+            renderer = new THREE.WebGLRenderer({
+                canvas: canvas,
+                alpha: true,
+                antialias: true,
+                powerPreference: 'high-performance'
+            });
+        } catch (err) {
+            console.warn('WebGLRenderer init failed:', err);
+            return;
+        }
+
         renderer.setSize(width, height);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-        renderer.setClearColor(0x000000, 0); // 100% transparent for background particles
+        renderer.setClearColor(0x000000, 0); // 100% transparent to blend with studio gradient
 
-        // Lighting Setup
-        const ambientLight = new THREE.AmbientLight(0xffffff, 1.4);
+        // Tone Mapping & Color Management
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.15;
+
+        // Soft Shadows
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+        // 2. Procedural RoomEnvironment for Photorealistic PBR Reflections
+        try {
+            const pmremGenerator = new THREE.PMREMGenerator(renderer);
+            pmremGenerator.compileEquirectangularShader();
+
+            const envScene = new THREE.Scene();
+            const envBox = new THREE.Mesh(
+                new THREE.BoxGeometry(20, 20, 20),
+                new THREE.MeshBasicMaterial({ color: 0x050814, side: THREE.BackSide })
+            );
+            envScene.add(envBox);
+
+            // Overhead soft white studio softbox
+            const softboxTop = new THREE.Mesh(
+                new THREE.PlaneGeometry(8, 8),
+                new THREE.MeshBasicMaterial({ color: 0xffffff })
+            );
+            softboxTop.position.set(2, 8, 3);
+            softboxTop.lookAt(0, 0, 0);
+            envScene.add(softboxTop);
+
+            // Cyan accent rim softbox
+            const softboxCyan = new THREE.Mesh(
+                new THREE.PlaneGeometry(6, 6),
+                new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
+            );
+            softboxCyan.position.set(-6, 3, -5);
+            softboxCyan.lookAt(0, 0, 0);
+            envScene.add(softboxCyan);
+
+            // Warm copper floor reflection
+            const softboxWarm = new THREE.Mesh(
+                new THREE.PlaneGeometry(8, 4),
+                new THREE.MeshBasicMaterial({ color: 0xd97706 })
+            );
+            softboxWarm.position.set(0, -6, 2);
+            softboxWarm.lookAt(0, 0, 0);
+            envScene.add(softboxWarm);
+
+            const envTarget = pmremGenerator.fromScene(envScene, 0.04);
+            scene.environment = envTarget.texture;
+        } catch (e) {
+            console.warn('Procedural PMREM environment generation bypassed:', e);
+        }
+
+        // 3. Shadow-Catcher Floor
+        const shadowFloor = new THREE.Mesh(
+            new THREE.PlaneGeometry(12, 10),
+            new THREE.ShadowMaterial({ opacity: 0.45 })
+        );
+        shadowFloor.rotation.x = -Math.PI / 2;
+        shadowFloor.position.y = -0.36;
+        shadowFloor.receiveShadow = true;
+        scene.add(shadowFloor);
+
+        // 4. Lighting Rig
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
         scene.add(ambientLight);
 
-        // Key Light (White Directional)
-        const keyLight = new THREE.DirectionalLight(0xffffff, 2.0);
-        keyLight.position.set(6, 10, 6);
+        // Directional Key Light with Soft Shadow
+        const keyLight = new THREE.DirectionalLight(0xffffff, 2.2);
+        keyLight.position.set(5.5, 9.0, 5.0);
+        keyLight.castShadow = true;
+        keyLight.shadow.mapSize.width = 1024;
+        keyLight.shadow.mapSize.height = 1024;
+        keyLight.shadow.camera.near = 0.5;
+        keyLight.shadow.camera.far = 25;
+        keyLight.shadow.camera.left = -3.8;
+        keyLight.shadow.camera.right = 3.8;
+        keyLight.shadow.camera.top = 3.8;
+        keyLight.shadow.camera.bottom = -3.8;
+        keyLight.shadow.bias = -0.0004;
+        keyLight.shadow.radius = 2.4;
         scene.add(keyLight);
 
-        // Cyan Rim Light
-        const cyanRimLight = new THREE.DirectionalLight(0x22d3ee, 2.2);
-        cyanRimLight.position.set(-6, 4, -4);
+        // Cyan Rim Light (High specular edge definition)
+        const cyanRimLight = new THREE.DirectionalLight(0x22d3ee, 2.6);
+        cyanRimLight.position.set(-6.0, 3.8, -4.5);
         scene.add(cyanRimLight);
 
-        // Warm Copper Accent Light
-        const copperFill = new THREE.PointLight(0xf59e0b, 1.2, 14);
-        copperFill.position.set(2, -2, 2);
-        scene.add(copperFill);
+        // Warm Copper Fill Light
+        const copperFillLight = new THREE.PointLight(0xf59e0b, 1.2, 14);
+        copperFillLight.position.set(2.0, -1.5, 2.0);
+        scene.add(copperFillLight);
 
-        // Cyan Chip Status Light
-        const powerLight = new THREE.PointLight(0x22d3ee, 1.0, 10);
-        powerLight.position.set(0, 0.8, 0);
-        scene.add(powerLight);
+        // Cyan Power-Pulse Traveling Light
+        const powerPulseLight = new THREE.PointLight(0x22d3ee, 0.0, 10);
+        powerPulseLight.position.set(0, 0.8, 0);
+        scene.add(powerPulseLight);
 
-        // Material Library
+        // 5. Procedural PCB Canvas Texture (Traces, Vias & Silkscreen)
+        function generateProceduralPcbTexture() {
+            const texCanvas = document.createElement('canvas');
+            texCanvas.width = 1024;
+            texCanvas.height = 1024;
+            const ctx = texCanvas.getContext('2d');
+
+            // Deep Emerald Green Solder Mask Base
+            ctx.fillStyle = '#08482d';
+            ctx.fillRect(0, 0, 1024, 1024);
+
+            // Subtle PCB Fiber/Grid Weave Noise
+            ctx.fillStyle = 'rgba(10, 85, 52, 0.4)';
+            for (let i = 0; i < 1024; i += 8) {
+                ctx.fillRect(i, 0, 2, 1024);
+                ctx.fillRect(0, i, 1024, 2);
+            }
+
+            // Ground plane copper pour shapes
+            ctx.fillStyle = '#105e3b';
+            ctx.beginPath();
+            ctx.rect(60, 60, 904, 904);
+            ctx.fill();
+
+            // Copper Circuit Traces (Metallic Gold / Copper lines with 45° bends)
+            ctx.strokeStyle = '#c68434';
+            ctx.lineWidth = 4;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+
+            const traces = [
+                // CPU to Memory bus lines
+                [[512, 512], [650, 512], [700, 420], [800, 420]],
+                [[512, 490], [640, 490], [680, 400], [800, 400]],
+                [[512, 534], [640, 534], [680, 600], [800, 600]],
+                [[512, 556], [650, 556], [700, 620], [800, 620]],
+                // CPU to Ethernet & USB
+                [[480, 512], [320, 512], [260, 380], [160, 380]],
+                [[480, 490], [310, 490], [250, 360], [160, 360]],
+                [[480, 534], [310, 534], [250, 660], [160, 660]],
+                [[480, 556], [320, 556], [260, 680], [160, 680]],
+                // GPIO Header traces
+                [[512, 460], [512, 300], [600, 210], [780, 210]],
+                [[490, 460], [490, 290], [580, 190], [780, 190]],
+                [[534, 460], [534, 310], [620, 230], [780, 230]],
+                // Power distribution bus
+                [[250, 200], [350, 200], [420, 350], [420, 512]]
+            ];
+
+            traces.forEach(path => {
+                ctx.beginPath();
+                ctx.moveTo(path[0][0], path[0][1]);
+                for (let j = 1; j < path.length; j++) {
+                    ctx.lineTo(path[j][0], path[j][1]);
+                }
+                ctx.stroke();
+            });
+
+            // Vias (Golden circular rings with dark hole centers)
+            const vias = [
+                [700, 420], [680, 400], [700, 620], [680, 600],
+                [260, 380], [250, 360], [260, 680], [250, 660],
+                [600, 210], [580, 190], [620, 230], [420, 350],
+                [420, 700], [550, 720], [360, 750], [720, 750],
+                [180, 220], [200, 240], [840, 240], [820, 220]
+            ];
+
+            vias.forEach(v => {
+                ctx.fillStyle = '#eab308';
+                ctx.beginPath();
+                ctx.arc(v[0], v[1], 5, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = '#051810';
+                ctx.beginPath();
+                ctx.arc(v[0], v[1], 2, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Golden Surface Mount Contact Pads
+            ctx.fillStyle = '#f59e0b';
+            for (let x = 460; x <= 564; x += 16) {
+                ctx.fillRect(x, 440, 8, 12);
+                ctx.fillRect(x, 572, 8, 12);
+            }
+            for (let y = 460; y <= 564; y += 16) {
+                ctx.fillRect(440, y, 12, 8);
+                ctx.fillRect(572, y, 12, 8);
+            }
+
+            // White Silkscreen Layer (Markings, Labels, Boundaries)
+            ctx.strokeStyle = '#f8fafc';
+            ctx.fillStyle = '#f8fafc';
+            ctx.lineWidth = 2.5;
+
+            // SoC Component Outline
+            ctx.strokeRect(440, 440, 144, 144);
+
+            // Memory Outlines
+            ctx.strokeRect(710, 360, 120, 150);
+            ctx.strokeRect(710, 540, 120, 150);
+
+            // GPIO Header Outline
+            ctx.strokeRect(580, 150, 260, 60);
+
+            // Corner Clearances
+            ctx.beginPath();
+            ctx.arc(90, 90, 32, 0, Math.PI * 2);
+            ctx.arc(934, 90, 32, 0, Math.PI * 2);
+            ctx.arc(90, 934, 32, 0, Math.PI * 2);
+            ctx.arc(934, 934, 32, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Silkscreen Typography
+            ctx.font = 'bold 20px monospace';
+            ctx.fillText('ELECTRODESK SBC-V2', 120, 140);
+            ctx.font = '14px monospace';
+            ctx.fillText('REV 2.4 // 64-BIT ARM', 120, 168);
+            ctx.fillText('U1 SoC', 480, 430);
+            ctx.fillText('U2 DRAM', 730, 350);
+            ctx.fillText('U3 FLASH', 730, 715);
+            ctx.fillText('USB 3.0', 100, 780);
+            ctx.fillText('GbE LAN', 100, 310);
+            ctx.fillText('GPIO 40-PIN', 640, 140);
+            ctx.fillText('PIN 1', 580, 140);
+
+            // Cyan Cyber Accents in Silkscreen
+            ctx.strokeStyle = '#22d3ee';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(432, 432, 160, 160);
+
+            const texture = new THREE.CanvasTexture(texCanvas);
+            texture.generateMipmaps = true;
+            texture.minFilter = THREE.LinearMipmapLinearFilter;
+            return texture;
+        }
+
+        const pcbTexture = generateProceduralPcbTexture();
+
+        // 6. PBR Material Library
         const materials = {
-            standoff: new THREE.MeshStandardMaterial({
-                color: 0xd97706,
-                metalness: 0.88,
-                roughness: 0.28
+            standoffBlack: new THREE.MeshStandardMaterial({
+                color: 0x18181b,
+                metalness: 0.78,
+                roughness: 0.35
             }),
             basePlate: new THREE.MeshStandardMaterial({
-                color: 0xcfd8dc,
-                metalness: 0.10,
+                color: 0xd8dee9,
+                metalness: 0.12,
                 roughness: 0.65
             }),
             copperTrace: new THREE.MeshStandardMaterial({
-                color: 0xe08d3c,
+                color: 0xe08238,
                 metalness: 0.95,
-                roughness: 0.22
+                roughness: 0.20
             }),
             goldPad: new THREE.MeshStandardMaterial({
                 color: 0xf59e0b,
-                metalness: 0.92,
-                roughness: 0.25
+                metalness: 0.98,
+                roughness: 0.18
             }),
-            pcbGreen: new THREE.MeshStandardMaterial({
-                color: 0x065f46,
-                metalness: 0.25,
-                roughness: 0.38
+            pcbGreenClearcoat: new THREE.MeshPhysicalMaterial({
+                map: pcbTexture,
+                color: 0xffffff,
+                roughness: 0.32,
+                metalness: 0.15,
+                clearcoat: 0.75,
+                clearcoatRoughness: 0.12
             }),
-            silkscreenWhite: new THREE.MeshStandardMaterial({
-                color: 0xe2e8f0,
-                roughness: 0.6
-            }),
-            silkscreenCyan: new THREE.MeshStandardMaterial({
-                color: 0x22d3ee,
-                emissive: 0x0891b2,
-                emissiveIntensity: 0.45,
-                roughness: 0.35
-            }),
-            chipPackage: new THREE.MeshStandardMaterial({
+            chipMatte: new THREE.MeshStandardMaterial({
                 color: 0x18181b,
-                metalness: 0.2,
+                metalness: 0.18,
                 roughness: 0.75
             }),
             chipHeatSpreader: new THREE.MeshStandardMaterial({
                 color: 0x94a3b8,
-                metalness: 0.85,
+                metalness: 0.88,
                 roughness: 0.22
             }),
-            chipCyanGlow: new THREE.MeshStandardMaterial({
+            heatsinkAluminum: new THREE.MeshStandardMaterial({
+                color: 0xd1d5db,
+                metalness: 0.92,
+                roughness: 0.24
+            }),
+            portBrushedMetal: new THREE.MeshStandardMaterial({
+                color: 0xe2e8f0,
+                metalness: 0.94,
+                roughness: 0.22
+            }),
+            portTongueBlue: new THREE.MeshStandardMaterial({
+                color: 0x0284c7,
+                roughness: 0.45
+            }),
+            pinGold: new THREE.MeshStandardMaterial({
+                color: 0xf59e0b,
+                metalness: 0.98,
+                roughness: 0.18
+            }),
+            headerBaseBlack: new THREE.MeshStandardMaterial({
+                color: 0x18181b,
+                roughness: 0.85
+            }),
+            smdResistor: new THREE.MeshStandardMaterial({
+                color: 0x262626,
+                metalness: 0.5,
+                roughness: 0.4
+            }),
+            smdCapacitor: new THREE.MeshStandardMaterial({
+                color: 0x854d0e,
+                metalness: 0.65,
+                roughness: 0.3
+            }),
+            screwSteel: new THREE.MeshStandardMaterial({
+                color: 0xcfd8dc,
+                metalness: 0.95,
+                roughness: 0.15
+            }),
+            ledCyan: new THREE.MeshStandardMaterial({
                 color: 0x22d3ee,
                 emissive: 0x22d3ee,
                 emissiveIntensity: 1.2,
                 roughness: 0.2
             }),
-            chipAmberLed: new THREE.MeshStandardMaterial({
+            ledAmber: new THREE.MeshStandardMaterial({
                 color: 0xfbbf24,
                 emissive: 0xd97706,
                 emissiveIntensity: 0.8,
                 roughness: 0.2
             }),
-            metalPort: new THREE.MeshStandardMaterial({
-                color: 0xe2e8f0,
-                metalness: 0.92,
-                roughness: 0.18
-            }),
-            portTongue: new THREE.MeshStandardMaterial({
-                color: 0x0284c7,
-                roughness: 0.5
-            }),
-            pinGold: new THREE.MeshStandardMaterial({
-                color: 0xf59e0b,
-                metalness: 0.95,
+            ledGreen: new THREE.MeshStandardMaterial({
+                color: 0x10b981,
+                emissive: 0x059669,
+                emissiveIntensity: 0.9,
                 roughness: 0.2
-            }),
-            headerBase: new THREE.MeshStandardMaterial({
-                color: 0x1e293b,
-                roughness: 0.8
-            }),
-            inductorCore: new THREE.MeshStandardMaterial({
-                color: 0x334155,
-                metalness: 0.4,
-                roughness: 0.7
-            }),
-            smdCapacitor: new THREE.MeshStandardMaterial({
-                color: 0xb45309,
-                metalness: 0.5,
-                roughness: 0.4
-            }),
-            screwSteel: new THREE.MeshStandardMaterial({
-                color: 0xcfd8dc,
-                metalness: 0.94,
-                roughness: 0.15
-            }),
-            shadowFloor: new THREE.MeshBasicMaterial({
-                color: 0x020617,
-                transparent: true,
-                opacity: 0.42
             })
         };
 
-        const pulsingEmissives = [materials.chipCyanGlow, materials.silkscreenCyan];
+        const pulsingLeds = [materials.ledCyan];
 
-        // Board Root Assembly Group
+        // 7. Root Board Group
         const boardRoot = new THREE.Group();
-        boardRoot.rotation.x = 0.24;
-        boardRoot.rotation.y = -0.52;
+        boardRoot.rotation.x = 0.22;
+        boardRoot.rotation.y = -0.48;
         scene.add(boardRoot);
 
-        const animatedParts = [];
+        // Staggered Layer System for Bottom-to-Top Animation
+        const layers = [];
 
-        function registerAnimatedPart(obj, explodedY, assembledY, options = {}) {
-            obj.position.y = prefersReducedMotion ? assembledY : explodedY;
-            boardRoot.add(obj);
-            animatedParts.push({
-                obj: obj,
+        function addLayer(group, explodedY, assembledY, startFrac, endFrac, options = {}) {
+            group.position.y = prefersReducedMotion ? assembledY : explodedY;
+            boardRoot.add(group);
+            layers.push({
+                group: group,
                 explodedY: explodedY,
                 assembledY: assembledY,
+                startFrac: startFrac,
+                endFrac: endFrac,
                 rotatesY: options.rotatesY || false,
-                initialRotY: obj.rotation.y,
-                screwTurns: options.screwTurns || 0
+                initialRotY: group.rotation.y,
+                turns: options.turns || 0
             });
-            return obj;
+            return group;
         }
 
-        // 1. LAYER 1: 4 Standoff Feet & Ground Shadow
-        const standoffsGroup = new THREE.Group();
         const cornerPositions = [
             { x: -1.85, z: -1.22 },
             { x:  1.85, z: -1.22 },
@@ -207,304 +445,245 @@
             { x:  1.85, z:  1.22 }
         ];
 
+        // --- LAYER 1 (Bottom): 4 Black Standoff Feet ---
+        const standoffsGroup = new THREE.Group();
         cornerPositions.forEach(pos => {
             const foot = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.12, 0.14, 0.30, 16),
-                materials.standoff
+                new THREE.CylinderGeometry(0.14, 0.14, 0.32, 20),
+                materials.standoffBlack
             );
             foot.position.set(pos.x, 0, pos.z);
+            foot.castShadow = true;
+            foot.receiveShadow = true;
             standoffsGroup.add(foot);
         });
+        addLayer(standoffsGroup, -1.8, -0.16, 0.00, 0.50);
 
-        registerAnimatedPart(standoffsGroup, -1.8, -0.15);
-
-        // Soft Shadow Mesh under the board
-        const shadowMesh = new THREE.Mesh(
-            new THREE.CylinderGeometry(2.5, 2.7, 0.01, 32),
-            materials.shadowFloor
-        );
-        shadowMesh.position.set(0, -0.32, 0);
-        boardRoot.add(shadowMesh);
-
-        // 2. LAYER 2: Pale Base Substrate Sheet
+        // --- LAYER 2: Pale Base Sheet ---
         const baseSheetGroup = new THREE.Group();
-        const basePlate = new THREE.Mesh(
+        const baseSheet = new THREE.Mesh(
             new THREE.BoxGeometry(4.2, 0.04, 2.8),
             materials.basePlate
         );
-        baseSheetGroup.add(basePlate);
-
+        baseSheet.castShadow = true;
+        baseSheet.receiveShadow = true;
+        baseSheetGroup.add(baseSheet);
         cornerPositions.forEach(pos => {
-            const ring = new THREE.Mesh(
+            const pad = new THREE.Mesh(
                 new THREE.CylinderGeometry(0.20, 0.20, 0.045, 16),
                 materials.copperTrace
             );
-            ring.position.set(pos.x, 0, pos.z);
-            baseSheetGroup.add(ring);
+            pad.position.set(pos.x, 0, pos.z);
+            baseSheetGroup.add(pad);
         });
+        addLayer(baseSheetGroup, -1.0, -0.02, 0.08, 0.62);
 
-        registerAnimatedPart(baseSheetGroup, -0.95, -0.02);
-
-        // 3. LAYER 3: Copper Trace Layer
+        // --- LAYER 3: Copper Traces & Ground Plane ---
         const copperLayerGroup = new THREE.Group();
-        const socCopperPad = new THREE.Mesh(
+        const socPad = new THREE.Mesh(
             new THREE.BoxGeometry(1.2, 0.015, 1.2),
             materials.copperTrace
         );
-        socCopperPad.position.set(0, 0, 0);
-        copperLayerGroup.add(socCopperPad);
+        copperLayerGroup.add(socPad);
 
-        const traceTracks = [
+        const copperTracks = [
             { x: 0.5, z: -0.4, w: 1.4, d: 0.04 },
-            { x: 0.5, z: -0.2, w: 1.2, d: 0.03 },
-            { x: 0.5, z:  0.2, w: 1.2, d: 0.03 },
             { x: 0.5, z:  0.4, w: 1.4, d: 0.04 },
             { x: -0.8, z: 0.0, w: 0.04, d: 1.6 },
-            { x: -0.9, z: 0.2, w: 0.03, d: 1.4 },
-            { x: -1.0, z: -0.3, w: 0.03, d: 1.2 },
             { x: -1.6, z:  0.85, w: 0.7, d: 0.8 },
             { x: -1.6, z: -0.55, w: 0.7, d: 0.8 },
             { x:  0.6, z:  1.15, w: 1.7, d: 0.25 }
         ];
-
-        traceTracks.forEach(t => {
-            const tr = new THREE.Mesh(
-                new THREE.BoxGeometry(t.w, 0.014, t.d),
-                materials.copperTrace
-            );
+        copperTracks.forEach(t => {
+            const tr = new THREE.Mesh(new THREE.BoxGeometry(t.w, 0.014, t.d), materials.copperTrace);
             tr.position.set(t.x, 0, t.z);
             copperLayerGroup.add(tr);
         });
-
         cornerPositions.forEach(pos => {
-            const ring = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.24, 0.24, 0.016, 16),
-                materials.goldPad
-            );
+            const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.016, 16), materials.goldPad);
             ring.position.set(pos.x, 0, pos.z);
             copperLayerGroup.add(ring);
         });
+        addLayer(copperLayerGroup, 0.35, 0.02, 0.18, 0.72);
 
-        registerAnimatedPart(copperLayerGroup, 0.35, 0.02);
-
-        // 4. LAYER 4: Green PCB Solder Mask with Silkscreen
+        // --- LAYER 4: Green Solder-Mask PCB with Clearcoat ---
         const pcbGroup = new THREE.Group();
         const pcbBoard = new THREE.Mesh(
             new THREE.BoxGeometry(4.2, 0.06, 2.8),
-            materials.pcbGreen
+            materials.pcbGreenClearcoat
         );
+        pcbBoard.castShadow = true;
+        pcbBoard.receiveShadow = true;
         pcbGroup.add(pcbBoard);
+        addLayer(pcbGroup, 1.4, 0.06, 0.26, 0.80);
 
-        const silkscreenDetails = [
-            { x: 0, z: 0, w: 1.3, d: 0.03, mat: materials.silkscreenWhite },
-            { x: 0, z: 0, w: 0.03, d: 1.3, mat: materials.silkscreenWhite },
-            { x: 0.85, z: -0.4, w: 0.6, d: 0.8, mat: materials.silkscreenWhite },
-            { x: 0.85, z:  0.4, w: 0.6, d: 0.8, mat: materials.silkscreenWhite },
-            { x: -0.4, z: -0.85, w: 1.1, d: 0.03, mat: materials.silkscreenCyan },
-            { x:  0.7, z: -0.95, w: 0.9, d: 0.03, mat: materials.silkscreenCyan },
-            { x: -0.3, z:  0.85, w: 0.8, d: 0.03, mat: materials.silkscreenCyan }
-        ];
+        // --- LAYER 5: InstancedMesh for 48 SMD Components ---
+        const smdCount = 48;
+        const smdGeo = new THREE.BoxGeometry(0.12, 0.05, 0.07);
+        const smdInstanced = new THREE.InstancedMesh(smdGeo, materials.smdCapacitor, smdCount);
+        smdInstanced.castShadow = true;
+        smdInstanced.receiveShadow = true;
 
-        silkscreenDetails.forEach(s => {
-            const mark = new THREE.Mesh(
-                new THREE.BoxGeometry(s.w, 0.065, s.d),
-                s.mat
-            );
-            mark.position.set(s.x, 0.001, s.z);
-            pcbGroup.add(mark);
-        });
+        const dummy = new THREE.Object3D();
+        let idx = 0;
 
-        registerAnimatedPart(pcbGroup, 1.4, 0.06);
+        // Decoupling array around CPU
+        for (let x = -0.7; x <= 0.7; x += 0.28) {
+            dummy.position.set(x, 0.09, -0.65);
+            dummy.rotation.y = 0;
+            dummy.updateMatrix();
+            smdInstanced.setMatrixAt(idx++, dummy.matrix);
 
-        // 5. LAYER 5: Electronic Components
-        // Central SoC / CPU Processor
-        const cpuGroup = new THREE.Group();
-        const cpuPackage = new THREE.Mesh(
-            new THREE.BoxGeometry(1.0, 0.10, 1.0),
-            materials.chipPackage
-        );
-        cpuGroup.add(cpuPackage);
-
-        const cpuHeatSpreader = new THREE.Mesh(
-            new THREE.BoxGeometry(0.82, 0.03, 0.82),
-            materials.chipHeatSpreader
-        );
-        cpuHeatSpreader.position.set(0, 0.055, 0);
-        cpuGroup.add(cpuHeatSpreader);
-
-        const cpuLed = new THREE.Mesh(
-            new THREE.BoxGeometry(0.09, 0.05, 0.09),
-            materials.chipCyanGlow
-        );
-        cpuLed.position.set(0.32, 0.065, 0.32);
-        cpuGroup.add(cpuLed);
-
-        for (let i = -0.42; i <= 0.42; i += 0.12) {
-            const p1 = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.03, 0.08), materials.goldPad);
-            p1.position.set(i, -0.04, -0.52);
-            cpuGroup.add(p1);
-
-            const p2 = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.03, 0.08), materials.goldPad);
-            p2.position.set(i, -0.04, 0.52);
-            cpuGroup.add(p2);
-
-            const p3 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.03, 0.04), materials.goldPad);
-            p3.position.set(-0.52, -0.04, i);
-            cpuGroup.add(p3);
-
-            const p4 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.03, 0.04), materials.goldPad);
-            p4.position.set(0.52, -0.04, i);
-            cpuGroup.add(p4);
+            dummy.position.set(x, 0.09, 0.65);
+            dummy.rotation.y = 0;
+            dummy.updateMatrix();
+            smdInstanced.setMatrixAt(idx++, dummy.matrix);
         }
 
-        cpuGroup.position.set(0, 0, 0);
-        registerAnimatedPart(cpuGroup, 2.7, 0.14);
+        // Filtering capacitors around RAM
+        for (let z = -0.7; z <= 0.7; z += 0.22) {
+            dummy.position.set(1.25, 0.09, z);
+            dummy.rotation.y = Math.PI / 2;
+            dummy.updateMatrix();
+            smdInstanced.setMatrixAt(idx++, dummy.matrix);
+        }
 
-        // RAM Memory ICs (2 Units)
-        const memoryGroup = new THREE.Group();
-        [-0.4, 0.4].forEach(zOffset => {
-            const memIc = new THREE.Mesh(
-                new THREE.BoxGeometry(0.52, 0.08, 0.72),
-                materials.chipPackage
-            );
-            memIc.position.set(0.85, 0, zOffset);
-            memoryGroup.add(memIc);
+        // Power rail SMD bank near USB/Ethernet
+        for (let z = -0.2; z <= 0.5; z += 0.18) {
+            dummy.position.set(-1.1, 0.09, z);
+            dummy.rotation.y = 0;
+            dummy.updateMatrix();
+            smdInstanced.setMatrixAt(idx++, dummy.matrix);
 
-            const memDot = new THREE.Mesh(
-                new THREE.BoxGeometry(0.05, 0.02, 0.05),
-                materials.chipCyanGlow
-            );
-            memDot.position.set(0.85, 0.045, zOffset - 0.22);
-            memoryGroup.add(memDot);
+            dummy.position.set(-0.95, 0.09, z);
+            dummy.rotation.y = 0;
+            dummy.updateMatrix();
+            smdInstanced.setMatrixAt(idx++, dummy.matrix);
+        }
+
+        // Fill remaining instances across board
+        while (idx < smdCount) {
+            dummy.position.set(-0.4 + (idx % 4) * 0.2, 0.09, -0.85);
+            dummy.rotation.y = 0;
+            dummy.updateMatrix();
+            smdInstanced.setMatrixAt(idx++, dummy.matrix);
+        }
+        smdInstanced.instanceMatrix.needsUpdate = true;
+
+        const smdGroup = new THREE.Group();
+        smdGroup.add(smdInstanced);
+        addLayer(smdGroup, 2.5, 0.03, 0.34, 0.86);
+
+        // --- LAYER 6: IC Chips, Stacked Ports & Pin Header ---
+        const compGroup = new THREE.Group();
+
+        // Central SoC Processor
+        const cpuPkg = new THREE.Mesh(new THREE.BoxGeometry(1.02, 0.10, 1.02), materials.chipMatte);
+        cpuPkg.castShadow = true;
+        cpuPkg.receiveShadow = true;
+        compGroup.add(cpuPkg);
+
+        const cpuSpreader = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.03, 0.86), materials.chipHeatSpreader);
+        cpuSpreader.position.set(0, 0.055, 0);
+        cpuSpreader.castShadow = true;
+        compGroup.add(cpuSpreader);
+
+        const cpuStatusLed = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.04, 0.08), materials.ledCyan);
+        cpuStatusLed.position.set(0.34, 0.065, 0.34);
+        compGroup.add(cpuStatusLed);
+
+        // RAM Chips (2 Units)
+        [-0.42, 0.42].forEach(z => {
+            const ram = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.08, 0.74), materials.chipMatte);
+            ram.position.set(0.85, 0, z);
+            ram.castShadow = true;
+            compGroup.add(ram);
         });
-        registerAnimatedPart(memoryGroup, 2.9, 0.13);
 
-        // Dual USB Type-A Port Block
-        const usbGroup = new THREE.Group();
-        const usbMetal = new THREE.Mesh(
-            new THREE.BoxGeometry(0.68, 0.52, 0.76),
-            materials.metalPort
-        );
-        usbGroup.add(usbMetal);
+        // Stacked Dual USB 3.0 Type-A Metal Block
+        const usbBlock = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.54, 0.76), materials.portBrushedMetal);
+        usbBlock.castShadow = true;
+        usbBlock.receiveShadow = true;
 
-        [-0.12, 0.12].forEach(yOff => {
-            const tongue = new THREE.Mesh(
-                new THREE.BoxGeometry(0.2, 0.05, 0.28),
-                materials.portTongue
-            );
+        [-0.13, 0.13].forEach(yOff => {
+            const tongue = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.05, 0.28), materials.portTongueBlue);
             tongue.position.set(-0.35, yOff, 0);
-            usbGroup.add(tongue);
+            usbBlock.add(tongue);
         });
+        usbBlock.position.set(-1.62, 0.20, 0.85);
+        compGroup.add(usbBlock);
 
-        usbGroup.position.set(-1.62, 0, 0.85);
-        registerAnimatedPart(usbGroup, 3.3, 0.33);
+        // RJ-45 Gigabit Ethernet Metal Block with Status LEDs
+        const ethBlock = new THREE.Mesh(new THREE.BoxGeometry(0.74, 0.58, 0.82), materials.portBrushedMetal);
+        ethBlock.castShadow = true;
+        ethBlock.receiveShadow = true;
 
-        // RJ-45 Ethernet Jack Block
-        const rj45Group = new THREE.Group();
-        const rj45Metal = new THREE.Mesh(
-            new THREE.BoxGeometry(0.72, 0.55, 0.82),
-            materials.metalPort
-        );
-        rj45Group.add(rj45Metal);
+        const ethLed1 = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.06), materials.ledCyan);
+        ethLed1.position.set(-0.37, 0.24, -0.22);
+        ethBlock.add(ethLed1);
+        const ethLed2 = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.06), materials.ledAmber);
+        ethLed2.position.set(-0.37, 0.24, 0.22);
+        ethBlock.add(ethLed2);
 
-        const ethCyanLed = new THREE.Mesh(
-            new THREE.BoxGeometry(0.06, 0.06, 0.06),
-            materials.chipCyanGlow
-        );
-        ethCyanLed.position.set(-0.36, 0.22, -0.22);
-        rj45Group.add(ethCyanLed);
-
-        const ethAmberLed = new THREE.Mesh(
-            new THREE.BoxGeometry(0.06, 0.06, 0.06),
-            materials.chipAmberLed
-        );
-        ethAmberLed.position.set(-0.36, 0.22, 0.22);
-        rj45Group.add(ethAmberLed);
-
-        rj45Group.position.set(-1.62, 0, -0.55);
-        registerAnimatedPart(rj45Group, 3.5, 0.35);
+        ethBlock.position.set(-1.62, 0.22, -0.55);
+        compGroup.add(ethBlock);
 
         // HDMI Output Port
-        const hdmiGroup = new THREE.Group();
-        const hdmiMetal = new THREE.Mesh(
-            new THREE.BoxGeometry(0.55, 0.22, 0.38),
-            materials.metalPort
-        );
-        hdmiGroup.add(hdmiMetal);
-        hdmiGroup.position.set(0.35, 0, -1.25);
-        registerAnimatedPart(hdmiGroup, 3.1, 0.18);
+        const hdmiPort = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.22, 0.38), materials.portBrushedMetal);
+        hdmiPort.position.set(0.35, 0.06, -1.25);
+        hdmiPort.castShadow = true;
+        compGroup.add(hdmiPort);
 
-        // GPIO Pin Header Strip (2x8 Pins)
-        const gpioGroup = new THREE.Group();
-        const gpioBase = new THREE.Mesh(
-            new THREE.BoxGeometry(1.65, 0.10, 0.24),
-            materials.headerBase
-        );
-        gpioGroup.add(gpioBase);
+        // 40-Pin GPIO Header Strip (Dual-row gold pins on black insulator)
+        const gpioBase = new THREE.Mesh(new THREE.BoxGeometry(1.68, 0.12, 0.24), materials.headerBaseBlack);
+        gpioBase.position.set(0.65, 0.06, 1.15);
+        gpioBase.castShadow = true;
+        compGroup.add(gpioBase);
 
-        for (let x = -0.7; x <= 0.7; x += 0.2) {
+        for (let x = -0.72; x <= 0.72; x += 0.18) {
             [-0.06, 0.06].forEach(z => {
-                const pin = new THREE.Mesh(
-                    new THREE.CylinderGeometry(0.024, 0.024, 0.38, 8),
-                    materials.pinGold
-                );
-                pin.position.set(x, 0.18, z);
-                gpioGroup.add(pin);
+                const pin = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, 0.38, 8), materials.pinGold);
+                pin.position.set(0.65 + x, 0.25, 1.15 + z);
+                pin.castShadow = true;
+                compGroup.add(pin);
             });
         }
 
-        gpioGroup.position.set(0.65, 0, 1.15);
-        registerAnimatedPart(gpioGroup, 3.2, 0.20);
+        addLayer(compGroup, 2.9, 0.14, 0.40, 0.92);
 
-        // SMD Ferrite Inductor & Capacitors
-        const smdGroup = new THREE.Group();
-        const inductor = new THREE.Mesh(
-            new THREE.BoxGeometry(0.42, 0.22, 0.42),
-            materials.inductorCore
-        );
-        inductor.position.set(-0.65, 0, -0.75);
-        smdGroup.add(inductor);
+        // --- LAYER 7: Extruded Finned Aluminum Heatsink ---
+        const heatsinkGroup = new THREE.Group();
+        const hsBase = new THREE.Mesh(new THREE.BoxGeometry(1.08, 0.08, 1.08), materials.heatsinkAluminum);
+        hsBase.castShadow = true;
+        hsBase.receiveShadow = true;
+        heatsinkGroup.add(hsBase);
 
-        const indStrap = new THREE.Mesh(
-            new THREE.BoxGeometry(0.44, 0.08, 0.16),
-            materials.copperTrace
-        );
-        indStrap.position.set(-0.65, 0.04, -0.75);
-        smdGroup.add(indStrap);
+        // 6 Vertical extruded cooling fins
+        for (let f = -0.42; f <= 0.42; f += 0.168) {
+            const fin = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.36, 1.06), materials.heatsinkAluminum);
+            fin.position.set(f, 0.21, 0);
+            fin.castShadow = true;
+            fin.receiveShadow = true;
+            heatsinkGroup.add(fin);
+        }
+        heatsinkGroup.position.set(0, 0, 0);
+        addLayer(heatsinkGroup, 3.6, 0.28, 0.48, 0.96);
 
-        const capOffsets = [
-            { x: -0.65, z: 0.15 },
-            { x: -0.65, z: 0.32 },
-            { x: -0.25, z: 0.75 },
-            { x: -0.40, z: 0.75 }
-        ];
-
-        capOffsets.forEach(pos => {
-            const cap = new THREE.Mesh(
-                new THREE.BoxGeometry(0.12, 0.08, 0.10),
-                materials.smdCapacitor
-            );
-            cap.position.set(pos.x, 0, pos.z);
-            smdGroup.add(cap);
-        });
-
-        registerAnimatedPart(smdGroup, 2.6, 0.14);
-
-        // 6. LAYER 6: 4 Corner Screws
+        // --- LAYER 8: 4 Corner Screws (Tightening with spin) ---
         cornerPositions.forEach(pos => {
             const screwGroup = new THREE.Group();
-
             const screwHead = new THREE.Mesh(
                 new THREE.CylinderGeometry(0.14, 0.13, 0.07, 16),
                 materials.screwSteel
             );
             screwHead.position.set(0, 0.035, 0);
+            screwHead.castShadow = true;
             screwGroup.add(screwHead);
 
-            const slot1 = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.02, 0.04), materials.chipPackage);
+            const slot1 = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.02, 0.04), materials.chipMatte);
             slot1.position.set(0, 0.075, 0);
             screwGroup.add(slot1);
-            const slot2 = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.02, 0.18), materials.chipPackage);
+            const slot2 = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.02, 0.18), materials.chipMatte);
             slot2.position.set(0, 0.075, 0);
             screwGroup.add(slot2);
 
@@ -513,18 +692,19 @@
                 materials.screwSteel
             );
             shank.position.set(0, -0.12, 0);
+            shank.castShadow = true;
             screwGroup.add(shank);
 
             screwGroup.position.set(pos.x, 0, pos.z);
-            registerAnimatedPart(screwGroup, 4.3, 0.13, {
+            addLayer(screwGroup, 4.4, 0.13, 0.54, 1.00, {
                 rotatesY: true,
-                screwTurns: 6.0
+                turns: 6.0
             });
         });
 
-        // Timing & Animation Variables
-        const START_DELAY_MS = 800;
-        const ANIM_DURATION_MS = 3000;
+        // 8. Animation State & Timing
+        const START_DELAY_MS = 800;    // ~0.8s exploded float
+        const ANIM_DURATION_MS = 3000; // ~3.0s assembly duration
         const startTime = performance.now();
 
         let isAssembled = prefersReducedMotion;
@@ -536,7 +716,7 @@
             return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
         }
 
-        // Parallax Tracking
+        // Mouse Parallax Handling
         const mouseTarget = { x: 0, y: 0 };
         const mouseCurrent = { x: 0, y: 0 };
 
@@ -548,6 +728,7 @@
         }
         window.addEventListener('mousemove', onMouseMove, { passive: true });
 
+        // Responsive Resizing
         function onWindowResize() {
             if (!container || !renderer || !camera) return;
             const newW = Math.max(container.clientWidth || 0, 360);
@@ -562,34 +743,40 @@
         }
         window.addEventListener('resize', onWindowResize);
 
+        // Pause Rendering When Tab Is Hidden (Performance)
         document.addEventListener('visibilitychange', () => {
             isRunning = !document.hidden;
             if (isRunning) requestAnimationFrame(renderLoop);
         });
 
+        // Main Render Loop
         function renderLoop(now) {
             if (!isRunning) return;
 
-            // Check if container dynamically resized
+            // Dynamically detect container resize
             if (container && container.clientWidth > 0 && container.clientHeight > 0) {
-                if (Math.abs(container.clientWidth - width) > 10 || Math.abs(container.clientHeight - height) > 10) {
+                if (Math.abs(container.clientWidth - width) > 8 || Math.abs(container.clientHeight - height) > 8) {
                     onWindowResize();
                 }
             }
 
             const elapsed = now - startTime;
 
+            // Step 1: Bottom-to-Top Staggered Assembly
             if (!prefersReducedMotion) {
                 if (elapsed < START_DELAY_MS) {
                     if (statusText) statusText.textContent = 'EXPLODED VIEW // STANDBY';
                 } else if (elapsed < START_DELAY_MS + ANIM_DURATION_MS) {
-                    const rawProgress = (elapsed - START_DELAY_MS) / ANIM_DURATION_MS;
-                    const progress = easeInOutCubic(Math.min(Math.max(rawProgress, 0), 1));
+                    const overallProgress = (elapsed - START_DELAY_MS) / ANIM_DURATION_MS;
 
-                    animatedParts.forEach(p => {
-                        p.obj.position.y = p.explodedY + (p.assembledY - p.explodedY) * progress;
-                        if (p.rotatesY) {
-                            p.obj.rotation.y = p.initialRotY + (p.screwTurns * Math.PI * 2 * progress);
+                    layers.forEach(layer => {
+                        const localRaw = (overallProgress - layer.startFrac) / (layer.endFrac - layer.startFrac);
+                        const localClamped = Math.min(Math.max(localRaw, 0), 1);
+                        const progress = easeInOutCubic(localClamped);
+
+                        layer.group.position.y = layer.explodedY + (layer.assembledY - layer.explodedY) * progress;
+                        if (layer.rotatesY) {
+                            layer.group.rotation.y = layer.initialRotY + (layer.turns * Math.PI * 2 * progress);
                         }
                     });
 
@@ -597,34 +784,48 @@
                 } else if (!isAssembled) {
                     isAssembled = true;
                     assemblyFinishTime = now;
-                    animatedParts.forEach(p => {
-                        p.obj.position.y = p.assembledY;
-                        if (p.rotatesY) {
-                            p.obj.rotation.y = p.initialRotY + (p.screwTurns * Math.PI * 2);
+
+                    layers.forEach(layer => {
+                        layer.group.position.y = layer.assembledY;
+                        if (layer.rotatesY) {
+                            layer.group.rotation.y = layer.initialRotY + (layer.turns * Math.PI * 2);
                         }
                     });
+
                     if (statusText) statusText.textContent = 'ELECTRODESK HARDWARE ASSEMBLED';
                 }
             }
 
+            // Step 2 & 3: Post-Assembly Power-On Pulse & Idle Motion
             if (isAssembled) {
                 const idleTime = (now - assemblyFinishTime) * 0.001;
 
+                // Power-On Cyan Pulse along traces right after assembly
+                if (idleTime < 1.6) {
+                    const pulseT = idleTime / 1.6;
+                    powerPulseLight.intensity = Math.sin(pulseT * Math.PI) * 3.5;
+                    materials.ledCyan.emissiveIntensity = 1.0 + Math.sin(pulseT * Math.PI * 4) * 2.5;
+                    materials.ledAmber.emissiveIntensity = 0.5 + Math.cos(pulseT * Math.PI * 4) * 1.5;
+                    if (statusText && idleTime > 0.8) {
+                        statusText.textContent = 'ELECTRODESK SBC ONLINE // ALL SYSTEMS NOMINAL';
+                    }
+                } else if (!isPoweringOn) {
+                    // Regular gentle pulse
+                    const pulse = 0.75 + 0.55 * Math.sin(idleTime * 3.2);
+                    pulsingLeds.forEach(mat => {
+                        mat.emissiveIntensity = pulse;
+                    });
+                    powerPulseLight.intensity = 0.5 + 0.45 * Math.sin(idleTime * 3.2);
+                }
+
+                // Smooth idle floating & gentle sway
                 boardRoot.position.y = Math.sin(idleTime * 1.15) * 0.08;
 
                 mouseCurrent.x += (mouseTarget.x - mouseCurrent.x) * 0.045;
                 mouseCurrent.y += (mouseTarget.y - mouseCurrent.y) * 0.045;
 
-                boardRoot.rotation.y = -0.52 + Math.sin(idleTime * 0.35) * 0.07 + mouseCurrent.x;
-                boardRoot.rotation.x =  0.24 + Math.cos(idleTime * 0.45) * 0.04 + mouseCurrent.y;
-
-                if (!isPoweringOn) {
-                    const pulseIntensity = 0.75 + 0.65 * Math.sin(idleTime * 3.4);
-                    pulsingEmissives.forEach(mat => {
-                        mat.emissiveIntensity = pulseIntensity;
-                    });
-                    powerLight.intensity = 0.6 + 0.55 * Math.sin(idleTime * 3.4);
-                }
+                boardRoot.rotation.y = -0.48 + Math.sin(idleTime * 0.32) * 0.06 + mouseCurrent.x;
+                boardRoot.rotation.x =  0.22 + Math.cos(idleTime * 0.42) * 0.03 + mouseCurrent.y;
             }
 
             renderer.render(scene, camera);
@@ -633,7 +834,7 @@
 
         requestAnimationFrame(renderLoop);
 
-        // Power-On Effect on Login Submit
+        // 9. Login Submit Power-On Flash
         window.triggerBoardPowerOn = function (callback) {
             if (isPoweringOn) {
                 if (callback) callback();
@@ -646,12 +847,12 @@
             const overlay = document.getElementById('login-poweron-overlay');
             if (overlay) overlay.classList.add('login-poweron-active');
 
-            pulsingEmissives.forEach(mat => {
+            pulsingLeds.forEach(mat => {
                 mat.emissiveIntensity = 5.0;
                 mat.emissive.setHex(0x38bdf8);
             });
-            powerLight.intensity = 5.5;
-            powerLight.color.setHex(0x38bdf8);
+            powerPulseLight.intensity = 5.8;
+            powerPulseLight.color.setHex(0x38bdf8);
 
             camera.position.z -= 0.35;
             camera.position.y += 0.15;
@@ -661,6 +862,7 @@
             }, 440);
         };
 
+        // 10. Disposal on Unload (Performance)
         function disposeScene() {
             isRunning = false;
             window.removeEventListener('mousemove', onMouseMove);
@@ -677,6 +879,8 @@
                 }
             });
 
+            if (pcbTexture) pcbTexture.dispose();
+
             if (renderer) {
                 renderer.dispose();
                 renderer.forceContextLoss();
@@ -686,7 +890,6 @@
         window.addEventListener('beforeunload', disposeScene);
     }
 
-    // Expose for explicit invocation or module fallback
     window.initLoginScene = initScene;
 
     if (document.readyState === 'loading') {
