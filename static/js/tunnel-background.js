@@ -53,7 +53,6 @@ const FinalPass = {
     tDiffuse: { value: null },
     torusTexture: { value: null },
     bloomTexture: { value: null },
-    haloTexture: { value: null },
     uBg: { value: hexToVec3('#0a0524') },
     uFlameA: { value: hexToVec3('#2bf0ff') },
     uFlameB: { value: hexToVec3('#7a3cff') },
@@ -61,7 +60,7 @@ const FinalPass = {
   },
   vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position, 1.0); }`,
   fragmentShader: `
-uniform float iTime; uniform sampler2D tDiffuse; uniform sampler2D bloomTexture; uniform sampler2D torusTexture; uniform sampler2D haloTexture;
+uniform float iTime; uniform sampler2D tDiffuse; uniform sampler2D bloomTexture; uniform sampler2D torusTexture;
 uniform vec3 uBg; uniform vec3 uFlameA; uniform vec3 uFlameB; uniform float uFlameAmt;
 varying vec2 vUv;
 vec3 warp3d(vec3 pos, float t){ float curv=.8,a=1.9,b=0.7; pos*=2.;
@@ -71,18 +70,20 @@ vec3 warp3d(vec3 pos, float t){ float curv=.8,a=1.9,b=0.7; pos*=2.;
   return 0.5+0.5*cos(pos.xyz+vec3(1,2,4)); }
 void main(){
   vec2 uv = 2.*vUv - 1.;
-  vec3 w = pow(warp3d(vec3(uv.x, sin(uv.y), uv.y), iTime*1.5), vec3(1.5));
+  vec3 w = pow(clamp(warp3d(vec3(uv.x, sin(uv.y), uv.y), iTime*1.5), 0.0, 1.0), vec3(1.5));
   vec3 flame = 1.5*uFlameA*w.x; flame*=w.y; flame += uFlameB*w.z;
   flame *= smoothstep(0.25, 1., abs(uv.y));
   float md = smoothstep(-0.7, 1., -uv.y*uv.x); flame *= md*md;
   vec3 bg = uBg * (1.0 - 0.4 * length(uv));
-  vec3 halo = texture2D(haloTexture, vUv).xyz;
-  gl_FragColor = vec4(bg + flame*uFlameAmt + texture2D(bloomTexture, vUv).xyz + texture2D(torusTexture, vUv).xyz + texture2D(tDiffuse, vUv).xyz + halo, 1.);
+  gl_FragColor = vec4(bg + flame*uFlameAmt + texture2D(bloomTexture, vUv).xyz + texture2D(torusTexture, vUv).xyz + texture2D(tDiffuse, vUv).xyz, 1.);
 }
   `
 };
 
 function initTunnel() {
+  if (window.__tunnelInitialized) return;
+  window.__tunnelInitialized = true;
+
   const canvas = document.getElementById('scene');
   if (!canvas) return;
 
@@ -91,11 +92,10 @@ function initTunnel() {
   const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
 
   // Renderer
-  const renderer = new THREE.WebGL1Renderer({ canvas, antialias: true, alpha: false });
+  const renderer = new THREE.WebGL1Renderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
   renderer.setPixelRatio(dpr);
   renderer.setSize(w, h, false);
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.VSMShadowMap;
+  renderer.shadowMap.enabled = false;
 
   // Scene & Fog
   const scene = new THREE.Scene();
@@ -296,6 +296,8 @@ function initTunnel() {
   };
 
   const overlayEl = document.getElementById('tunnel-overlay');
+  if (overlayEl) overlayEl.style.transition = 'none';
+  let lastRenderedOverlay = -1;
   let currentIntensityMode = (document.body && document.body.dataset.bgIntensity === 'hero') ? 'hero' : 'calm';
   let targetIntensity = INTENSITIES[currentIntensityMode] || INTENSITIES.calm;
   const currentIntensityVals = {
@@ -313,7 +315,10 @@ function initTunnel() {
   uniforms.uSize.value = currentIntensityVals.uSize;
   mainBloomPass.strength = currentIntensityVals.bloom1;
   torusBloomPass.strength = currentIntensityVals.bloom2;
-  if (overlayEl) overlayEl.style.opacity = currentIntensityVals.overlay;
+  if (overlayEl) {
+    overlayEl.style.opacity = currentIntensityVals.overlay;
+    lastRenderedOverlay = currentIntensityVals.overlay;
+  }
 
   function setIntensity(mode) {
     if (!INTENSITIES[mode]) mode = 'calm';
@@ -332,7 +337,10 @@ function initTunnel() {
       uniforms.uSize.value = currentIntensityVals.uSize;
       mainBloomPass.strength = currentIntensityVals.bloom1;
       torusBloomPass.strength = currentIntensityVals.bloom2;
-      if (overlayEl) overlayEl.style.opacity = currentIntensityVals.overlay;
+      if (overlayEl) {
+        overlayEl.style.opacity = currentIntensityVals.overlay;
+        lastRenderedOverlay = currentIntensityVals.overlay;
+      }
     }
   }
 
@@ -415,31 +423,28 @@ function initTunnel() {
     }
   };
 
-  // Scroll tracking
+  // Scroll tracking: calculate page-level scroll to prevent nested container jumping
   let scrollTarget = 0;
   let scrollSmooth = 0;
   let scrollCurrent = 0;
 
-  function onScroll(e) {
-    let el = (e && e.target && e.target !== document) ? e.target : null;
-    if (!el || !el.scrollHeight || !el.clientHeight || (el.scrollHeight - el.clientHeight <= 1)) {
-      const doc = document.scrollingElement || document.documentElement || document.body;
-      if (doc && (doc.scrollHeight - doc.clientHeight > 1)) {
-        el = doc;
-      } else {
-        const candidates = document.querySelectorAll('.main-wrapper, .content-body, main, .sidebar-scrollable, body, html');
-        for (const c of candidates) {
-          if (c.scrollHeight - c.clientHeight > 1) {
-            el = c;
-            break;
-          }
-        }
+  function onScroll() {
+    const doc = document.scrollingElement || document.documentElement || document.body;
+    let scrollTop = window.scrollY || window.pageYOffset || (doc ? doc.scrollTop : 0);
+    let scrollHeight = (doc ? doc.scrollHeight : 0);
+    let clientHeight = window.innerHeight || (doc ? doc.clientHeight : 0);
+    let maxScroll = scrollHeight - clientHeight;
+
+    if (maxScroll <= 10) {
+      const main = document.querySelector('.main-wrapper');
+      if (main && (main.scrollHeight - main.clientHeight > 10)) {
+        scrollTop = main.scrollTop;
+        maxScroll = main.scrollHeight - main.clientHeight;
       }
     }
 
-    if (el && (el.scrollHeight - el.clientHeight > 1)) {
-      const maxScroll = el.scrollHeight - el.clientHeight;
-      scrollTarget = clamp(el.scrollTop / maxScroll, 0, 1);
+    if (maxScroll > 10) {
+      scrollTarget = clamp(scrollTop / maxScroll, 0, 1);
     } else {
       scrollTarget = 0;
     }
@@ -481,7 +486,7 @@ function initTunnel() {
     onScroll();
   }
 
-  window.addEventListener('scroll', onScroll, { capture: true, passive: true });
+  window.addEventListener('scroll', onScroll, { passive: true });
   window.addEventListener('resize', onResize, { passive: true });
   window.addEventListener('mousemove', onPointerMove, { passive: true });
   window.addEventListener('mouseout', onPointerLeave, { passive: true });
@@ -524,7 +529,13 @@ function initTunnel() {
       currentIntensityVals.uBrightness = Lerp(currentIntensityVals.uBrightness, targetIntensity.uBrightness, kInt);
       currentIntensityVals.uOpacity = Lerp(currentIntensityVals.uOpacity, targetIntensity.uOpacity, kInt);
       currentIntensityVals.uSize = Lerp(currentIntensityVals.uSize, targetIntensity.uSize, kInt);
-      currentIntensityVals.overlay = Lerp(currentIntensityVals.overlay, targetIntensity.overlay, kInt);
+      
+      if (Math.abs(currentIntensityVals.overlay - targetIntensity.overlay) < 0.002) {
+        currentIntensityVals.overlay = targetIntensity.overlay;
+      } else {
+        currentIntensityVals.overlay = Lerp(currentIntensityVals.overlay, targetIntensity.overlay, kInt);
+      }
+      
       currentIntensityVals.bloom1 = Lerp(currentIntensityVals.bloom1, targetIntensity.bloom1, kInt);
       currentIntensityVals.bloom2 = Lerp(currentIntensityVals.bloom2, targetIntensity.bloom2, kInt);
 
@@ -533,7 +544,11 @@ function initTunnel() {
       uniforms.uSize.value = currentIntensityVals.uSize;
       mainBloomPass.strength = currentIntensityVals.bloom1;
       torusBloomPass.strength = currentIntensityVals.bloom2;
-      if (overlayEl) overlayEl.style.opacity = currentIntensityVals.overlay.toFixed(3);
+      
+      if (overlayEl && Math.abs(lastRenderedOverlay - currentIntensityVals.overlay) > 0.001) {
+        lastRenderedOverlay = currentIntensityVals.overlay;
+        overlayEl.style.opacity = currentIntensityVals.overlay.toFixed(3);
+      }
     }
 
     sceneObj.render(scrollCurrent, mouse);
@@ -544,6 +559,10 @@ function initTunnel() {
     camera.layers.set(LAYERS.BLOOM_SCENE);
     bloomComposer.render();
 
+    // Ensure final composite references the actual completed readBuffer textures
+    finalPass.uniforms.bloomTexture.value = bloomComposer.readBuffer.texture;
+    finalPass.uniforms.torusTexture.value = torusComposer.readBuffer.texture;
+
     camera.layers.set(LAYERS.ENTIRE_SCENE);
     finalComposer.render();
   }
@@ -553,7 +572,8 @@ function initTunnel() {
   // Cleanup on unload or unmount
   function cleanup() {
     cancelAnimationFrame(rAFId);
-    window.removeEventListener('scroll', onScroll, { capture: true });
+    window.__tunnelInitialized = false;
+    window.removeEventListener('scroll', onScroll);
     window.removeEventListener('resize', onResize);
     window.removeEventListener('mousemove', onPointerMove);
     window.removeEventListener('mouseout', onPointerLeave);
