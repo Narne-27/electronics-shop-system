@@ -1084,6 +1084,21 @@ def products():
                            current_sort=sort_by)
 
 
+@app.route('/products/<int:product_id>')
+@login_required
+def product_detail(product_id):
+    product = db.query_one("""
+        SELECT p.*, c.category_name
+        FROM PRODUCT p
+        JOIN CATEGORY c ON p.category_id = c.category_id
+        WHERE p.product_id = %s
+    """, (product_id,))
+    if not product:
+        flash('Product not found.', 'danger')
+        return redirect(url_for('products'))
+    return render_template('product_detail.html', product=product)
+
+
 def _product_form_values():
     """Parse + validate the shared add/edit product form. Raises InputError."""
     code = request.form.get('product_code', '').strip().upper()
@@ -2394,14 +2409,145 @@ def warranty_export_csv():
 @app.route('/returns')
 @login_required
 def returns_list():
-    notes = db.query("""
-        SELECT cn.*, s.invoice_number, c.customer_name, c.phone
+    today = get_app_today()
+    search = request.args.get('search', '').strip()
+    date_filter = request.args.get('date', '').strip()
+
+    query_sql = """
+        SELECT cn.*, cn.created_at as issue_date,
+               s.invoice_number, s.sale_date, s.grand_total as original_amount, s.amount_paid as original_paid, s.payment_method,
+               c.customer_name, c.phone, c.address, c.city,
+               u.full_name as processed_by_name, u.role as processed_by_role
         FROM CREDIT_NOTE cn
         JOIN SALE s ON cn.sale_id = s.sale_id
         LEFT JOIN CUSTOMER c ON cn.customer_id = c.customer_id
-        ORDER BY cn.credit_note_id DESC
+        LEFT JOIN USER u ON s.user_id = u.user_id
+        WHERE 1=1
+    """
+    params = []
+    if search:
+        query_sql += """ AND (
+            cn.credit_note_number LIKE %s OR 
+            s.invoice_number LIKE %s OR 
+            c.customer_name LIKE %s OR 
+            c.phone LIKE %s OR 
+            cn.reason LIKE %s
+        )"""
+        s_wild = f"%{search}%"
+        params.extend([s_wild, s_wild, s_wild, s_wild, s_wild])
+
+    if date_filter:
+        query_sql += " AND DATE(cn.created_at) = %s"
+        params.append(date_filter)
+
+    query_sql += " ORDER BY cn.credit_note_id DESC"
+    notes = db.query(query_sql, tuple(params))
+
+    # Fetch returned items for each credit note
+    for cn in notes:
+        cn['sale_items'] = db.query("""
+            SELECT si.*, p.product_name, p.product_code, p.image_url
+            FROM SALE_ITEM si
+            JOIN PRODUCT p ON si.product_id = p.product_id
+            WHERE si.sale_id = %s
+        """, (cn['sale_id'],))
+        cn['total_items_qty'] = sum(it.get('quantity', 0) for it in cn['sale_items'])
+
+    # KPI Statistics
+    all_notes = db.query("SELECT refund_amount, created_at, sale_id FROM CREDIT_NOTE")
+    total_refunded = sum(float(n['refund_amount'] or 0.0) for n in all_notes)
+
+    restocked_cnt_row = db.query_one("""
+        SELECT COALESCE(SUM(quantity), 0) as total_units
+        FROM STOCK_MOVEMENT
+        WHERE movement_type = 'IN' AND reason = 'Customer Return'
     """)
-    return render_template('operations/returns.html', credit_notes=notes)
+    total_units_restocked = restocked_cnt_row['total_units'] if restocked_cnt_row else 0
+
+    cur_month_str = today.strftime('%Y-%m')
+    month_notes = [n for n in all_notes if str(n.get('created_at') or '')[:7] == cur_month_str]
+    month_refunded = sum(float(n['refund_amount'] or 0.0) for n in month_notes)
+
+    stats = {
+        'total_count': len(all_notes),
+        'total_refunded': total_refunded,
+        'month_count': len(month_notes),
+        'month_refunded': month_refunded,
+        'units_restocked': total_units_restocked
+    }
+
+    # Available sales eligible for return
+    available_sales = db.query("""
+        SELECT s.sale_id, s.invoice_number, s.sale_date, s.grand_total, s.amount_paid, s.payment_method, s.customer_id,
+               c.customer_name, c.phone, c.city
+        FROM SALE s
+        LEFT JOIN CUSTOMER c ON s.customer_id = c.customer_id
+        LEFT JOIN CREDIT_NOTE cn ON s.sale_id = cn.sale_id
+        WHERE cn.credit_note_id IS NULL AND s.payment_status != 'Refunded' AND s.amount_paid > 0
+        ORDER BY s.sale_id DESC
+        LIMIT 60
+    """)
+    for s in available_sales:
+        s['sale_items'] = db.query("""
+            SELECT si.product_id, si.quantity, si.unit_price, si.total_price, p.product_name, p.product_code
+            FROM SALE_ITEM si
+            JOIN PRODUCT p ON si.product_id = p.product_id
+            WHERE si.sale_id = %s
+        """, (s['sale_id'],))
+
+    return render_template('operations/returns.html',
+                           credit_notes=notes,
+                           stats=stats,
+                           available_sales=available_sales,
+                           current_search=search,
+                           current_date=date_filter,
+                           today=today)
+
+
+@app.route('/api/returns/invoice-lookup/<invoice_number>')
+@login_required
+def returns_invoice_lookup(invoice_number):
+    invoice_no = invoice_number.strip().upper()
+    sale = db.query_one("""
+        SELECT s.sale_id, s.invoice_number, s.sale_date, s.grand_total, s.amount_paid, s.payment_status,
+               s.payment_method, c.customer_name, c.phone, c.city
+        FROM SALE s
+        LEFT JOIN CUSTOMER c ON s.customer_id = c.customer_id
+        WHERE UPPER(s.invoice_number) = %s
+    """, (invoice_no,))
+
+    if not sale:
+        return jsonify({'found': False, 'error': f"Invoice '{invoice_no}' was not found in the sales register."}), 404
+
+    prior = db.query_one("SELECT credit_note_id, credit_note_number, refund_amount, created_at FROM CREDIT_NOTE WHERE sale_id = %s", (sale['sale_id'],))
+    if prior or sale['payment_status'] == 'Refunded':
+        return jsonify({
+            'found': True,
+            'eligible': False,
+            'error': f"Invoice {sale['invoice_number']} has already been returned/refunded under Credit Note {prior['credit_note_number'] if prior else 'CN'}."
+        }), 400
+
+    if (sale.get('amount_paid') or 0.0) <= 0:
+        return jsonify({
+            'found': True,
+            'eligible': False,
+            'error': f"Invoice {sale['invoice_number']} has 0 amount paid (unsettled credit sale)."
+        }), 400
+
+    items = db.query("""
+        SELECT si.product_id, si.quantity, si.unit_price, si.total_price, p.product_name, p.product_code
+        FROM SALE_ITEM si
+        JOIN PRODUCT p ON si.product_id = p.product_id
+        WHERE si.sale_id = %s
+    """, (sale['sale_id'],))
+
+    return jsonify({
+        'found': True,
+        'eligible': True,
+        'sale': sale,
+        'items': items,
+        'max_refund': float(sale['amount_paid'])
+    })
 
 
 def _next_sequence(tx, table, column, id_column, prefix):
