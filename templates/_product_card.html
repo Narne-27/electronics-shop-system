@@ -9,7 +9,11 @@
     {% set theme_class = 'pc-card--grey' %}
 {% endif %}
 
-<article class="pc-card {{ theme_class }}" tabindex="0" aria-label="{{ product.product_name }}">
+{% set detail_url = url_for('product_detail', product_id=product.product_id) %}
+<article class="pc-card {{ theme_class }}" tabindex="0" role="link"
+         aria-label="{{ product.product_name }}" style="cursor: pointer;"
+         onclick="if (!event.target.closest('a')) window.location.href='{{ detail_url }}';"
+         onkeydown="if (event.key === 'Enter' && event.target === this) window.location.href='{{ detail_url }}';">
     <div class="pc-card-header-stack">
         {% if product.is_new %}
         <span class="pc-card-eyebrow">NEW</span>
@@ -29,7 +33,7 @@
              onerror="this.onerror=null; this.src='/static/images/logo.svg'; this.classList.add('pc-card-image-fallback');">
     </div>
 
-    <a href="{{ url_for('products', search=product.product_code) }}" 
+    <a href="{{ detail_url }}" 
        class="pc-card-btn" 
        aria-label="View details for {{ product.product_name }}"
        title="Explore {{ product.product_name }}">

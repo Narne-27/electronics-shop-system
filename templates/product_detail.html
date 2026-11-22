@@ -1,0 +1,156 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ product.product_name }}{% endblock %}
+
+{% block content %}
+{% set is_manager = current_user.role in ['Admin', 'Manager', 'System Administrator', 'Shop Owner', 'Shop Manager'] %}
+{% set margin = ((product.selling_price - product.cost_price) / product.selling_price * 100) if product.selling_price > 0 else 0 %}
+
+<!-- Breadcrumb / Back -->
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0 small">
+            <li class="breadcrumb-item"><a href="{{ url_for('products') }}" class="text-decoration-none">Products</a></li>
+            <li class="breadcrumb-item">{{ product.category_name }}</li>
+            <li class="breadcrumb-item active" aria-current="page">{{ product.product_code }}</li>
+        </ol>
+    </nav>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('products') }}" class="btn btn-outline-secondary d-flex align-items-center gap-1 shadow-sm">
+            <i class="bi bi-arrow-left"></i><span>Back to Products</span>
+        </a>
+        {% if is_manager %}
+        <a href="{{ url_for('products', search=product.product_code) }}" class="btn btn-navy d-flex align-items-center gap-2 shadow-sm">
+            <i class="bi bi-pencil-square"></i><span>Edit in Catalog</span>
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Image -->
+    <div class="col-12 col-lg-5">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-body p-4 d-flex align-items-center justify-content-center" style="min-height: 360px;">
+                <img src="{{ product.image_url or '/static/images/logo.svg' }}"
+                     alt="{{ product.product_name }}"
+                     class="img-fluid"
+                     style="max-height: 420px; object-fit: contain;"
+                     onerror="this.onerror=null; this.src='/static/images/logo.svg';">
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="col-12 col-lg-7">
+        <div class="card border-0 shadow-sm rounded-4 mb-4">
+            <div class="card-body p-4">
+                <div class="mb-2">
+                    <span class="badge bg-light text-secondary border">{{ product.category_name }}</span>
+                    {% if product.is_new %}
+                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1">NEW</span>
+                    {% endif %}
+                </div>
+                <h1 class="fw-bold text-dark mb-1" style="font-size: 1.75rem;">{{ product.product_name }}</h1>
+                <div class="text-muted mb-3">
+                    {{ product.brand }}{% if product.model %} &bull; {{ product.model }}{% endif %}
+                </div>
+                {% if product.tagline %}
+                <p class="fst-italic text-secondary mb-3">{{ product.tagline }}</p>
+                {% endif %}
+
+                <div class="d-flex flex-wrap align-items-end gap-3 mb-3">
+                    <div class="fw-bold text-dark" style="font-size: 2rem; line-height: 1;">{{ product.selling_price|inr }}</div>
+                    {% if product.stock_quantity == 0 %}
+                    <span class="badge bg-danger">Out of Stock</span>
+                    {% elif product.stock_quantity <= product.reorder_level %}
+                    <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle-fill me-1"></i>Low Stock &ndash; {{ product.stock_quantity }} left</span>
+                    {% else %}
+                    <span class="badge bg-success-subtle text-success border border-success-subtle">In Stock &ndash; {{ product.stock_quantity }} units</span>
+                    {% endif %}
+                </div>
+
+                <div class="d-flex flex-wrap gap-2">
+                    <span class="badge bg-light text-dark border">
+                        <i class="bi bi-shield-check text-primary me-1"></i>{{ product.warranty_months }} month{{ '' if product.warranty_months == 1 else 's' }} warranty
+                    </span>
+                    {% if product.hsn_code %}
+                    <span class="badge bg-light text-dark border">HSN {{ product.hsn_code }}</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Key facts -->
+        <div class="card border-0 shadow-sm rounded-4">
+            <div class="card-header bg-transparent border-0 pt-4 px-4 pb-0">
+                <h2 class="h6 fw-bold text-dark mb-0">Product Details</h2>
+            </div>
+            <div class="card-body p-4">
+                <div class="row g-3">
+                    <div class="col-6 col-md-4">
+                        <div class="text-muted small">SKU / Code</div>
+                        <code class="fw-bold text-dark">{{ product.product_code }}</code>
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <div class="text-muted small">Brand</div>
+                        <div class="fw-semibold text-dark">{{ product.brand or '—' }}</div>
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <div class="text-muted small">Model</div>
+                        <div class="fw-semibold text-dark">{{ product.model or '—' }}</div>
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <div class="text-muted small">Category</div>
+                        <div class="fw-semibold text-dark">{{ product.category_name }}</div>
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <div class="text-muted small">Selling Price</div>
+                        <div class="fw-semibold text-dark">{{ product.selling_price|inr }}</div>
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <div class="text-muted small">Warranty</div>
+                        <div class="fw-semibold text-dark">{{ product.warranty_months }} month{{ '' if product.warranty_months == 1 else 's' }}</div>
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <div class="text-muted small">Stock Quantity</div>
+                        <div class="fw-semibold text-dark">{{ product.stock_quantity }} units</div>
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <div class="text-muted small">Reorder Alert Level</div>
+                        <div class="fw-semibold text-dark">&le; {{ product.reorder_level }}</div>
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <div class="text-muted small">HSN Code</div>
+                        <div class="fw-semibold text-dark">{{ product.hsn_code or '—' }}</div>
+                    </div>
+                    {% if is_manager %}
+                    <div class="col-6 col-md-4">
+                        <div class="text-muted small">Cost Price</div>
+                        <div class="fw-semibold text-dark">{{ product.cost_price|inr }}</div>
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <div class="text-muted small">Margin</div>
+                        <div class="fw-semibold text-success">+{{ "%.1f"|format(margin) }}%</div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Specs / description -->
+<div class="card border-0 shadow-sm rounded-4 mt-4">
+    <div class="card-header bg-transparent border-0 pt-4 px-4 pb-0">
+        <h2 class="h6 fw-bold text-dark mb-0">Specifications &amp; Description</h2>
+    </div>
+    <div class="card-body p-4">
+        {% if product.description %}
+        <div class="text-dark" style="white-space: pre-line;">{{ product.description }}</div>
+        {% else %}
+        <span class="text-muted">No specifications have been added for this product yet.</span>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
