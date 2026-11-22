@@ -154,6 +154,17 @@
 {% block scripts %}
 <!-- Three.js pinned from cdnjs exclusively for login intro scene -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script type="module">
+  if (typeof THREE === 'undefined') {
+    try {
+      const THREE_MOD = await import('three');
+      window.THREE = THREE_MOD;
+      if (window.initLoginScene) window.initLoginScene();
+    } catch (e) {
+      console.warn('Three.js module fallback error:', e);
+    }
+  }
+</script>
 <script src="{{ url_for('static', filename='js/login-scene.js') }}"></script>
 
 <script>
