@@ -1,5 +1,5 @@
 /**
- * Electrodesk - Photorealistic 3D Exploded Circuit Board Stylesheet
+ * Electrodesk – Studio Motherboard Scene Stylesheet
  * Scoped strictly to /login page only.
  */
 
@@ -15,7 +15,7 @@ html.login-page #vignette-overlay {
 
 body.login-page,
 html.login-page body {
-    background: radial-gradient(circle at 35% 50%, #0e1e38 0%, #0b1224 55%, #05070f 100%) !important;
+    background: linear-gradient(165deg, #0b1224 0%, #050814 100%) !important;
     overflow-x: hidden;
     min-height: 100vh;
 }
@@ -26,7 +26,7 @@ html.login-page body {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 2.5rem 1rem;
+    padding: 1.5rem 2rem;
     position: relative;
     z-index: 2;
     overflow-y: auto;
@@ -34,19 +34,19 @@ html.login-page body {
 
 .login-split-row {
     width: 100%;
-    max-width: 1280px;
+    max-width: 1760px;
     margin: 0 auto;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 2.5rem;
+    gap: 1.5rem;
 }
 
 /* 3D Scene Column (Left Side) */
 .login-3d-scene-col {
-    flex: 1 1 56%;
-    height: 600px;
-    min-height: 520px;
+    flex: 1 1 58%;
+    height: clamp(520px, 82vh, 880px);
+    min-height: 500px;
     position: relative;
     display: flex;
     flex-direction: column;
@@ -56,32 +56,7 @@ html.login-page body {
     z-index: 2;
 }
 
-/* Soft Cyan Spotlight behind the 3D board */
-.login-3d-scene-col::before {
-    content: '';
-    position: absolute;
-    width: 520px;
-    height: 520px;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(34, 211, 238, 0.20) 0%, rgba(56, 189, 248, 0.08) 40%, rgba(11, 18, 36, 0) 75%);
-    filter: blur(35px);
-    pointer-events: none;
-    z-index: 0;
-    animation: pulseSpotlight 7s ease-in-out infinite alternate;
-}
-
-@keyframes pulseSpotlight {
-    0% {
-        transform: scale(0.92);
-        opacity: 0.70;
-    }
-    100% {
-        transform: scale(1.10);
-        opacity: 1;
-    }
-}
-
-/* 3D Canvas wrapper */
+/* 3D Canvas wrapper (faint radial glow so contact shadow reads cleanly) */
 .login-canvas-container {
     width: 100%;
     height: 100%;
@@ -91,6 +66,7 @@ html.login-page body {
     display: flex;
     align-items: center;
     justify-content: center;
+    background: radial-gradient(ellipse 64% 52% at 50% 52%, rgba(36, 70, 135, 0.48) 0%, rgba(18, 36, 74, 0.22) 45%, transparent 76%);
 }
 
 #login-board-canvas {
@@ -106,42 +82,6 @@ html.login-page body {
 
 #login-board-canvas:active {
     cursor: grabbing;
-}
-
-/* Hardware Telemetry Badge */
-.scene-hardware-status {
-    position: absolute;
-    bottom: 14px;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 16px;
-    background: rgba(11, 27, 58, 0.82);
-    border: 1px solid rgba(34, 211, 238, 0.30);
-    border-radius: 20px;
-    backdrop-filter: blur(10px);
-    font-size: 0.75rem;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    color: #94a3b8;
-    z-index: 3;
-    pointer-events: none;
-    user-select: none;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
-    transition: all 0.3s ease;
-}
-
-.scene-status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #22d3ee;
-    box-shadow: 0 0 8px #22d3ee;
-    animation: blinkStatus 2s infinite ease-in-out;
-}
-
-@keyframes blinkStatus {
-    0%, 100% { opacity: 0.55; transform: scale(0.85); }
-    50% { opacity: 1; transform: scale(1.20); box-shadow: 0 0 14px #38bdf8; }
 }
 
 /* Login Card Column (Right Side - Never Overlapped) */
@@ -203,14 +143,55 @@ html.login-page body {
     pointer-events: none;
 }
 
-.login-board-fallback .fallback-chip-icon {
+.login-board-fallback .fallback-chip-icon,
+.webgl-fallback-container .fallback-chip-icon {
     font-size: 3.5rem;
     color: #22d3ee;
     margin-bottom: 0.8rem;
     filter: drop-shadow(0 0 16px rgba(34, 211, 238, 0.4));
 }
 
-.login-board-fallback .fallback-caption {
+.webgl-fallback-image {
+    max-width: 90%;
+    max-height: 75%;
+    object-fit: contain;
+    border-radius: 12px;
+    margin-bottom: 1rem;
+    opacity: 0.92;
+}
+
+.scene-loading-indicator {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    color: #94a3b8;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.78rem;
+    letter-spacing: 0.1em;
+    pointer-events: none;
+    z-index: 4;
+    transition: opacity 0.25s ease;
+}
+
+.scene-loading-spinner {
+    width: 28px;
+    height: 28px;
+    border: 2px solid rgba(148, 163, 184, 0.2);
+    border-top-color: #38bdf8;
+    border-radius: 50%;
+    animation: spinSceneLoader 0.8s linear infinite;
+}
+
+@keyframes spinSceneLoader {
+    to { transform: rotate(360deg); }
+}
+
+.login-board-fallback .fallback-caption,
+.webgl-fallback-container .fallback-caption {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-size: 0.8rem;
     letter-spacing: 0.12em;
@@ -247,40 +228,26 @@ html.login-page body {
     }
 }
 
-/* Mobile Screens (< 768px): Simplified Compact Scene */
-@media (max-width: 767.98px) {
+/* Small screens (< 900px): Hide 3D scene entirely, show login card only */
+@media (max-width: 899.98px) {
     .login-3d-scene-col {
-        flex: 0 0 280px !important;
-        height: 280px !important;
-        min-height: 250px !important;
-        max-width: 100% !important;
-    }
-
-    .login-canvas-container {
-        min-height: 250px !important;
-    }
-
-    #login-board-canvas {
-        min-height: 230px !important;
-    }
-
-    .login-split-row {
-        gap: 1rem !important;
+        display: none !important;
     }
 
     .login-card-col {
         flex: 1 1 100% !important;
-        max-width: 460px !important;
+        max-width: 480px !important;
         margin: 0 auto !important;
+    }
+
+    .login-split-row {
+        justify-content: center !important;
     }
 }
 
 /* Accessibility: Prefers Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
-    .login-3d-scene-col::before {
-        animation: none;
-    }
-    .scene-status-dot {
-        animation: none;
+    #login-board-canvas {
+        cursor: default;
     }
 }

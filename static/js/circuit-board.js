@@ -1,1416 +1,1794 @@
 /**
- * Electrodesk - Photorealistic 3D Exploded-Layer PCB Intro Scene
- * Modular Three.js Implementation
- * 
- * Visual Target: Layer Stack PCB floating over warm paper studio.
- * Layers:
- *  - Screws & Heatsink (Top floating)
- *  - Components (ICs, Ports, GPIO, Capacitors, SMD passives, drifting motes)
- *  - Frosted Translucent Top Film (with faint trace & silkscreen art)
- *  - Deep Green Solder-Mask PCB (with copper traces, vias, gold pads)
- *  - Copper/Tan FR-4 Substrate Layer (with copper pour & drill holes)
- *  - Four Standoff Pillars (linking the stack)
- *  - Soft contact shadow floor
+ * Electrodesk – Studio Motherboard Scene  (Stage 1 – v2)
+ * ───────────────────────────────────────────────────────
+ * PCB board, heatsink, screws, materials, studio lighting & camera.
+ * Three.js r143 · ES-module · import-map ready.
+ *
+ * Exports:
+ *   window.triggerBoardPowerOn(callback)
+ *   window.initCircuitBoardScene()
  */
 
-(function (global) {
-    'use strict';
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
-    // =========================================================================
-    // 1. NAMED CONSTANTS & PALETTES
-    // =========================================================================
-    const COLORS = {
-        SOLDER_MASK: 0x14532d,       // Deep emerald green glossy solder mask (#14532d)
-        SUBSTRATE_TAN: 0xc27838,     // Warm copper/tan FR-4 substrate (#c27838)
-        COPPER_TRACE: 0xd97706,      // Copper tracks & pour (#d97706)
-        GOLD_ENIG: 0xf59e0b,         // Electroless Nickel Immersion Gold pads & pins (#f59e0b)
-        ALUMINUM_HEATSINK: 0xd8dde4, // Anodized / brushed aluminum (#d8dde4)
-        BRUSHED_STEEL: 0xcbd5e1,     // Metal connector shields (#cbd5e1)
-        USB3_BLUE: 0x0284c7,         // Vivid USB 3.0 blue tongue (#0284c7)
-        FROSTED_FILM: 0xf8fafc,      // Translucent frosted film layer
-        CHIP_BODY: 0x15181c,         // Near-black IC epoxy molding compound (#15181c)
-        STANDOFF_BLACK: 0x27272a,    // Black oxide / dark steel standoffs
-        STANDOFF_BRASS: 0xd97706,    // Brass hex standoff option
-        SCREW_STEEL: 0xe2e8f0,       // Polished steel Phillips screws
-        LED_CYAN: 0x22d3ee,          // Cyan power LED
-        LED_AMBER: 0xfbbf24,         // Amber activity LED
-        SMD_CAPACITOR: 0xb45309,     // Caramel ceramic capacitor body
-        SMD_RESISTOR: 0x18181b       // Black resistor body
-    };
+/* ═══════════════════════════════════════════════════════════
+   0.  CONSTANTS & CONFIG
+   ═══════════════════════════════════════════════════════════ */
+const DPR_CAP = 2;
+const FOV     = 30;
+const ANISO   = 16;
 
-    const GAPS = {
-        // Vertical Y offsets in EXPLODED state
-        EXPLODED: {
-            STANDOFF_FEET: -1.75,
-            SUBSTRATE: -0.90,
-            MAIN_PCB: 0.15,
-            FROSTED_FILM: 1.15,
-            SMD_PARTS: 1.80,
-            COMPONENTS: 2.50,
-            HEATSINK: 3.45,
-            SCREWS: 4.30
-        },
-        // Vertical Y offsets in ASSEMBLED state
-        ASSEMBLED: {
-            STANDOFF_FEET: -0.16,
-            SUBSTRATE: -0.04,
-            MAIN_PCB: 0.02,
-            FROSTED_FILM: 0.06,
-            SMD_PARTS: 0.08,
-            COMPONENTS: 0.10,
-            HEATSINK: 0.22,
-            SCREWS: 0.11
+const PAL = {
+  pcbMask      : 0x0d1a2e,
+  pcbEdge      : 0x05070c,
+  pcbBottom    : 0x060912,
+  copperTrace  : 0x173256,
+  goldENIG     : 0xb89030,
+  silkscreen   : 0xd8e0ec,
+  heatsinkAlu  : 0x383f48,
+  copperPipe   : 0xb87038,
+  bracketSteel : 0x161b24,
+  screwSteel   : 0x161a20,
+  washerSteel  : 0x20252d,
+};
+
+const PCB_W = 6.0, PCB_D = 4.2, PCB_H = 0.10;
+
+// Shared IC chip specs (UV fractions -> exact world X, Z & pad alignment)
+const CHIP_SPECS = [
+  { u: 0.13, v: 0.38, pw: 140, ph: 100, label: 'U1  MCU',  mark: 'ED-32F407\n2644A-IND' },
+  { u: 0.74, v: 0.24, pw: 150, ph: 105, label: 'U2  VRM',  mark: 'TPS-54820\nPWM-CTRL' },
+  { u: 0.72, v: 0.62, pw: 200, ph: 135, label: 'U3  NAND', mark: 'ED-NAND256\nREV 3.2' },
+  { u: 0.20, v: 0.66, pw: 130, ph: 95,  label: 'U4  PHY',  mark: 'RTL-8125B\nGBE-PHY' },
+  { u: 0.83, v: 0.43, pw: 120, ph: 90,  label: 'U5  BIOS', mark: 'MX25L128\nUEFI-ROM' },
+  { u: 0.46, v: 0.72, pw: 160, ph: 110, label: 'U6  PMIC', mark: 'PMIC-802\n3V3/5V' },
+];
+
+/* ═══════════════════════════════════════════════════════════
+   1.  PROCEDURAL TEXTURES – PHYSICAL PCB + MATCHING PBR MAPS
+   ═══════════════════════════════════════════════════════════ */
+
+function createPCBTextures(w = 2048, h = 2048) {
+  const cCol = document.createElement('canvas');
+  const cRgh = document.createElement('canvas');
+  const cMet = document.createElement('canvas');
+  cCol.width = cRgh.width = cMet.width = w;
+  cCol.height = cRgh.height = cMet.height = h;
+
+  const gC = cCol.getContext('2d');
+  const gR = cRgh.getContext('2d');
+  const gM = cMet.getContext('2d');
+
+  // --- base solder-mask (deep matte blue-black #0d1a2e, matte roughness ~0.58) ---
+  gC.fillStyle = '#0d1a2e';
+  gC.fillRect(0, 0, w, h);
+  gR.fillStyle = '#949494';
+  gR.fillRect(0, 0, w, h);
+  gM.fillStyle = '#000000';
+  gM.fillRect(0, 0, w, h);
+
+  // subtle fiberglass weave / mask grain
+  for (let i = 0; i < 6000; i++) {
+    const v = 12 + Math.random() * 10 | 0;
+    gC.fillStyle = `rgba(${v},${v + 12},${v + 24},0.14)`;
+    const x = Math.random() * w, y = Math.random() * h;
+    gC.fillRect(x, y, 1.5, 1.5);
+  }
+
+  // Helper: draw synchronized trace (thin 2-4px, slightly lighter than mask)
+  function drawTrace(pts, width = 3.0) {
+    for (const [ctx, col] of [[gC, '#183358'], [gR, '#767676'], [gM, '#262626']]) {
+      ctx.save();
+      ctx.strokeStyle = col;
+      ctx.lineWidth = width;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  // Helper: draw a muted gold via at (x, y)
+  const vias = [];
+  function addVia(vx, vy, r = 6.5) {
+    vias.push([vx, vy, r]);
+  }
+
+  // ---- TIDY PARALLEL BUS GROUPS (every trace starts and ends at a via or chip pad) ----
+  // Group 1: Left edge vias -> U1 MCU
+  for (let i = 0; i < 6; i++) {
+    const y0 = h * 0.19 + i * 11;
+    const xStart = w * 0.08;
+    const xEnd = w * 0.17 - 70;
+    const bendX = xStart + 60 + i * 8;
+    addVia(xStart, y0, 6);
+    drawTrace([[xStart, y0], [bendX, y0], [bendX + 18, y0 + 18], [xEnd, y0 + 18]], 2.8);
+  }
+
+  // Group 2: U1 MCU -> U2 VRM (horizontal upper bus across top)
+  for (let i = 0; i < 7; i++) {
+    const y0 = h * 0.20 + i * 10;
+    const xStart = w * 0.17 + 70;
+    const xEnd = w * 0.74 - 75;
+    const bendX = w * 0.45 + i * 12;
+    drawTrace([[xStart, y0], [bendX, y0], [bendX + 20, y0 - 20], [xEnd, y0 - 20]], 2.6);
+  }
+
+  // Group 3: U2 VRM -> U5 BIOS (vertical bus)
+  for (let i = 0; i < 5; i++) {
+    const x0 = w * 0.72 + i * 11;
+    const yStart = h * 0.24 + 52;
+    const yEnd = h * 0.43 - 45;
+    drawTrace([[x0, yStart], [x0, yEnd]], 2.6);
+  }
+
+  // Group 4: U5 BIOS -> U3 NAND (vertical bus)
+  for (let i = 0; i < 5; i++) {
+    const x0 = w * 0.81 + i * 11;
+    const yStart = h * 0.43 + 45;
+    const yEnd = h * 0.62 - 68;
+    const xDest = w * 0.72 + 20 + i * 11;
+    drawTrace([[x0, yStart], [x0, yStart + 35], [xDest, yStart + 35 + Math.abs(x0 - xDest) * 0.5], [xDest, yEnd]], 2.6);
+  }
+
+  // Group 5: U4 PHY -> U6 PMIC -> U3 NAND (clean lower horizontal bus, clear of ELECTRODESK text)
+  for (let i = 0; i < 6; i++) {
+    const y0 = h * 0.65 + i * 11;
+    const x1 = w * 0.20 + 65;
+    const x2 = w * 0.46 - 80;
+    drawTrace([[x1, y0], [x2, y0]], 3.0);
+
+    const x3 = w * 0.46 + 80;
+    const x4 = w * 0.72 - 100;
+    drawTrace([[x3, y0], [x3 + 50, y0], [x3 + 75, y0 - 25], [x4, y0 - 25]], 3.0);
+  }
+
+  // Group 6: Vertical feeder buses from heatsink socket area down to U6 PMIC
+  for (let i = 0; i < 6; i++) {
+    const x0 = w * 0.41 + i * 12;
+    const yStart = h * 0.52;
+    const yEnd = h * 0.68 - 55;
+    addVia(x0, yStart, 6);
+    drawTrace([[x0, yStart], [x0, yEnd]], 2.5);
+  }
+
+  // Group 7: Left vertical bus U1 MCU -> U4 PHY
+  for (let i = 0; i < 5; i++) {
+    const x0 = w * 0.16 + i * 11;
+    const yStart = h * 0.24 + 50;
+    const yEnd = h * 0.66 - 48;
+    drawTrace([[x0, yStart], [x0, yEnd]], 2.6);
+  }
+
+  // Group 8: Right edge termination vias from U3 NAND & U2 VRM
+  for (let i = 0; i < 5; i++) {
+    const y0 = h * 0.58 + i * 12;
+    const xStart = w * 0.72 + 100;
+    const xEnd = w * 0.91;
+    addVia(xEnd, y0, 6);
+    drawTrace([[xStart, y0], [xEnd, y0]], 2.5);
+  }
+
+  // ---- CHIP FOOTPRINT PADS (muted gold pads + readable silkscreen labels) ----
+  const chipPositions = CHIP_SPECS.map(c => ({
+    cx: w * c.u, cy: h * c.v, pw: c.pw, ph: c.ph, label: c.label
+  }));
+
+  for (const cp of chipPositions) {
+    const { cx, cy, pw, ph, label } = cp;
+
+    // silkscreen outline (off-white matte)
+    gC.strokeStyle = '#d8e0ec';
+    gC.lineWidth = 2.5;
+    gC.globalAlpha = 0.75;
+    gC.strokeRect(cx - pw / 2, cy - ph / 2, pw, ph);
+    gR.strokeStyle = '#b8b8b8';
+    gR.lineWidth = 2.5;
+    gR.strokeRect(cx - pw / 2, cy - ph / 2, pw, ph);
+
+    // pin-1 dot
+    gC.beginPath();
+    gC.arc(cx - pw / 2 + 12, cy - ph / 2 + 12, 4.5, 0, Math.PI * 2);
+    gC.fillStyle = '#d8e0ec';
+    gC.globalAlpha = 0.88;
+    gC.fill();
+
+    // muted gold ENIG pads along each side
+    const padW = 6, padH = 14, padGap = 12;
+    const padsPerSide = Math.floor((pw - 16) / padGap);
+    const padsVert = Math.floor((ph - 16) / padGap);
+    for (const [ctx, col] of [[gC, '#c49b36'], [gR, '#383838'], [gM, '#dcdcdc']]) {
+      ctx.fillStyle = col;
+      ctx.globalAlpha = 1.0;
+      for (let i = 0; i < padsPerSide; i++) {
+        const px = cx - pw / 2 + 12 + i * padGap;
+        ctx.fillRect(px, cy - ph / 2 - padH / 2, padW, padH);
+        ctx.fillRect(px, cy + ph / 2 - padH / 2, padW, padH);
+      }
+      for (let i = 0; i < padsVert; i++) {
+        const py = cy - ph / 2 + 12 + i * padGap;
+        ctx.fillRect(cx - pw / 2 - padH / 2, py, padH, padW);
+        ctx.fillRect(cx + pw / 2 - padH / 2, py, padH, padW);
+      }
+    }
+
+    // crisp off-white label
+    gC.font = 'bold 22px monospace';
+    gC.fillStyle = '#d8e0ec';
+    gC.globalAlpha = 0.90;
+    gC.textAlign = 'center';
+    gC.fillText(label, cx, cy + 7);
+    gR.font = 'bold 22px monospace';
+    gR.fillStyle = '#b8b8b8';
+    gR.textAlign = 'center';
+    gR.fillText(label, cx, cy + 7);
+  }
+  gC.globalAlpha = 1;
+  gC.textAlign = 'start';
+  gR.textAlign = 'start';
+
+  // ---- DRAW ALL TERMINATION VIAS (muted gold) ----
+  for (const [vx, vy, r] of vias) {
+    for (const [ctx, col] of [[gC, '#c49b36'], [gR, '#383838'], [gM, '#dcdcdc']]) {
+      ctx.beginPath(); ctx.arc(vx, vy, r, 0, Math.PI * 2);
+      ctx.fillStyle = col;
+      ctx.fill();
+    }
+    for (const [ctx, col] of [[gC, '#060a14'], [gR, '#949494'], [gM, '#000000']]) {
+      ctx.beginPath(); ctx.arc(vx, vy, r * 0.4, 0, Math.PI * 2);
+      ctx.fillStyle = col;
+      ctx.fill();
+    }
+  }
+
+  // ---- SILKSCREEN REFERENCE DESIGNATORS (placed in clear space) ----
+  const refs = [
+    { t: 'R1', x: 0.11, y: 0.12 }, { t: 'R12', x: 0.31, y: 0.12 }, { t: 'R18', x: 0.62, y: 0.12 },
+    { t: 'C1', x: 0.10, y: 0.42 }, { t: 'C6',  x: 0.64, y: 0.35 }, { t: 'C15', x: 0.88, y: 0.20 },
+    { t: 'D1', x: 0.10, y: 0.54 }, { t: 'Q1',  x: 0.64, y: 0.48 }, { t: 'L1',  x: 0.84, y: 0.76 },
+    { t: 'J1', x: 0.14, y: 0.84 }, { t: 'J2',  x: 0.24, y: 0.84 }, { t: 'SW1', x: 0.80, y: 0.84 },
+    { t: 'VCC3V3', x: 0.62, y: 0.16 }, { t: 'VCC5V', x: 0.10, y: 0.48 },
+    { t: 'SDA', x: 0.56, y: 0.58 }, { t: 'SCL', x: 0.62, y: 0.58 },
+  ];
+  gC.font = 'bold 20px monospace';
+  gC.fillStyle = '#d8e0ec';
+  gR.font = 'bold 20px monospace';
+  gR.fillStyle = '#b8b8b8';
+  for (const r of refs) {
+    const lx = w * r.x, ly = h * r.y;
+    gC.globalAlpha = 0.85;
+    gC.fillText(r.t, lx, ly);
+    gR.fillText(r.t, lx, ly);
+  }
+  gC.globalAlpha = 1;
+
+  // ---- LARGE BRAND SILKSCREEN IN CLEAR SPACE (no traces over it) ----
+  gC.font = 'bold 76px monospace';
+  gC.fillStyle = '#d8e0ec';
+  gC.globalAlpha = 0.94;
+  gC.textAlign = 'center';
+  gC.fillText('ELECTRODESK', w * 0.50, h * 0.89);
+  gC.font = 'bold 24px monospace';
+  gC.globalAlpha = 0.82;
+  gC.fillText('REV 3.2  •  MADE IN INDIA', w * 0.50, h * 0.94);
+  gC.textAlign = 'start';
+  gC.globalAlpha = 1;
+
+  gR.font = 'bold 76px monospace';
+  gR.fillStyle = '#b8b8b8';
+  gR.textAlign = 'center';
+  gR.fillText('ELECTRODESK', w * 0.50, h * 0.89);
+  gR.font = 'bold 24px monospace';
+  gR.fillText('REV 3.2  •  MADE IN INDIA', w * 0.50, h * 0.94);
+  gR.textAlign = 'start';
+
+  const mapTex = new THREE.CanvasTexture(cCol);
+  mapTex.encoding = THREE.sRGBEncoding;
+  mapTex.anisotropy = ANISO;
+  mapTex.wrapS = mapTex.wrapT = THREE.RepeatWrapping;
+
+  const roughTex = new THREE.CanvasTexture(cRgh);
+  roughTex.anisotropy = ANISO;
+  roughTex.wrapS = roughTex.wrapT = THREE.RepeatWrapping;
+
+  const metalTex = new THREE.CanvasTexture(cMet);
+  metalTex.anisotropy = ANISO;
+  metalTex.wrapS = metalTex.wrapT = THREE.RepeatWrapping;
+
+  return { mapTex, roughTex, metalTex };
+}
+
+function createContactShadowTexture(w = 512, h = 512) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const g = c.getContext('2d');
+  const cx = w / 2, cy = h / 2;
+  const grad = g.createRadialGradient(cx, cy, w * 0.22, cx, cy, w * 0.49);
+  grad.addColorStop(0.0, 'rgba(0, 0, 0, 0.98)');
+  grad.addColorStop(0.55, 'rgba(0, 0, 0, 0.80)');
+  grad.addColorStop(0.80, 'rgba(0, 0, 0, 0.36)');
+  grad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, w, h);
+  const tex = new THREE.CanvasTexture(c);
+  tex.encoding = THREE.sRGBEncoding;
+  return tex;
+}
+
+function createHeatsinkFinTexture(w = 64, h = 256) {
+  // Satin aluminium vertical gradient: dark in the grooves, satin highlight at top edge (never pure white)
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const g = c.getContext('2d');
+  const grad = g.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0.0,  '#cfd6df'); // satin aluminium top edge
+  grad.addColorStop(0.10, '#9aa3af');
+  grad.addColorStop(0.45, '#5a626e');
+  grad.addColorStop(1.0,  '#22272f'); // dark groove base
+  g.fillStyle = grad;
+  g.fillRect(0, 0, w, h);
+  const tex = new THREE.CanvasTexture(c);
+  tex.encoding = THREE.sRGBEncoding;
+  tex.anisotropy = ANISO;
+  return tex;
+}
+
+function createBrushedMetalTexture(w = 512, h = 512) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const g = c.getContext('2d');
+  g.fillStyle = '#585858';
+  g.fillRect(0, 0, w, h);
+  for (let y = 0; y < h; y++) {
+    const v = 78 + Math.random() * 44 | 0;
+    g.strokeStyle = `rgb(${v},${v},${v})`;
+    g.lineWidth = 0.5 + Math.random();
+    g.beginPath();
+    g.moveTo(0, y); g.lineTo(w, y);
+    g.stroke();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.anisotropy = ANISO;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  return tex;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   2.  MATERIAL LIBRARY
+   ═══════════════════════════════════════════════════════════ */
+function createMaterials() {
+  const { mapTex, roughTex, metalTex } = createPCBTextures();
+  const brushedTex    = createBrushedMetalTexture();
+  const contactShadowTex = createContactShadowTexture();
+  const finGradTex    = createHeatsinkFinTexture();
+
+  return {
+    metalMaskTex: metalTex,
+    solderMask: new THREE.MeshPhysicalMaterial({
+      map: mapTex,
+      roughnessMap: roughTex,
+      metalnessMap: metalTex,
+      roughness: 1.0,
+      metalness: 1.0,
+      clearcoat: 0.15,
+      clearcoatRoughness: 0.35,
+      color: 0xffffff,
+      envMapIntensity: 0.25,
+    }),
+    pcbEdge: new THREE.MeshStandardMaterial({
+      color: PAL.pcbEdge,
+      roughness: 0.88,
+      metalness: 0.0,
+      envMapIntensity: 0.05,
+    }),
+    pcbBottom: new THREE.MeshStandardMaterial({
+      color: PAL.pcbBottom,
+      roughness: 0.70,
+      metalness: 0.0,
+      envMapIntensity: 0.1,
+    }),
+    heatsinkBody: new THREE.MeshPhysicalMaterial({
+      color: PAL.heatsinkAlu,
+      map: finGradTex,
+      metalness: 0.88,
+      roughness: 0.42,
+      roughnessMap: brushedTex,
+      clearcoat: 0.0,
+      envMapIntensity: 0.72,
+    }),
+    copperPipe: new THREE.MeshPhysicalMaterial({
+      color: PAL.copperPipe,
+      metalness: 0.90,
+      roughness: 0.28,
+      envMapIntensity: 0.9,
+    }),
+    bracketSteel: new THREE.MeshStandardMaterial({
+      color: PAL.bracketSteel,
+      metalness: 0.65,
+      roughness: 0.55,
+      envMapIntensity: 0.35,
+    }),
+    screwMetal: new THREE.MeshPhysicalMaterial({
+      color: PAL.screwSteel,
+      metalness: 0.55,
+      roughness: 0.58,
+      clearcoat: 0.0,
+      envMapIntensity: 0.18,
+    }),
+    washerMetal: new THREE.MeshStandardMaterial({
+      color: PAL.washerSteel,
+      metalness: 0.52,
+      roughness: 0.60,
+      envMapIntensity: 0.18,
+    }),
+    icBody: new THREE.MeshStandardMaterial({
+      color: 0x15181e,
+      roughness: 0.68,
+      metalness: 0.04,
+      envMapIntensity: 0.18,
+    }),
+    pinMetal: new THREE.MeshStandardMaterial({
+      color: 0x8a929e,
+      metalness: 0.85,
+      roughness: 0.34,
+      envMapIntensity: 0.48,
+    }),
+    goldPin: new THREE.MeshStandardMaterial({
+      color: 0xc89e38,
+      metalness: 0.88,
+      roughness: 0.26,
+      envMapIntensity: 0.55,
+    }),
+    ioMetal: new THREE.MeshPhysicalMaterial({
+      color: 0x5c6470,
+      metalness: 0.85,
+      roughness: 0.38,
+      roughnessMap: brushedTex,
+      envMapIntensity: 0.52,
+    }),
+    cavityDark: new THREE.MeshStandardMaterial({
+      color: 0x05070a,
+      roughness: 0.92,
+      metalness: 0.0,
+      envMapIntensity: 0.05,
+    }),
+    usbBlue: new THREE.MeshStandardMaterial({
+      color: 0x1a54b0,
+      roughness: 0.48,
+      metalness: 0.0,
+      envMapIntensity: 0.25,
+    }),
+    slotDark: new THREE.MeshStandardMaterial({
+      color: 0x161a22,
+      roughness: 0.62,
+      metalness: 0.08,
+      envMapIntensity: 0.18,
+    }),
+    slotGraphite: new THREE.MeshStandardMaterial({
+      color: 0x222730,
+      roughness: 0.52,
+      metalness: 0.45,
+      envMapIntensity: 0.30,
+    }),
+    latchGrey: new THREE.MeshStandardMaterial({
+      color: 0x2a303a,
+      roughness: 0.55,
+      metalness: 0.15,
+      envMapIntensity: 0.22,
+    }),
+    chokeFerrite: new THREE.MeshStandardMaterial({
+      color: 0x20242c,
+      roughness: 0.72,
+      metalness: 0.14,
+      envMapIntensity: 0.22,
+    }),
+    capBody: new THREE.MeshPhysicalMaterial({
+      color: 0x1c2840,
+      roughness: 0.38,
+      metalness: 0.25,
+      envMapIntensity: 0.35,
+    }),
+    capTopAlu: new THREE.MeshStandardMaterial({
+      color: 0x6e7682,
+      metalness: 0.82,
+      roughness: 0.36,
+      envMapIntensity: 0.42,
+    }),
+    smdResistor: new THREE.MeshStandardMaterial({
+      color: 0x181b20,
+      roughness: 0.55,
+      metalness: 0.12,
+      envMapIntensity: 0.25,
+    }),
+    smdCap: new THREE.MeshStandardMaterial({
+      color: 0x8f6b42,
+      roughness: 0.42,
+      metalness: 0.08,
+      envMapIntensity: 0.30,
+    }),
+    contactShadow: new THREE.MeshBasicMaterial({
+      map: contactShadowTex,
+      transparent: true,
+      depthWrite: false,
+      opacity: 0.98,
+    }),
+    shadowFloor: new THREE.ShadowMaterial({ opacity: 0.45 }),
+  };
+}
+
+/* ═══════════════════════════════════════════════════════════
+   3.  GEOMETRY BUILDERS
+   ═══════════════════════════════════════════════════════════ */
+
+function buildPCB(mats) {
+  const group = new THREE.Group();
+  group.name = 'pcb';
+  const W = 6.0, D = 4.2, H = 0.10;
+
+  // --- Edge body slab (dark, visible thickness) ---
+  const bodyGeo = new THREE.BoxGeometry(W, H, D);
+  const bodyMesh = new THREE.Mesh(bodyGeo, mats.pcbEdge);
+  bodyMesh.position.y = H / 2;
+  bodyMesh.castShadow = true;
+  bodyMesh.receiveShadow = true;
+  group.add(bodyMesh);
+
+  // --- Top face (textured solder mask) ---
+  const topGeo = new THREE.PlaneGeometry(W - 0.004, D - 0.004);
+  const topMesh = new THREE.Mesh(topGeo, mats.solderMask);
+  topMesh.rotation.x = -Math.PI / 2;
+  topMesh.position.y = H + 0.001;
+  topMesh.receiveShadow = true;
+  group.add(topMesh);
+
+  // --- Bottom face ---
+  const botGeo = new THREE.PlaneGeometry(W - 0.004, D - 0.004);
+  const botMesh = new THREE.Mesh(botGeo, mats.pcbBottom);
+  botMesh.rotation.x = Math.PI / 2;
+  botMesh.position.y = -0.001;
+  group.add(botMesh);
+
+  // --- Mounting holes + muted gold rings + 1.5x SCREWS ---
+  const holeR = 0.105;
+  const holeGeo = new THREE.CylinderGeometry(holeR, holeR, H + 0.06, 20);
+  const holeMat = new THREE.MeshStandardMaterial({ color: 0x040810, roughness: 0.85 });
+  const ringGeo = new THREE.RingGeometry(holeR, holeR + 0.075, 24);
+  ringGeo.rotateX(-Math.PI / 2);
+  const ringMat = new THREE.MeshPhysicalMaterial({
+    color: PAL.goldENIG, metalness: 0.85, roughness: 0.28, clearcoat: 0.1
+  });
+
+  const corners = [
+    [-W / 2 + 0.28, -D / 2 + 0.28],
+    [ W / 2 - 0.28, -D / 2 + 0.28],
+    [-W / 2 + 0.28,  D / 2 - 0.28],
+    [ W / 2 - 0.28,  D / 2 - 0.28],
+  ];
+
+  for (const [cx, cz] of corners) {
+    // hole
+    const hole = new THREE.Mesh(holeGeo, holeMat);
+    hole.position.set(cx, H / 2, cz);
+    group.add(hole);
+    // gold ring
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.position.set(cx, H + 0.002, cz);
+    group.add(ring);
+    // SCREW – Phillips head, seated flush
+    const screwGroup = buildScrew(mats);
+    screwGroup.position.set(cx, H + 0.002, cz);
+    group.add(screwGroup);
+  }
+
+  return group;
+}
+
+/** Builds a 1.5x dark stainless-steel domed Phillips-head screw with thin washer. */
+function buildScrew(mats) {
+  const g = new THREE.Group();
+
+  // Thin metal washer seated flush on the muted gold ring
+  const washerR = 0.138, washerH = 0.006;
+  const washerGeo = new THREE.CylinderGeometry(washerR, washerR, washerH, 28);
+  const washer = new THREE.Mesh(washerGeo, mats.washerMetal);
+  washer.position.y = washerH / 2;
+  washer.castShadow = true;
+  washer.receiveShadow = true;
+  g.add(washer);
+
+  // Raised domed head (pan-head collar + flattened satin dome to avoid white ceiling glare)
+  const headR = 0.102, collarH = 0.015;
+  const collarGeo = new THREE.CylinderGeometry(headR, headR * 1.03, collarH, 28);
+  const collar = new THREE.Mesh(collarGeo, mats.screwMetal);
+  collar.position.y = washerH + collarH / 2;
+  collar.castShadow = true;
+  g.add(collar);
+
+  const domeGeo = new THREE.SphereGeometry(headR, 28, 16, 0, Math.PI * 2, 0, Math.PI * 0.46);
+  domeGeo.scale(1, 0.36, 1);
+  const dome = new THREE.Mesh(domeGeo, mats.screwMetal);
+  dome.position.y = washerH + collarH - 0.002;
+  dome.castShadow = true;
+  dome.receiveShadow = true;
+  g.add(dome);
+
+  // Clear recessed Phillips cross seated cleanly in the dome apex
+  const slotW = headR * 1.18, slotH = 0.016, slotD = 0.028;
+  const slotGeo = new THREE.BoxGeometry(slotW, slotH, slotD);
+  const slotMat = new THREE.MeshStandardMaterial({ color: 0x040608, roughness: 0.96, metalness: 0.0, envMapIntensity: 0.02 });
+  const slotY = washerH + collarH + headR * 0.36 - 0.007;
+  const slot1 = new THREE.Mesh(slotGeo, slotMat);
+  slot1.position.y = slotY;
+  g.add(slot1);
+  const slot2 = new THREE.Mesh(slotGeo, slotMat);
+  slot2.position.y = slotY;
+  slot2.rotation.y = Math.PI / 2;
+  g.add(slot2);
+
+  // Shaft going down into the hole
+  const shaftR = 0.045, shaftH = 0.14;
+  const shaftGeo = new THREE.CylinderGeometry(shaftR, shaftR, shaftH, 10);
+  const shaft = new THREE.Mesh(shaftGeo, mats.screwMetal);
+  shaft.position.y = -shaftH / 2;
+  g.add(shaft);
+
+  return g;
+}
+
+function buildHeatsink(mats) {
+  const group = new THREE.Group();
+  group.name = 'heatsink';
+  const baseW = 1.6, baseD = 1.6, baseH = 0.10;
+
+  // --- Base plate ---
+  const baseGeo = new THREE.BoxGeometry(baseW, baseH, baseD);
+  const base = new THREE.Mesh(baseGeo, mats.heatsinkBody);
+  base.position.y = baseH / 2;
+  base.castShadow = true;
+  base.receiveShadow = true;
+  group.add(base);
+
+  // --- Fins: 16 individually separated thin plates with dark grooves ---
+  const finCount = 16;
+  const finW = 0.026;
+  const finH = 0.60;
+  const finD = baseD - 0.08;
+  const totalSpan = baseW - 0.10;
+  const spacing = totalSpan / (finCount - 1);
+  const finGeo = new THREE.BoxGeometry(finW, finH, finD);
+
+  for (let i = 0; i < finCount; i++) {
+    const fin = new THREE.Mesh(finGeo, mats.heatsinkBody);
+    fin.position.set(-totalSpan / 2 + i * spacing, baseH + finH / 2, 0);
+    fin.castShadow = true;
+    fin.receiveShadow = true;
+    group.add(fin);
+  }
+
+  // --- Copper heat pipes (3 visible between fins) ---
+  const pipeR = 0.035;
+  const pipeLen = baseW - 0.25;
+  const pipeGeo = new THREE.CylinderGeometry(pipeR, pipeR, pipeLen, 10);
+  pipeGeo.rotateZ(Math.PI / 2);
+  for (const pz of [-0.35, 0, 0.35]) {
+    const pipe = new THREE.Mesh(pipeGeo, mats.copperPipe);
+    pipe.position.set(0, baseH + 0.10, pz);
+    pipe.castShadow = true;
+    group.add(pipe);
+  }
+
+  // --- Mounting bracket (steel retention frame) ---
+  const bW = baseW + 0.35, bD = baseD + 0.35, bH = 0.035, bT = 0.07;
+  const barDefs = [
+    { w: bW, d: bT, x: 0, z: -bD / 2 + bT / 2 },
+    { w: bW, d: bT, x: 0, z:  bD / 2 - bT / 2 },
+    { w: bT, d: bD - bT * 2, x: -bW / 2 + bT / 2, z: 0 },
+    { w: bT, d: bD - bT * 2, x:  bW / 2 - bT / 2, z: 0 },
+  ];
+  for (const b of barDefs) {
+    const bg = new THREE.BoxGeometry(b.w, bH, b.d);
+    const bm = new THREE.Mesh(bg, mats.bracketSteel);
+    bm.position.set(b.x, -0.008, b.z);
+    bm.castShadow = true;
+    group.add(bm);
+  }
+
+  return group;
+}
+
+/* ─── Stage Two Builders: ICs, Rear I/O, Slots, Power, VRM, SMDs ─── */
+
+function createICTopTexture(text) {
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 256;
+  const g = c.getContext('2d');
+  g.fillStyle = '#15181e';
+  g.fillRect(0, 0, 256, 256);
+  // subtle epoxy grain
+  for (let i = 0; i < 600; i++) {
+    const v = 18 + Math.random() * 10 | 0;
+    g.fillStyle = `rgb(${v},${v + 2},${v + 5})`;
+    g.fillRect(Math.random() * 256, Math.random() * 256, 2, 2);
+  }
+  // pin-1 dimple
+  g.beginPath(); g.arc(28, 28, 10, 0, Math.PI * 2);
+  g.fillStyle = '#0d0f13'; g.fill();
+  g.strokeStyle = '#2c323d'; g.lineWidth = 2; g.stroke();
+  // faint laser-etched marking
+  g.fillStyle = '#7b8494';
+  g.font = 'bold 26px monospace';
+  g.textAlign = 'center';
+  const lines = text.split('\n');
+  lines.forEach((ln, idx) => g.fillText(ln, 128, 118 + idx * 36));
+  const tex = new THREE.CanvasTexture(c);
+  tex.encoding = THREE.sRGBEncoding;
+  tex.anisotropy = ANISO;
+  return tex;
+}
+
+function buildICChips(mats) {
+  const group = new THREE.Group();
+  group.name = 'ic_chips';
+  const pinMatrices = [];
+  const chipGlowTargets = [];
+  const dummy = new THREE.Object3D();
+
+  for (const cp of CHIP_SPECS) {
+    const cx = (cp.u - 0.5) * PCB_W;
+    const cz = (cp.v - 0.5) * PCB_D;
+    const w = (cp.pw / 2048) * PCB_W * 0.88;
+    const d = (cp.ph / 2048) * PCB_D * 0.88;
+    const h = 0.042;
+
+    const topTex = createICTopTexture(cp.mark);
+    const topMat = new THREE.MeshStandardMaterial({
+      map: topTex, roughness: 0.65, metalness: 0.04, envMapIntensity: 0.18,
+      emissive: new THREE.Color(0x2868a8), emissiveIntensity: 0,
+    });
+    chipGlowTargets.push({ cx, mat: topMat });
+    const pkgGeo = new THREE.BoxGeometry(w, h, d);
+    const pkgMats = [mats.icBody, mats.icBody, topMat, mats.icBody, mats.icBody, mats.icBody];
+    const pkg = new THREE.Mesh(pkgGeo, pkgMats);
+    pkg.position.set(cx, PCB_H + h / 2 + 0.004, cz);
+    pkg.castShadow = true;
+    pkg.receiveShadow = true;
+    group.add(pkg);
+
+    // Gull-wing pins along all 4 sides matching PCB pad spacing
+    const padGapW = (12 / 2048) * PCB_W;
+    const padGapD = (12 / 2048) * PCB_D;
+    const countX = Math.floor((w * 0.92) / padGapW);
+    const countZ = Math.floor((d * 0.92) / padGapD);
+
+    for (let i = 0; i < countX; i++) {
+      const px = cx - (countX - 1) * padGapW / 2 + i * padGapW;
+      for (const s of [-1, 1]) {
+        dummy.position.set(px, PCB_H + 0.012, cz + s * (d / 2 + 0.018));
+        dummy.rotation.set(s * 0.32, 0, 0);
+        dummy.scale.set(0.011, 0.022, 0.036);
+        dummy.updateMatrix();
+        pinMatrices.push(dummy.matrix.clone());
+      }
+    }
+    for (let i = 0; i < countZ; i++) {
+      const pz = cz - (countZ - 1) * padGapD / 2 + i * padGapD;
+      for (const s of [-1, 1]) {
+        dummy.position.set(cx + s * (w / 2 + 0.018), PCB_H + 0.012, pz);
+        dummy.rotation.set(0, 0, -s * 0.32);
+        dummy.scale.set(0.036, 0.022, 0.011);
+        dummy.updateMatrix();
+        pinMatrices.push(dummy.matrix.clone());
+      }
+    }
+  }
+
+  const pinGeo = new THREE.BoxGeometry(1, 1, 1);
+  const pinInst = new THREE.InstancedMesh(pinGeo, mats.pinMetal, pinMatrices.length);
+  pinInst.castShadow = true;
+  pinMatrices.forEach((m, idx) => pinInst.setMatrixAt(idx, m));
+  pinInst.instanceMatrix.needsUpdate = true;
+  group.add(pinInst);
+
+  return { group, chipGlowTargets };
+}
+
+function buildShieldedPort(mats, w, h, d, wallT = 0.018) {
+  // Hollow brushed-metal port shell open on the -X face with recessed dark cavity
+  const g = new THREE.Group();
+  const top = new THREE.Mesh(new THREE.BoxGeometry(w, wallT, d), mats.ioMetal);
+  top.position.y = h - wallT / 2;
+  const bot = new THREE.Mesh(new THREE.BoxGeometry(w, wallT, d), mats.ioMetal);
+  bot.position.y = wallT / 2;
+  const sideL = new THREE.Mesh(new THREE.BoxGeometry(w, h, wallT), mats.ioMetal);
+  sideL.position.set(0, h / 2, -d / 2 + wallT / 2);
+  const sideR = new THREE.Mesh(new THREE.BoxGeometry(w, h, wallT), mats.ioMetal);
+  sideR.position.set(0, h / 2, d / 2 - wallT / 2);
+  const back = new THREE.Mesh(new THREE.BoxGeometry(wallT, h, d), mats.ioMetal);
+  back.position.set(w / 2 - wallT / 2, h / 2, 0);
+  const cavity = new THREE.Mesh(new THREE.BoxGeometry(w * 0.86, h - wallT * 2.1, d - wallT * 2.1), mats.cavityDark);
+  cavity.position.set(0.015, h / 2, 0);
+  for (const m of [top, bot, sideL, sideR, back]) {
+    m.castShadow = true;
+    m.receiveShadow = true;
+  }
+  g.add(top, bot, sideL, sideR, back, cavity);
+  return g;
+}
+
+function buildRearIO(mats) {
+  const group = new THREE.Group();
+  group.name = 'rear_io';
+
+  // Place along the front-left +Z edge so port openings face +Z toward the camera
+  // buildShieldedPort opens on -X; rotating +Math.PI/2 around Y points its opening to +Z!
+  const edgeZ = PCB_D / 2;
+
+  // 1. Dual Stacked USB 3.2 Type-A
+  const usbW = 0.36, usbH = 0.32, usbD = 0.32;
+  const usb = buildShieldedPort(mats, usbW, usbH, usbD);
+  const midBar = new THREE.Mesh(new THREE.BoxGeometry(usbW * 0.92, 0.022, usbD - 0.02), mats.ioMetal);
+  midBar.position.set(-0.005, usbH / 2, 0);
+  usb.add(midBar);
+  for (const ty of [usbH * 0.27, usbH * 0.73]) {
+    const tongue = new THREE.Mesh(new THREE.BoxGeometry(usbW * 0.72, 0.018, usbD * 0.68), mats.usbBlue);
+    tongue.position.set(-0.02, ty, 0);
+    usb.add(tongue);
+  }
+  usb.rotation.y = Math.PI / 2;
+  usb.position.set(-2.22, PCB_H, edgeZ - usbW / 2 + 0.01);
+  group.add(usb);
+
+  // 2. RJ-45 Gigabit Ethernet
+  const rjW = 0.42, rjH = 0.30, rjD = 0.36;
+  const rj = buildShieldedPort(mats, rjW, rjH, rjD);
+  for (let i = 0; i < 8; i++) {
+    const pin = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.010, 0.010), mats.goldPin);
+    pin.position.set(-0.02, rjH * 0.72, -0.10 + i * 0.028);
+    pin.rotation.z = -0.35;
+    rj.add(pin);
+  }
+  rj.rotation.y = Math.PI / 2;
+  rj.position.set(-1.76, PCB_H, edgeZ - rjW / 2 + 0.01);
+  group.add(rj);
+
+  // 3. USB-C Port
+  const ucW = 0.28, ucH = 0.12, ucD = 0.24;
+  const uc = buildShieldedPort(mats, ucW, ucH, ucD, 0.014);
+  const ucTongue = new THREE.Mesh(new THREE.BoxGeometry(ucW * 0.7, 0.012, ucD * 0.56), mats.slotDark);
+  ucTongue.position.set(-0.015, ucH / 2, 0);
+  uc.add(ucTongue);
+  uc.rotation.y = Math.PI / 2;
+  uc.position.set(-1.34, PCB_H, edgeZ - ucW / 2 + 0.01);
+  group.add(uc);
+
+  // 4. HDMI Display Port
+  const hdW = 0.34, hdH = 0.16, hdD = 0.34;
+  const hd = buildShieldedPort(mats, hdW, hdH, hdD, 0.016);
+  const hdTongue = new THREE.Mesh(new THREE.BoxGeometry(hdW * 0.72, 0.016, hdD * 0.68), mats.slotDark);
+  hdTongue.position.set(-0.015, hdH / 2, 0);
+  hd.add(hdTongue);
+  hd.rotation.y = Math.PI / 2;
+  hd.position.set(-0.94, PCB_H, edgeZ - hdW / 2 + 0.01);
+  group.add(hd);
+
+  return group;
+}
+
+function buildMemoryAndPCIe(mats) {
+  const group = new THREE.Group();
+  group.name = 'slots';
+
+  // --- Two DDR5 DIMM Slots with retention latches ---
+  const dimmLen = 1.66, dimmW = 0.085, dimmH = 0.14;
+  for (const sx of [0.76, 0.98]) {
+    const slot = new THREE.Group();
+    const base = new THREE.Mesh(new THREE.BoxGeometry(dimmW, dimmH, dimmLen), mats.slotDark);
+    base.position.y = dimmH / 2;
+    base.castShadow = true;
+    base.receiveShadow = true;
+    slot.add(base);
+
+    // Recessed dark channel + keying notch
+    const chan = new THREE.Mesh(new THREE.BoxGeometry(0.026, 0.04, dimmLen - 0.10), mats.cavityDark);
+    chan.position.y = dimmH - 0.015;
+    slot.add(chan);
+
+    const keyBridge = new THREE.Mesh(new THREE.BoxGeometry(0.030, 0.045, 0.035), mats.slotDark);
+    keyBridge.position.set(0, dimmH - 0.015, 0.08);
+    slot.add(keyBridge);
+
+    // Visible gold metal contacts along both inner walls of the DDR5 channel
+    const contactGeo = new THREE.BoxGeometry(0.008, 0.025, 0.014);
+    const dimmContacts = new THREE.InstancedMesh(contactGeo, mats.goldPin, 60);
+    const dummy = new THREE.Object3D();
+    let idx = 0;
+    for (let i = 0; i < 30; i++) {
+      const cz = -dimmLen / 2 + 0.12 + i * 0.048;
+      if (Math.abs(cz - 0.08) < 0.035) continue;
+      for (const cx of [-0.013, 0.013]) {
+        if (idx < 60) {
+          dummy.position.set(cx, dimmH - 0.008, cz);
+          dummy.updateMatrix();
+          dimmContacts.setMatrixAt(idx++, dummy.matrix);
         }
-    };
+      }
+    }
+    dimmContacts.count = idx;
+    dimmContacts.instanceMatrix.needsUpdate = true;
+    slot.add(dimmContacts);
 
-    const TIMINGS = {
-        EXPLODED_HOLD: 4200,      // Time (ms) spent floating exploded in idle
-        ASSEMBLE_DURATION: 1800,  // Smooth ease duration from exploded to assembled
-        ASSEMBLED_HOLD: 3200,     // Time (ms) spent assembled / powered on
-        EXPLODE_DURATION: 1800    // Smooth ease duration from assembled back to exploded
-    };
-    TIMINGS.CYCLE_TOTAL = TIMINGS.EXPLODED_HOLD + TIMINGS.ASSEMBLE_DURATION + TIMINGS.ASSEMBLED_HOLD + TIMINGS.EXPLODE_DURATION;
+    // Retention latches at both ends
+    for (const dir of [-1, 1]) {
+      const latch = new THREE.Mesh(new THREE.BoxGeometry(dimmW * 1.12, dimmH * 0.95, 0.055), mats.latchGrey);
+      latch.position.set(0, dimmH * 0.58, dir * (dimmLen / 2 + 0.022));
+      latch.rotation.x = dir * 0.14;
+      latch.castShadow = true;
+      slot.add(latch);
+    }
 
-    // Board Dimensions
-    const BOARD_WIDTH = 4.4;
-    const BOARD_HEIGHT = 0.05;
-    const BOARD_DEPTH = 3.0;
-    const CORNER_HOLES = [
-        { x: -1.95, z: -1.30 },
-        { x:  1.95, z: -1.30 },
-        { x: -1.95, z:  1.30 },
-        { x:  1.95, z:  1.30 }
+    slot.position.set(sx, PCB_H, -0.68);
+    group.add(slot);
+  }
+
+  // --- One Long PCIe x16 Expansion Slot (dark graphite armor + gold contacts) ---
+  const pcieLen = 2.55, pcieW = 0.125, pcieH = 0.14;
+  const pcie = new THREE.Group();
+  const armor = new THREE.Mesh(new THREE.BoxGeometry(pcieLen, pcieH, pcieW), mats.slotGraphite);
+  armor.position.y = pcieH / 2;
+  armor.castShadow = true;
+  armor.receiveShadow = true;
+  pcie.add(armor);
+
+  const inner = new THREE.Mesh(new THREE.BoxGeometry(pcieLen - 0.04, pcieH + 0.004, pcieW - 0.03), mats.slotDark);
+  inner.position.y = pcieH / 2 + 0.001;
+  pcie.add(inner);
+
+  const groove = new THREE.Mesh(new THREE.BoxGeometry(pcieLen - 0.12, 0.04, 0.034), mats.cavityDark);
+  groove.position.y = pcieH - 0.012;
+  pcie.add(groove);
+
+  const pcieKey = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.045, 0.038), mats.slotDark);
+  pcieKey.position.set(-0.78, pcieH - 0.012, 0);
+  pcie.add(pcieKey);
+
+  // Visible gold metal contacts along both inner edges of PCIe groove
+  const pcieContactGeo = new THREE.BoxGeometry(0.016, 0.026, 0.009);
+  const pcieContacts = new THREE.InstancedMesh(pcieContactGeo, mats.goldPin, 96);
+  const pDummy = new THREE.Object3D();
+  let pIdx = 0;
+  for (let i = 0; i < 48; i++) {
+    const cx = -pcieLen / 2 + 0.10 + i * 0.050;
+    if (Math.abs(cx + 0.78) < 0.04) continue;
+    for (const cz of [-0.017, 0.017]) {
+      if (pIdx < 96) {
+        pDummy.position.set(cx, pcieH - 0.007, cz);
+        pDummy.updateMatrix();
+        pcieContacts.setMatrixAt(pIdx++, pDummy.matrix);
+      }
+    }
+  }
+  pcieContacts.count = pIdx;
+  pcieContacts.instanceMatrix.needsUpdate = true;
+  pcie.add(pcieContacts);
+
+  // Rear retention clip (+X end)
+  const clip = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.09, pcieW * 1.25), mats.latchGrey);
+  clip.position.set(pcieLen / 2 + 0.045, pcieH * 0.72, 0);
+  clip.castShadow = true;
+  pcie.add(clip);
+
+  pcie.position.set(-0.75, PCB_H, 1.28);
+  group.add(pcie);
+
+  return group;
+}
+
+function buildPowerAndHeaders(mats) {
+  const group = new THREE.Group();
+  group.name = 'power_headers';
+
+  function makePinHeader(cols, rows, pitch = 0.055, hasShroud = false) {
+    const hg = new THREE.Group();
+    const bw = cols * pitch + 0.03;
+    const bd = rows * pitch + 0.03;
+    const baseH = 0.028;
+    const base = new THREE.Mesh(new THREE.BoxGeometry(bw, baseH, bd), mats.slotDark);
+    base.position.y = baseH / 2;
+    base.castShadow = true;
+    hg.add(base);
+
+    const pinGeo = new THREE.BoxGeometry(0.014, 0.095, 0.014);
+    for (let c = 0; c < cols; c++) {
+      for (let r = 0; r < rows; r++) {
+        const pin = new THREE.Mesh(pinGeo, mats.goldPin);
+        pin.position.set((c - (cols - 1) / 2) * pitch, baseH + 0.042, (r - (rows - 1) / 2) * pitch);
+        pin.castShadow = true;
+        hg.add(pin);
+      }
+    }
+    if (hasShroud) {
+      const sh = new THREE.Mesh(new THREE.BoxGeometry(bw, 0.09, 0.016), mats.latchGrey);
+      sh.position.set(0, baseH + 0.045, -bd / 2 + 0.008);
+      hg.add(sh);
+    }
+    return hg;
+  }
+
+  // 24-pin ATX Main Power (2x12 nylon housing along right edge)
+  const atxW = 0.22, atxH = 0.20, atxD = 1.18;
+  const atx = new THREE.Group();
+  const atxShell = new THREE.Mesh(new THREE.BoxGeometry(atxW, atxH, atxD), mats.slotDark);
+  atxShell.position.y = atxH / 2;
+  atxShell.castShadow = true;
+  atxShell.receiveShadow = true;
+  atx.add(atxShell);
+  const atxCavity = new THREE.Mesh(new THREE.BoxGeometry(atxW - 0.04, 0.04, atxD - 0.06), mats.cavityDark);
+  atxCavity.position.y = atxH - 0.015;
+  atx.add(atxCavity);
+  const atxClip = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.12, 0.16), mats.slotDark);
+  atxClip.position.set(-atxW / 2 - 0.012, atxH * 0.6, 0);
+  atx.add(atxClip);
+  for (let i = 0; i < 12; i++) {
+    for (const cx of [-0.04, 0.04]) {
+      const p = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.05, 0.018), mats.goldPin);
+      p.position.set(cx, atxH - 0.025, -atxD / 2 + 0.08 + i * 0.092);
+      atx.add(p);
+    }
+  }
+  atx.position.set(2.66, PCB_H, -0.15);
+  group.add(atx);
+
+  // 8-pin EPS CPU Power (2x4 nylon housing top-left)
+  const epsW = 0.40, epsH = 0.19, epsD = 0.20;
+  const eps = new THREE.Group();
+  const epsShell = new THREE.Mesh(new THREE.BoxGeometry(epsW, epsH, epsD), mats.slotDark);
+  epsShell.position.y = epsH / 2;
+  epsShell.castShadow = true;
+  eps.add(epsShell);
+  const epsCavity = new THREE.Mesh(new THREE.BoxGeometry(epsW - 0.05, 0.04, epsD - 0.05), mats.cavityDark);
+  epsCavity.position.y = epsH - 0.015;
+  eps.add(epsCavity);
+  for (let i = 0; i < 4; i++) {
+    for (const cz of [-0.038, 0.038]) {
+      const p = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.05, 0.018), mats.goldPin);
+      p.position.set(-epsW / 2 + 0.065 + i * 0.09, epsH - 0.025, cz);
+      eps.add(p);
+    }
+  }
+  eps.position.set(-1.75, PCB_H, -1.78);
+  group.add(eps);
+
+  // Gold pin headers
+  const gpio = makePinHeader(10, 2, 0.055, false);
+  gpio.position.set(1.85, PCB_H, 1.56);
+  group.add(gpio);
+
+  const fanHdr = makePinHeader(4, 1, 0.055, true);
+  fanHdr.position.set(0.86, PCB_H, -1.78);
+  group.add(fanHdr);
+
+  const uartHdr = makePinHeader(4, 1, 0.055, true);
+  uartHdr.rotation.y = Math.PI / 2;
+  uartHdr.position.set(-2.70, PCB_H, -0.60);
+  group.add(uartHdr);
+
+  return group;
+}
+
+function buildVRMAndCaps(mats) {
+  const group = new THREE.Group();
+  group.name = 'vrm_caps';
+
+  // --- 6 Dark Power Chokes (VRM Inductors) near heatsink ---
+  const chokeGeo = new THREE.BoxGeometry(0.22, 0.14, 0.22);
+  for (let i = 0; i < 6; i++) {
+    const cx = -1.25 + i * 0.30;
+    const choke = new THREE.Mesh(chokeGeo, mats.chokeFerrite);
+    choke.position.set(cx, PCB_H + 0.07, -1.46);
+    choke.castShadow = true;
+    choke.receiveShadow = true;
+    group.add(choke);
+  }
+
+  // Helper for cylindrical electrolytic capacitor
+  function makeCap(r, h) {
+    const cg = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 20), mats.capBody);
+    body.position.y = h / 2;
+    body.castShadow = true;
+    body.receiveShadow = true;
+    cg.add(body);
+    const top = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.88, r * 0.88, 0.006, 20), mats.capTopAlu);
+    top.position.y = h + 0.002;
+    cg.add(top);
+    // Polarity stripe
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(r * 0.35, h * 0.92, 0.012), mats.latchGrey);
+    stripe.position.set(0, h / 2, r * 0.92);
+    cg.add(stripe);
+    return cg;
+  }
+
+  // 6 VRM solid capacitors in row above chokes
+  for (let i = 0; i < 6; i++) {
+    const cap = makeCap(0.068, 0.20);
+    cap.position.set(-1.25 + i * 0.30, PCB_H, -1.78);
+    group.add(cap);
+  }
+
+  // 4 Bulk capacitors (2 near ATX, 2 near left edge)
+  for (const [cx, cz] of [[2.35, -0.55], [2.35, 0.25], [-2.60, 0.05], [-2.60, 0.42]]) {
+    const cap = makeCap(0.082, 0.24);
+    cap.position.set(cx, PCB_H, cz);
+    group.add(cap);
+  }
+
+  return group;
+}
+
+function buildSMDs(mats) {
+  const group = new THREE.Group();
+  group.name = 'smds';
+
+  const resMatrices = [];
+  const capMatrices = [];
+  const dummy = new THREE.Object3D();
+
+  function pushSMD(type, x, z, rotY = 0) {
+    dummy.position.set(x, PCB_H + 0.010, z);
+    dummy.rotation.set(0, rotY, 0);
+    dummy.scale.set(0.042, 0.020, 0.022);
+    dummy.updateMatrix();
+    if (type === 'R') resMatrices.push(dummy.matrix.clone());
+    else capMatrices.push(dummy.matrix.clone());
+  }
+
+  // 1. Tidy vertical columns flanking DDR5 memory slots (2 x 40 = 80)
+  for (let i = 0; i < 40; i++) {
+    const z = -1.46 + i * 0.041;
+    pushSMD(i % 2 === 0 ? 'R' : 'C', 0.62, z, 0);
+    pushSMD(i % 2 === 0 ? 'C' : 'R', 1.12, z, 0);
+  }
+
+  // 2. Tidy horizontal decoupling rows above & below PCIe x16 slot (2 x 52 = 104)
+  for (let i = 0; i < 52; i++) {
+    const x = -1.96 + i * 0.048;
+    pushSMD(i % 3 === 0 ? 'R' : 'C', x, 1.14, Math.PI / 2);
+    pushSMD(i % 2 === 0 ? 'C' : 'R', x, 1.42, Math.PI / 2);
+  }
+
+  // 3. Tidy rows around VRM chokes & heatsink bottom/right (6 x 12 + 24 = 96)
+  for (let c = 0; c < 6; c++) {
+    const bx = -1.25 + c * 0.30;
+    for (let k = 0; k < 4; k++) {
+      pushSMD('R', bx - 0.09 + k * 0.06, -1.29, Math.PI / 2);
+      pushSMD('C', bx - 0.09 + k * 0.06, -1.62, Math.PI / 2);
+    }
+  }
+  for (let i = 0; i < 24; i++) {
+    pushSMD(i % 2 === 0 ? 'C' : 'R', -1.35 + i * 0.075, 0.56, Math.PI / 2);
+    pushSMD(i % 2 === 0 ? 'R' : 'C', -1.58, -1.05 + i * 0.065, 0);
+  }
+
+  // 4. Signal termination rows behind Rear I/O ports (3 x 20 = 60)
+  for (let i = 0; i < 20; i++) {
+    const x = -2.30 + i * 0.078;
+    pushSMD('R', x, 1.56, Math.PI / 2);
+    pushSMD('C', x, 1.62, Math.PI / 2);
+    pushSMD('R', x, 1.68, Math.PI / 2);
+  }
+
+  // 5. Decoupling clusters around U2, U3, U4, U5, U6 (5 x 14 = 70)
+  for (const cp of CHIP_SPECS.slice(1)) {
+    const cx = (cp.u - 0.5) * PCB_W;
+    const cz = (cp.v - 0.5) * PCB_D;
+    const hw = (cp.pw / 2048) * PCB_W * 0.55;
+    const hd = (cp.ph / 2048) * PCB_D * 0.55;
+    for (let i = 0; i < 7; i++) {
+      pushSMD(i % 2 === 0 ? 'C' : 'R', cx - hw + i * (hw * 2 / 6), cz - hd - 0.06, Math.PI / 2);
+      pushSMD(i % 2 === 0 ? 'R' : 'C', cx - hw + i * (hw * 2 / 6), cz + hd + 0.06, Math.PI / 2);
+    }
+  }
+
+  // 6. Tidy bank along right ATX power edge (20)
+  for (let i = 0; i < 20; i++) {
+    pushSMD(i % 2 === 0 ? 'C' : 'R', 2.46, -0.70 + i * 0.060, 0);
+  }
+
+  const smdGeo = new THREE.BoxGeometry(1, 1, 1);
+  const resInst = new THREE.InstancedMesh(smdGeo, mats.smdResistor, resMatrices.length);
+  const capInst = new THREE.InstancedMesh(smdGeo, mats.smdCap, capMatrices.length);
+  resInst.castShadow = true;
+  capInst.castShadow = true;
+  resMatrices.forEach((m, i) => resInst.setMatrixAt(i, m));
+  capMatrices.forEach((m, i) => capInst.setMatrixAt(i, m));
+  resInst.instanceMatrix.needsUpdate = true;
+  capInst.instanceMatrix.needsUpdate = true;
+  group.add(resInst, capInst);
+
+  return group;
+}
+
+/* ─── Stage Three Builders: Subtle Trace Pulses & Status LEDs ─── */
+
+function buildTracePulses() {
+  const group = new THREE.Group();
+  group.name = 'trace_pulses';
+  const pulseGeo = new THREE.BoxGeometry(0.14, 0.005, 0.018);
+  const paths = [
+    // From U1 MCU -> Processor
+    { start: [-2.05, -0.50], end: [-0.85, -0.25] },
+    // From U2 VRM -> Processor
+    { start: [ 1.44, -1.09], end: [ 0.05, -0.35] },
+    // From U3 NAND -> Processor
+    { start: [ 1.32,  0.50], end: [ 0.05,  0.05] },
+    // From U4 PHY -> Processor
+    { start: [-1.80,  0.67], end: [-0.75,  0.15] },
+    // From U6 PMIC -> Processor
+    { start: [-0.24,  0.92], end: [-0.45,  0.30] },
+    // From Left Edge -> Processor
+    { start: [-2.52, -1.25], end: [-0.95, -0.55] },
+  ];
+
+  const pulses = [];
+  for (const p of paths) {
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0x38bdf8,
+      transparent: true,
+      opacity: 0.0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const mesh = new THREE.Mesh(pulseGeo, mat);
+    const dx = p.end[0] - p.start[0];
+    const dz = p.end[1] - p.start[1];
+    mesh.rotation.y = -Math.atan2(dz, dx);
+    mesh.position.set(p.start[0], PCB_H + 0.004, p.start[1]);
+    group.add(mesh);
+    pulses.push({ mesh, mat, start: p.start, end: p.end, progress: -1, speed: 1.0 });
+  }
+  return { group, pulses };
+}
+
+function createLEDGlowTexture() {
+  const c = document.createElement('canvas');
+  c.width = 128; c.height = 128;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(64, 64, 4, 64, 64, 62);
+  grad.addColorStop(0.0, 'rgba(255, 255, 255, 0.95)');
+  grad.addColorStop(0.35, 'rgba(255, 255, 255, 0.45)');
+  grad.addColorStop(0.75, 'rgba(255, 255, 255, 0.10)');
+  grad.addColorStop(1.0, 'rgba(255, 255, 255, 0.0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 128, 128);
+  const tex = new THREE.CanvasTexture(c);
+  tex.encoding = THREE.sRGBEncoding;
+  return tex;
+}
+
+function buildStatusLEDs() {
+  const group = new THREE.Group();
+  group.name = 'status_leds';
+  const leds = [];
+  // 3x larger SMD LEDs placed in clear view along the front-right edge
+  const bodyGeo = new THREE.BoxGeometry(0.14, 0.042, 0.095);
+  const padMat = new THREE.MeshStandardMaterial({ color: 0x181e26, roughness: 0.6 });
+  const lensGeo = new THREE.BoxGeometry(0.105, 0.028, 0.068);
+  const haloGeo = new THREE.PlaneGeometry(0.36, 0.36);
+  const haloTex = createLEDGlowTexture();
+
+  for (let i = 0; i < 4; i++) {
+    const lx = 1.05 + i * 0.22;
+    const lz = 1.88;
+    const housing = new THREE.Mesh(bodyGeo, padMat);
+    housing.position.set(lx, PCB_H + 0.021, lz);
+    housing.castShadow = true;
+    group.add(housing);
+
+    const lensMat = new THREE.MeshStandardMaterial({
+      color: 0x1a3824,
+      emissive: 0x22ff66,
+      emissiveIntensity: 0.05,
+      roughness: 0.25,
+      metalness: 0.05,
+    });
+    const emitter = new THREE.Mesh(lensGeo, lensMat);
+    emitter.position.set(lx, PCB_H + 0.046, lz);
+    group.add(emitter);
+
+    const haloMat = new THREE.MeshBasicMaterial({
+      map: haloTex,
+      color: 0x22ff66,
+      transparent: true,
+      opacity: 0.0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const halo = new THREE.Mesh(haloGeo, haloMat);
+    halo.rotation.x = -Math.PI / 2;
+    halo.position.set(lx, PCB_H + 0.052, lz);
+    group.add(halo);
+
+    leds.push({
+      lensMat,
+      haloMat,
+      intensity: 0,
+      hold: 0,
+      color: new THREE.Color(0x22ff66),
+    });
+  }
+  return { group, leds };
+}
+
+function buildSweepBand(metalMaskTex) {
+  const group = new THREE.Group();
+  group.name = 'sweep_band';
+
+  // 1. Soft trace-glow overlay (samples metalMaskTex, glows only where band passes)
+  const traceGlowMat = new THREE.ShaderMaterial({
+    uniforms: {
+      uMask: { value: metalMaskTex },
+      uSweepX: { value: -10.0 },
+      uStrength: { value: 0.0 },
+      uColor: { value: new THREE.Color(0x38bdf8) },
+    },
+    vertexShader: `
+      varying vec2 vUv;
+      varying float vLocalX;
+      void main() {
+        vUv = uv;
+        vLocalX = position.x;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform sampler2D uMask;
+      uniform float uSweepX;
+      uniform float uStrength;
+      uniform vec3 uColor;
+      varying vec2 vUv;
+      varying float vLocalX;
+      void main() {
+        float mask = texture2D(uMask, vUv).r;
+        float dist = (vLocalX - uSweepX) / 0.48;
+        float band = exp(-dist * dist);
+        float alpha = mask * band * uStrength * 0.65;
+        if (alpha < 0.005) discard;
+        gl_FragColor = vec4(uColor, alpha);
+      }
+    `,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const traceOverlay = new THREE.Mesh(new THREE.PlaneGeometry(PCB_W - 0.004, PCB_D - 0.004), traceGlowMat);
+  traceOverlay.rotation.x = -Math.PI / 2;
+  traceOverlay.position.y = PCB_H + 0.0025;
+  group.add(traceOverlay);
+
+  // 2. Thin visible band of light sweeping across the board
+  const c = document.createElement('canvas');
+  c.width = 128; c.height = 16;
+  const g = c.getContext('2d');
+  const grad = g.createLinearGradient(0, 0, 128, 0);
+  grad.addColorStop(0.0, 'rgba(56, 189, 248, 0.0)');
+  grad.addColorStop(0.5, 'rgba(56, 189, 248, 0.36)');
+  grad.addColorStop(1.0, 'rgba(56, 189, 248, 0.0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 128, 16);
+  const bandTex = new THREE.CanvasTexture(c);
+  bandTex.encoding = THREE.sRGBEncoding;
+
+  const bandMat = new THREE.MeshBasicMaterial({
+    map: bandTex,
+    transparent: true,
+    opacity: 0.0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const bandMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.70, PCB_D - 0.02), bandMat);
+  bandMesh.rotation.x = -Math.PI / 2;
+  bandMesh.position.y = PCB_H + 0.016;
+  group.add(bandMesh);
+
+  return { group, traceGlowMat, bandMesh, bandMat };
+}
+
+/* ═══════════════════════════════════════════════════════════
+   4.  SCENE ASSEMBLY
+   ═══════════════════════════════════════════════════════════ */
+
+let sceneInitialized = false;
+
+function initCircuitBoardScene() {
+  if (sceneInitialized) return;
+  // Do not load the 3D scene below 900px width
+  if (window.innerWidth < 900) {
+    const waitDesktop = () => {
+      if (window.innerWidth >= 900) {
+        window.removeEventListener('resize', waitDesktop);
+        initCircuitBoardScene();
+      }
+    };
+    window.addEventListener('resize', waitDesktop);
+    return;
+  }
+
+  const canvas = document.getElementById('login-board-canvas');
+  const container = document.getElementById('login-canvas-container');
+  if (!canvas || !container) return;
+  sceneInitialized = true;
+
+  // Loading state
+  const loaderEl = document.createElement('div');
+  loaderEl.className = 'scene-loading-indicator';
+  loaderEl.innerHTML = '<div class="scene-loading-spinner"></div><span>INITIALIZING HARDWARE</span>';
+  container.appendChild(loaderEl);
+
+  let renderer;
+  try {
+    renderer = new THREE.WebGLRenderer({
+      canvas, antialias: true, alpha: true,
+      powerPreference: 'high-performance',
+    });
+  } catch (e) { console.warn('[Electrodesk] WebGL unavailable:', e); loaderEl.remove(); showFallback(); return; }
+  if (!renderer.capabilities) { loaderEl.remove(); showFallback(); return; }
+
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, DPR_CAP));
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 0.90;
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+  const scene = new THREE.Scene();
+  // alpha canvas – CSS gradient is the backdrop
+
+  // --- Studio environment map ---
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  pmrem.compileEquirectangularShader();
+  const roomEnv = new RoomEnvironment();
+  scene.environment = pmrem.fromScene(roomEnv, 0.04).texture;
+  if (roomEnv.dispose) roomEnv.dispose();
+
+  const camera = new THREE.PerspectiveCamera(FOV, container.clientWidth / Math.max(1, container.clientHeight), 0.1, 100);
+
+  const mats = createMaterials();
+  const maxAniso = renderer.capabilities.getMaxAnisotropy();
+  for (const m of Object.values(mats)) {
+    if (m.map) m.map.anisotropy = Math.min(ANISO, maxAniso);
+    if (m.roughnessMap) m.roughnessMap.anisotropy = Math.min(ANISO, maxAniso);
+    if (m.metalnessMap) m.metalnessMap.anisotropy = Math.min(ANISO, maxAniso);
+  }
+
+  // --- Assemble board ---
+  const board = new THREE.Group();
+  board.name = 'motherboard';
+  const pcb = buildPCB(mats);
+  board.add(pcb);
+  const heatsink = buildHeatsink(mats);
+  heatsink.position.set(-0.5, 0.102, -0.25);
+  board.add(heatsink);
+
+  // Stage 2 components
+  const icChips = buildICChips(mats);
+  board.add(icChips.group);
+  board.add(buildRearIO(mats));
+  board.add(buildMemoryAndPCIe(mats));
+  board.add(buildPowerAndHeaders(mats));
+  board.add(buildVRMAndCaps(mats));
+  board.add(buildSMDs(mats));
+
+  // Stage 3 pulses, status LEDs & click sweep band
+  const tracePulses = buildTracePulses();
+  board.add(tracePulses.group);
+  const statusLEDs = buildStatusLEDs();
+  board.add(statusLEDs.group);
+  const sweepBand = buildSweepBand(mats.metalMaskTex);
+  board.add(sweepBand.group);
+
+  scene.add(board);
+
+  // --- Contact shadow + Shadow floor ---
+  const contactGeo = new THREE.PlaneGeometry(9.5, 7.0);
+  const contactMesh = new THREE.Mesh(contactGeo, mats.contactShadow);
+  contactMesh.rotation.x = -Math.PI / 2;
+  contactMesh.position.y = -0.040;
+  scene.add(contactMesh);
+
+  const floorGeo = new THREE.PlaneGeometry(24, 24);
+  const floor = new THREE.Mesh(floorGeo, mats.shadowFloor);
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.y = -0.020;
+  floor.receiveShadow = true;
+  scene.add(floor);
+
+  // --- LIGHTING (studio, balanced for 0.90 exposure) ---
+  // Key: warm, top-left
+  const key = new THREE.DirectionalLight(0xfff4e8, 1.15);
+  key.position.set(-4, 10, 4);
+  key.castShadow = true;
+  key.shadow.mapSize.set(1024, 1024);
+  key.shadow.camera.near = 0.5; key.shadow.camera.far = 25;
+  key.shadow.camera.left = -6; key.shadow.camera.right = 6;
+  key.shadow.camera.top = 6; key.shadow.camera.bottom = -6;
+  key.shadow.bias = -0.0004;
+  key.shadow.radius = 5;
+  scene.add(key);
+
+  // Rim: subtle cool blue, opposite
+  const rim = new THREE.DirectionalLight(0x1a3588, 0.40);
+  rim.position.set(5, 4, -5);
+  scene.add(rim);
+
+  // Fill: gentle overhead-front (keeps side wall dark)
+  const fill = new THREE.DirectionalLight(0xd8e0f0, 0.15);
+  fill.position.set(0, 5, 6);
+  scene.add(fill);
+
+  // Ambient
+  const amb = new THREE.AmbientLight(0x101828, 0.20);
+  scene.add(amb);
+
+  // --- Camera (35° elevation, board fills ~80% with zero clipping) ---
+  function fitCamera() {
+    const box = new THREE.Box3().setFromObject(board);
+    const center = box.getCenter(new THREE.Vector3());
+
+    const phi   = THREE.MathUtils.degToRad(35);
+    const theta = THREE.MathUtils.degToRad(25);
+    const dir = new THREE.Vector3(
+      Math.cos(phi) * Math.sin(theta),
+      Math.sin(phi),
+      Math.cos(phi) * Math.cos(theta)
+    ).normalize();
+
+    const worldUp = new THREE.Vector3(0, 1, 0);
+    const right = new THREE.Vector3().crossVectors(worldUp, dir).normalize();
+    const camUp = new THREE.Vector3().crossVectors(dir, right).normalize();
+
+    const corners = [
+      new THREE.Vector3(box.min.x, box.min.y, box.min.z),
+      new THREE.Vector3(box.min.x, box.min.y, box.max.z),
+      new THREE.Vector3(box.min.x, box.max.y, box.min.z),
+      new THREE.Vector3(box.min.x, box.max.y, box.max.z),
+      new THREE.Vector3(box.max.x, box.min.y, box.min.z),
+      new THREE.Vector3(box.max.x, box.min.y, box.max.z),
+      new THREE.Vector3(box.max.x, box.max.y, box.min.z),
+      new THREE.Vector3(box.max.x, box.max.y, box.max.z),
     ];
 
-    // =========================================================================
-    // 2. WEBGL CAPABILITY & FALLBACK
-    // =========================================================================
-    function isWebGLAvailable() {
-        try {
-            const canvas = document.createElement('canvas');
-            return !!(window.WebGLRenderingContext && (
-                canvas.getContext('webgl') || canvas.getContext('experimental-webgl')
-            ));
-        } catch (e) {
-            return false;
-        }
+    const vFov = FOV * Math.PI / 180;
+    const tanHalfV = Math.tan(vFov / 2);
+    const aspect = camera.aspect || (container.clientWidth / Math.max(1, container.clientHeight));
+    const tanHalfH = tanHalfV * aspect;
+
+    // Enlarge board by ~15% without clipping
+    const fill = 1.03;
+    const rel = new THREE.Vector3();
+    let dist = 0;
+    for (const c of corners) {
+      rel.subVectors(c, center);
+      const x = Math.abs(rel.dot(right));
+      const y = Math.abs(rel.dot(camUp));
+      const z = rel.dot(dir);
+      dist = Math.max(dist, x / (fill * tanHalfH) + z, y / (fill * tanHalfV) + z);
     }
 
-    function showFallback(container, statusText) {
-        if (!container) return;
-        const canvas = document.getElementById('login-board-canvas');
-        if (canvas) canvas.style.display = 'none';
+    camera.position.copy(center).addScaledVector(dir, dist);
+    camera.lookAt(center);
+    camera.updateProjectionMatrix();
+  }
+  fitCamera();
 
-        const fallback = document.createElement('div');
-        fallback.className = 'login-board-fallback';
-        fallback.innerHTML = `
-            <div class="fallback-glow"></div>
-            <div class="fallback-chip-icon">
-                <i class="bi bi-cpu-fill"></i>
-            </div>
-            <div class="fallback-caption">ELECTRODESK 3D HARDWARE VIEW</div>
-        `;
-        container.appendChild(fallback);
-        if (statusText) statusText.textContent = '2D PREVIEW MODE // WEBGL OFFLINE';
+  function onResize() {
+    const cw = container.clientWidth, ch = container.clientHeight;
+    if (!cw || !ch) return;
+    camera.aspect = cw / ch;
+    camera.updateProjectionMatrix();
+    renderer.setSize(cw, ch, false);
+    fitCamera();
+  }
+  window.addEventListener('resize', onResize);
+  onResize();
+
+  // --- Mouse parallax & motion state ---
+  const mouse = { x: 0, y: 0 };
+  const tilt  = { x: 0, y: 0 };
+  const curT  = { x: 0, y: 0 };
+  const noMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let ledStep = 0; // cyclic 0..3 only, never tracks password value or length
+  let amberPulse = 0;
+
+  function triggerTraceWave(speed = 0.95) {
+    if (noMotion) return;
+    tracePulses.pulses.forEach((p, idx) => {
+      p.progress = -idx * 0.08;
+      p.speed = speed;
+    });
+  }
+
+  function triggerNextStatusLED() {
+    if (noMotion) return;
+    const led = statusLEDs.leds[ledStep];
+    led.color.setHex(0x22ff66);
+    led.intensity = 1.0;
+    led.hold = 1.5;
+    ledStep = (ledStep + 1) % statusLEDs.leds.length;
+  }
+
+  function triggerAmberErrorPulse() {
+    amberPulse = 1.0;
+    statusLEDs.leds.forEach(led => {
+      led.color.setHex(0xf59e0b);
+      led.intensity = 1.0;
+      led.hold = 0.8;
+    });
+  }
+
+  // Form event hooks (never read, store, or log typed values)
+  const usernameEl = document.getElementById('usernameInput');
+  if (usernameEl) {
+    usernameEl.addEventListener('focus', () => triggerTraceWave(0.90));
+  }
+  const passwordEl = document.getElementById('passwordInput');
+  if (passwordEl) {
+    passwordEl.addEventListener('input', () => triggerNextStatusLED());
+  }
+
+  // Login error check after redirect/reload
+  if (document.querySelector('.alert-danger, .alert-error')) {
+    setTimeout(triggerAmberErrorPulse, 260);
+  }
+
+  container.addEventListener('mousemove', e => {
+    if (noMotion) return;
+    const r = container.getBoundingClientRect();
+    mouse.x = ((e.clientX - r.left) / r.width  - 0.5) * 2;
+    mouse.y = ((e.clientY - r.top)  / r.height - 0.5) * 2;
+  });
+  container.addEventListener('mouseleave', () => { mouse.x = 0; mouse.y = 0; });
+
+  // Board click: sweep a thin band of light across it once
+  let sweepProgress = -1;
+  canvas.addEventListener('click', () => {
+    if (noMotion) return;
+    sweepProgress = 0;
+  });
+
+  // --- Render loop ---
+  let running = true;
+  let firstFrame = true;
+  const clock = new THREE.Clock();
+
+  function animate() {
+    if (!running) return;
+    requestAnimationFrame(animate);
+    const dt = Math.min(clock.getDelta(), 0.05);
+    const t  = clock.getElapsedTime();
+
+    if (!noMotion) {
+      // Idle: slow float + rotation within 1.5° (0.026 rad)
+      board.position.y = Math.sin(t * 0.65) * 0.016;
+      const idleRotY = Math.sin(t * 0.35) * 0.014;
+      tilt.x = -mouse.y * 0.042;
+      tilt.y =  mouse.x * 0.055;
+      const damp = 1 - Math.exp(-3.5 * dt);
+      curT.x += (tilt.x - curT.x) * damp;
+      curT.y += (tilt.y - curT.y) * damp;
+      board.rotation.x = curT.x;
+      board.rotation.y = idleRotY + curT.y * 0.5;
+      board.rotation.z = -curT.y * 0.22;
+
+      // Update trace pulses
+      for (const p of tracePulses.pulses) {
+        if (p.progress >= -1 && p.progress < 1.05) {
+          p.progress += dt * p.speed;
+          if (p.progress >= 0 && p.progress <= 1.0) {
+            p.mesh.position.x = THREE.MathUtils.lerp(p.start[0], p.end[0], p.progress);
+            p.mesh.position.z = THREE.MathUtils.lerp(p.start[1], p.end[1], p.progress);
+            p.mat.opacity = Math.sin(p.progress * Math.PI) * 0.72;
+          } else {
+            p.mat.opacity = 0;
+          }
+        } else {
+          p.mat.opacity = 0;
+        }
+      }
+
+      // Update status LEDs (hold 1.5s, then fade smoothly)
+      for (const led of statusLEDs.leds) {
+        if (led.hold > 0) {
+          led.hold = Math.max(0, led.hold - dt);
+        } else if (led.intensity > 0.01) {
+          led.intensity = Math.max(0, led.intensity - dt * 1.2);
+        } else {
+          led.intensity = 0;
+        }
+        led.lensMat.emissive.copy(led.color);
+        led.lensMat.emissiveIntensity = 0.06 + led.intensity * 2.4;
+        led.haloMat.color.copy(led.color);
+        led.haloMat.opacity = led.intensity * 0.72;
+      }
+
+      if (amberPulse > 0) {
+        amberPulse = Math.max(0, amberPulse - dt * 0.85);
+      }
+
+      // Update click-to-sweep light band + trace & chip soft glow
+      if (sweepProgress >= 0 && sweepProgress <= 1.0) {
+        sweepProgress += dt * 0.85;
+        const sx = THREE.MathUtils.lerp(-PCB_W / 2 - 0.45, PCB_W / 2 + 0.45, Math.min(sweepProgress, 1.0));
+        const env = Math.sin(Math.min(sweepProgress, 1.0) * Math.PI);
+        sweepBand.bandMesh.position.x = sx;
+        sweepBand.bandMat.opacity = env * 0.85;
+        sweepBand.traceGlowMat.uniforms.uSweepX.value = sx;
+        sweepBand.traceGlowMat.uniforms.uStrength.value = env;
+        for (const t of icChips.chipGlowTargets) {
+          const d = (sx - t.cx) / 0.52;
+          t.mat.emissiveIntensity = Math.exp(-d * d) * env * 0.90;
+        }
+        if (sweepProgress > 1.0) {
+          sweepProgress = -1;
+          sweepBand.bandMat.opacity = 0;
+          sweepBand.traceGlowMat.uniforms.uStrength.value = 0;
+          for (const t of icChips.chipGlowTargets) t.mat.emissiveIntensity = 0;
+        }
+      }
     }
 
-    // =========================================================================
-    // 3. PROCEDURAL TEXTURE GENERATORS (100% Offline, Zero Assets)
-    // =========================================================================
-
-    /**
-     * Rounded Box Geometry Generator using ExtrudeGeometry (Bevel ~0.02)
-     */
-    function createRoundedBox(w, h, d, bevel = 0.02) {
-        const b = Math.min(bevel, w * 0.15, h * 0.15, d * 0.15);
-        const shape = new THREE.Shape();
-        const hw = w / 2 - b;
-        const hh = h / 2 - b;
-        shape.moveTo(-hw, hh);
-        shape.lineTo(hw, hh);
-        shape.lineTo(hw, -hh);
-        shape.lineTo(-hw, -hh);
-        shape.closePath();
-
-        const geo = new THREE.ExtrudeGeometry(shape, {
-            depth: d - b * 2,
-            bevelEnabled: true,
-            bevelSegments: 2,
-            steps: 1,
-            bevelSize: b,
-            bevelThickness: b
-        });
-        geo.center();
-        return geo;
+    renderer.render(scene, camera);
+    if (firstFrame) {
+      firstFrame = false;
+      loaderEl.style.opacity = '0';
+      setTimeout(() => loaderEl.remove(), 260);
     }
-
-    /**
-     * Procedural Main PCB Green Solder Mask Texture (Color Map + Bump Map)
-     */
-    function generatePcbTextures(renderer) {
-        const cCanvas = document.createElement('canvas');
-        cCanvas.width = 2048;
-        cCanvas.height = 2048;
-        const c = cCanvas.getContext('2d');
-
-        const bCanvas = document.createElement('canvas');
-        bCanvas.width = 2048;
-        bCanvas.height = 2048;
-        const b = bCanvas.getContext('2d');
-
-        // Solder mask base: Deep Emerald Green (#14532d)
-        c.fillStyle = '#14532d';
-        c.fillRect(0, 0, 2048, 2048);
-
-        b.fillStyle = '#111111';
-        b.fillRect(0, 0, 2048, 2048);
-
-        // Ground pour polygons (subtle darker green where copper pour is present)
-        c.fillStyle = '#166534';
-        c.fillRect(120, 120, 1808, 1808);
-        b.fillStyle = '#2a2a2a';
-        b.fillRect(120, 120, 1808, 1808);
-
-        // Isolation moat around edge
-        c.strokeStyle = '#0f3e21';
-        c.lineWidth = 14;
-        c.strokeRect(100, 100, 1848, 1848);
-
-        // High-Speed Copper Circuit Traces (45-degree octagonal routing)
-        c.strokeStyle = '#d97706'; // Warm copper tone under glossy clearcoat
-        c.lineWidth = 7;
-        c.lineCap = 'round';
-        c.lineJoin = 'round';
-
-        b.strokeStyle = '#888888'; // Raised trace bump relief
-        b.lineWidth = 7;
-        b.lineCap = 'round';
-        b.lineJoin = 'round';
-
-        const traces = [
-            // CPU to DRAM buses
-            [[1024, 1024], [1300, 1024], [1400, 840], [1680, 840]],
-            [[1024, 980],  [1280, 980],  [1360, 800], [1680, 800]],
-            [[1024, 1068], [1280, 1068], [1360, 1220], [1680, 1220]],
-            [[1024, 1112], [1300, 1112], [1400, 1260], [1680, 1260]],
-            // CPU to Ports (USB & Ethernet)
-            [[960, 1024],  [640, 1024],  [520, 760],  [280, 760]],
-            [[960, 980],   [620, 980],   [500, 720],  [280, 720]],
-            [[960, 1068],  [620, 1068],  [500, 1340], [280, 1340]],
-            [[960, 1112],  [640, 1112],  [520, 1380], [280, 1380]],
-            // GPIO Header Bus
-            [[1024, 920],  [1024, 600],  [1200, 420], [1580, 420]],
-            [[980, 920],   [980, 580],   [1160, 380], [1580, 380]],
-            [[1068, 920],  [1068, 620],  [1240, 460], [1580, 460]],
-            // Power rails
-            [[500, 400],   [700, 400],   [840, 700],  [840, 1024]],
-            [[500, 1640],  [760, 1640],  [840, 1360], [840, 1024]]
-        ];
-
-        traces.forEach(pts => {
-            c.beginPath();
-            b.beginPath();
-            c.moveTo(pts[0][0], pts[0][1]);
-            b.moveTo(pts[0][0], pts[0][1]);
-            for (let i = 1; i < pts.length; i++) {
-                c.lineTo(pts[i][0], pts[i][1]);
-                b.lineTo(pts[i][0], pts[i][1]);
-            }
-            c.stroke();
-            b.stroke();
-        });
-
-        // Annular Ring Vias (Plated Through-Hole vias with gold rings & dark centers)
-        function drawVia(x, y) {
-            c.fillStyle = '#f59e0b'; // Gold ring
-            c.beginPath(); c.arc(x, y, 10, 0, Math.PI * 2); c.fill();
-            c.fillStyle = '#0f172a'; // Drill center
-            c.beginPath(); c.arc(x, y, 4, 0, Math.PI * 2); c.fill();
-
-            b.fillStyle = '#aaaaaa';
-            b.beginPath(); b.arc(x, y, 10, 0, Math.PI * 2); b.fill();
-            b.fillStyle = '#000000'; // Recessed hole
-            b.beginPath(); b.arc(x, y, 4, 0, Math.PI * 2); b.fill();
-        }
-
-        // Scatter vias along ground stitch & bus lines
-        for (let vx = 300; vx <= 1700; vx += 140) {
-            drawVia(vx, 220);
-            drawVia(vx, 1820);
-        }
-        for (let vy = 300; vy <= 1700; vy += 140) {
-            drawVia(220, vy);
-            drawVia(1820, vy);
-        }
-        // Via stitch clusters around CPU and DRAM
-        [
-            [920, 920], [920, 1120], [1120, 920], [1120, 1120],
-            [1380, 780], [1380, 860], [1380, 1200], [1380, 1280]
-        ].forEach(([vx, vy]) => drawVia(vx, vy));
-
-        // Gold SMT Component Pads (ENIG Electroless Nickel Immersion Gold)
-        c.fillStyle = '#f59e0b';
-        b.fillStyle = '#bbbbbb';
-
-        // CPU BGA pad grid
-        for (let r = -6; r <= 6; r++) {
-            for (let k = -6; k <= 6; k++) {
-                if (Math.abs(r) > 1 || Math.abs(k) > 1) {
-                    c.fillRect(1024 + r * 24 - 5, 1024 + k * 24 - 5, 10, 10);
-                    b.fillRect(1024 + r * 24 - 5, 1024 + k * 24 - 5, 10, 10);
-                }
-            }
-        }
-
-        // DRAM SMT footprint pads
-        [-340, 340].forEach(yOff => {
-            for (let p = -5; p <= 5; p++) {
-                c.fillRect(1520 - 70, 1024 + yOff + p * 20 - 4, 18, 9);
-                c.fillRect(1520 + 70, 1024 + yOff + p * 20 - 4, 18, 9);
-                b.fillRect(1520 - 70, 1024 + yOff + p * 20 - 4, 18, 9);
-                b.fillRect(1520 + 70, 1024 + yOff + p * 20 - 4, 18, 9);
-            }
-        });
-
-        // Crisp White Silkscreen Typography & Legend (Industrial Standard)
-        c.fillStyle = '#f8fafc';
-        c.font = 'bold 36px "Inter", monospace';
-        c.fillText('ELECTRODESK SBC-V3.2', 240, 280);
-        c.font = '22px "Inter", monospace';
-        c.fillStyle = '#cbd5e1';
-        c.fillText('MODEL 4B // 64-BIT OCTA-CORE', 240, 320);
-        c.fillText('4-LAYER HIGH-TG FR-4 STACK', 240, 352);
-        c.fillText('U1 SoC', 970, 850);
-        c.fillText('U2 DRAM-A', 1460, 710);
-        c.fillText('U3 DRAM-B', 1460, 1420);
-        c.fillText('J1 USB 3.0', 210, 1550);
-        c.fillText('J2 GbE LAN', 210, 620);
-        c.fillText('GPIO 40-PIN', 1280, 270);
-        c.fillText('▲ PIN 1', 1160, 270);
-
-        // Fiducials & CE/RoHS Marks
-        c.strokeStyle = '#f8fafc';
-        c.lineWidth = 3;
-        c.strokeRect(900, 900, 248, 248); // CPU Courtyard
-        c.strokeRect(1400, 720, 240, 160); // DRAM Courtyard
-        c.strokeRect(1400, 1160, 240, 160);
-
-        // Corner Mount Pad Rings
-        [
-            [120, 120], [1928, 120], [120, 1928], [1928, 1928]
-        ].forEach(([cx, cy]) => {
-            c.strokeStyle = '#f59e0b';
-            c.lineWidth = 12;
-            c.beginPath(); c.arc(cx, cy, 64, 0, Math.PI * 2); c.stroke();
-            b.strokeStyle = '#cccccc';
-            b.lineWidth = 12;
-            b.beginPath(); b.arc(cx, cy, 64, 0, Math.PI * 2); b.stroke();
-        });
-
-        const maxAniso = renderer ? renderer.capabilities.getMaxAnisotropy() : 4;
-
-        const colorTex = new THREE.CanvasTexture(cCanvas);
-        colorTex.generateMipmaps = true;
-        colorTex.anisotropy = maxAniso;
-
-        const bumpTex = new THREE.CanvasTexture(bCanvas);
-        bumpTex.generateMipmaps = true;
-        bumpTex.anisotropy = maxAniso;
-
-        return { colorTex, bumpTex };
-    }
-
-    /**
-     * Procedural Copper/Tan Substrate Layer Texture
-     */
-    function generateSubstrateTexture(renderer) {
-        const canvas = document.createElement('canvas');
-        canvas.width = 1024;
-        canvas.height = 1024;
-        const ctx = canvas.getContext('2d');
-
-        // FR-4 laminate core: warm translucent copper/tan
-        ctx.fillStyle = '#b45309';
-        ctx.fillRect(0, 0, 1024, 1024);
-
-        // Copper pour planes
-        ctx.fillStyle = '#d97706';
-        ctx.fillRect(60, 60, 904, 904);
-
-        // Internal ground planes and routing clearance splits
-        ctx.strokeStyle = '#92400e';
-        ctx.lineWidth = 6;
-        ctx.strokeRect(80, 80, 864, 864);
-
-        // Thermal copper hatch pattern
-        ctx.strokeStyle = 'rgba(245, 158, 11, 0.25)';
-        ctx.lineWidth = 2;
-        for (let i = 0; i < 1024; i += 24) {
-            ctx.beginPath();
-            ctx.moveTo(i, 0); ctx.lineTo(i, 1024); ctx.stroke();
-            ctx.beginPath();
-            ctx.moveTo(0, i); ctx.lineTo(1024, i); ctx.stroke();
-        }
-
-        // Corner drill holes
-        ctx.fillStyle = '#1e1b18';
-        [
-            [60, 60], [964, 60], [60, 964], [964, 964]
-        ].forEach(([hx, hy]) => {
-            ctx.beginPath();
-            ctx.arc(hx, hy, 28, 0, Math.PI * 2);
-            ctx.fill();
-        });
-
-        const maxAniso = renderer ? renderer.capabilities.getMaxAnisotropy() : 4;
-        const tex = new THREE.CanvasTexture(canvas);
-        tex.generateMipmaps = true;
-        tex.anisotropy = maxAniso;
-        return tex;
-    }
-
-    /**
-     * Procedural Frosted Top Film Texture
-     */
-    function generateFrostedFilmTexture(renderer) {
-        const canvas = document.createElement('canvas');
-        canvas.width = 1024;
-        canvas.height = 1024;
-        const ctx = canvas.getContext('2d');
-
-        // Translucent frosted base with fine trace art
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
-        ctx.fillRect(0, 0, 1024, 1024);
-
-        // Faint white alignment grid lines & component stencil apertures
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(50, 50, 924, 924);
-
-        // Component courtyard stencil apertures
-        ctx.strokeRect(450, 450, 124, 124); // SoC
-        ctx.strokeRect(680, 360, 120, 80);  // DRAM A
-        ctx.strokeRect(680, 580, 120, 80);  // DRAM B
-        ctx.strokeRect(100, 300, 100, 160); // Ports
-
-        // Faint trace guides
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.20)';
-        ctx.beginPath();
-        ctx.moveTo(512, 450); ctx.lineTo(512, 200); ctx.lineTo(750, 200);
-        ctx.moveTo(512, 574); ctx.lineTo(512, 824); ctx.lineTo(750, 824);
-        ctx.moveTo(450, 512); ctx.lineTo(250, 512);
-        ctx.stroke();
-
-        // Registration fiducials
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
-        [
-            [100, 100], [924, 100], [100, 924], [924, 924]
-        ].forEach(([fx, fy]) => {
-            ctx.beginPath();
-            ctx.arc(fx, fy, 8, 0, Math.PI * 2);
-            ctx.fill();
-        });
-
-        const maxAniso = renderer ? renderer.capabilities.getMaxAnisotropy() : 4;
-        const tex = new THREE.CanvasTexture(canvas);
-        tex.generateMipmaps = true;
-        tex.anisotropy = maxAniso;
-        return tex;
-    }
-
-    /**
-     * Procedural Laser-Engraved Chip Markings
-     */
-    function generateChipTexture(line1, line2, line3, renderer) {
-        const canvas = document.createElement('canvas');
-        canvas.width = 512;
-        canvas.height = 512;
-        const ctx = canvas.getContext('2d');
-
-        // Matte black epoxy body (#15181c)
-        ctx.fillStyle = '#15181c';
-        ctx.fillRect(0, 0, 512, 512);
-
-        // Laser-etched typography
-        ctx.fillStyle = '#94a3b8';
-        ctx.font = 'bold 36px monospace';
-        ctx.fillText(line1, 50, 170);
-
-        ctx.font = '22px monospace';
-        ctx.fillStyle = '#64748b';
-        ctx.fillText(line2, 50, 230);
-        ctx.fillText(line3, 50, 270);
-
-        // Laser pin 1 dot
-        ctx.fillStyle = '#475569';
-        ctx.beginPath();
-        ctx.arc(55, 55, 14, 0, Math.PI * 2);
-        ctx.fill();
-
-        // 2D DataMatrix code in corner
-        ctx.fillStyle = '#94a3b8';
-        for (let r = 0; r < 7; r++) {
-            for (let k = 0; k < 7; k++) {
-                if ((r + k) % 2 === 0 || (r === 0 && k === 6) || (r === 6 && k === 0)) {
-                    ctx.fillRect(350 + k * 14, 50 + r * 14, 10, 10);
-                }
-            }
-        }
-
-        const maxAniso = renderer ? renderer.capabilities.getMaxAnisotropy() : 4;
-        const tex = new THREE.CanvasTexture(canvas);
-        tex.generateMipmaps = true;
-        tex.anisotropy = maxAniso;
-        return tex;
-    }
-
-    // =========================================================================
-    // 4. MAIN SCENE INITIALIZER
-    // =========================================================================
-    function initCircuitBoardScene() {
-        if (window.__circuitBoardInitialized) return;
-
-        if (typeof THREE === 'undefined') {
-            setTimeout(initCircuitBoardScene, 60);
-            return;
-        }
-
-        const canvas = document.getElementById('login-board-canvas');
-        const container = document.getElementById('login-canvas-container');
-        const statusText = document.getElementById('scene-status-text');
-
-        if (!canvas || !container) {
-            setTimeout(initCircuitBoardScene, 60);
-            return;
-        }
-
-        if (!isWebGLAvailable()) {
-            showFallback(container, statusText);
-            return;
-        }
-
-        window.__circuitBoardInitialized = true;
-
-        const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-        // Container Dimensions
-        let width = Math.max(container.clientWidth || 0, 360);
-        let height = Math.max(container.clientHeight || 0, 340);
-
-        // ---------------------------------------------------------------------
-        // 4.1 Three.js Scene, Camera & WebGLRenderer
-        // ---------------------------------------------------------------------
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(34, width / height, 0.1, 100);
-        camera.position.set(5.5, 4.6, 5.8);
-        camera.lookAt(0, 0.35, 0);
-
-        let renderer;
-        try {
-            renderer = new THREE.WebGLRenderer({
-                canvas: canvas,
-                alpha: true,
-                antialias: true,
-                powerPreference: 'high-performance'
-            });
-        } catch (err) {
-            console.warn('WebGL init failed:', err);
-            showFallback(container, statusText);
-            return;
-        }
-
-        renderer.setSize(width, height);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-        renderer.setClearColor(0x000000, 0); // Transparent canvas; blends with page background
-        renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        renderer.toneMappingExposure = 0.95;
-        renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-
-        // ---------------------------------------------------------------------
-        // 4.2 Procedural Studio Environment for PBR Specular Reflections
-        // ---------------------------------------------------------------------
-        try {
-            const pmrem = new THREE.PMREMGenerator(renderer);
-            pmrem.compileEquirectangularShader();
-            const envScene = new THREE.Scene();
-
-            // Studio room shell
-            const envRoom = new THREE.Mesh(
-                new THREE.BoxGeometry(20, 20, 20),
-                new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.85, side: THREE.BackSide })
-            );
-            envScene.add(envRoom);
-
-            // Overhead softbox light panel
-            const envTop = new THREE.Mesh(
-                new THREE.PlaneGeometry(12, 12),
-                new THREE.MeshBasicMaterial({ color: 0xffffff })
-            );
-            envTop.position.set(0, 9.8, 0);
-            envTop.rotation.x = Math.PI / 2;
-            envScene.add(envTop);
-
-            // Key warm softbox panel (studio reflection)
-            const envKey = new THREE.Mesh(
-                new THREE.PlaneGeometry(8, 8),
-                new THREE.MeshBasicMaterial({ color: 0xfff7ed })
-            );
-            envKey.position.set(7, 6, 7);
-            envKey.lookAt(0, 0, 0);
-            envScene.add(envKey);
-
-            // Cyan rim softbox panel
-            const envCyan = new THREE.Mesh(
-                new THREE.PlaneGeometry(7, 7),
-                new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
-            );
-            envCyan.position.set(-7, 4, -6);
-            envCyan.lookAt(0, 0, 0);
-            envScene.add(envCyan);
-
-            const envTexture = pmrem.fromScene(envScene, 0.04).texture;
-            scene.environment = envTexture;
-            pmrem.dispose();
-        } catch (e) {
-            console.warn('RoomEnvironment PMREM generation bypassed:', e);
-        }
-
-        // ---------------------------------------------------------------------
-        // 4.3 Studio Floor with Soft Shadow & Ambient Warm Grounding
-        // ---------------------------------------------------------------------
-        const shadowFloor = new THREE.Mesh(
-            new THREE.PlaneGeometry(16, 14),
-            new THREE.ShadowMaterial({ opacity: 0.45 })
-        );
-        shadowFloor.rotation.x = -Math.PI / 2;
-        shadowFloor.position.y = -0.42;
-        shadowFloor.receiveShadow = true;
-        scene.add(shadowFloor);
-
-        // Procedural warm ground ambient vignette disc
-        const glowCanvas = document.createElement('canvas');
-        glowCanvas.width = 512;
-        glowCanvas.height = 512;
-        const gctx = glowCanvas.getContext('2d');
-        const gGrad = gctx.createRadialGradient(256, 256, 20, 256, 256, 250);
-        gGrad.addColorStop(0, 'rgba(217, 180, 130, 0.28)'); // warm paper highlight
-        gGrad.addColorStop(0.35, 'rgba(34, 211, 238, 0.14)'); // subtle cyan rim glow
-        gGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-        gctx.fillStyle = gGrad;
-        gctx.fillRect(0, 0, 512, 512);
-
-        const floorGlowTex = new THREE.CanvasTexture(glowCanvas);
-        const floorGlowMesh = new THREE.Mesh(
-            new THREE.PlaneGeometry(8, 8),
-            new THREE.MeshBasicMaterial({
-                map: floorGlowTex,
-                transparent: true,
-                opacity: 0.35,
-                blending: THREE.AdditiveBlending,
-                depthWrite: false
-            })
-        );
-        floorGlowMesh.rotation.x = -Math.PI / 2;
-        floorGlowMesh.position.y = -0.415;
-        scene.add(floorGlowMesh);
-
-        // ---------------------------------------------------------------------
-        // 4.4 Studio Natural Lighting Rig
-        // ---------------------------------------------------------------------
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.45);
-        scene.add(ambientLight);
-
-        // Directional Key Light with PCF Soft Shadows
-        const keyLight = new THREE.DirectionalLight(0xfffaed, 2.1);
-        keyLight.position.set(6.2, 9.5, 5.8);
-        keyLight.castShadow = true;
-        keyLight.shadow.mapSize.width = 2048;
-        keyLight.shadow.mapSize.height = 2048;
-        keyLight.shadow.camera.near = 0.5;
-        keyLight.shadow.camera.far = 28;
-        keyLight.shadow.camera.left = -4.5;
-        keyLight.shadow.camera.right = 4.5;
-        keyLight.shadow.camera.top = 4.5;
-        keyLight.shadow.camera.bottom = -4.5;
-        keyLight.shadow.bias = -0.0003;
-        keyLight.shadow.radius = 2.4;
-        scene.add(keyLight);
-
-        // Teal / Cyan Rim Light for Specular Edge Definition
-        const rimLight = new THREE.DirectionalLight(0x22d3ee, 2.4);
-        rimLight.position.set(-6.2, 4.0, -4.8);
-        scene.add(rimLight);
-
-        // Warm Fill Light from underneath
-        const fillLight = new THREE.DirectionalLight(0xb45309, 0.25);
-        fillLight.position.set(0, -4, 2);
-        scene.add(fillLight);
-
-        // ---------------------------------------------------------------------
-        // 4.5 Materials Library
-        // ---------------------------------------------------------------------
-        const { colorTex: pcbColorTex, bumpTex: pcbBumpTex } = generatePcbTextures(renderer);
-        const substrateTex = generateSubstrateTexture(renderer);
-        const frostedFilmTex = generateFrostedFilmTexture(renderer);
-        const cpuTex = generateChipTexture('ELECTRODESK', 'EDK-9900PRO // OCTA', '64-BIT // 2.8GHz ARM', renderer);
-        const ramTex = generateChipTexture('ELECTRODESK', 'LPDDR5X 16GB', '8533Mbps DUAL-CH', renderer);
-
-        const materials = {
-            // Layer 1: Substrate
-            substrate: new THREE.MeshStandardMaterial({
-                map: substrateTex,
-                color: COLORS.SUBSTRATE_TAN,
-                metalness: 0.55,
-                roughness: 0.40,
-                bumpMap: substrateTex,
-                bumpScale: 0.006
-            }),
-            // Layer 2: Main Solder-Mask Green PCB (MeshPhysicalMaterial with Clearcoat)
-            pcbGreen: new THREE.MeshPhysicalMaterial({
-                color: COLORS.SOLDER_MASK,
-                map: pcbColorTex,
-                bumpMap: pcbBumpTex,
-                bumpScale: 0.005,
-                roughness: 0.35,
-                metalness: 0.05,
-                clearcoat: 0.85,
-                clearcoatRoughness: 0.12
-            }),
-            // Layer 3: Translucent Frosted Top Film
-            frostedFilm: new THREE.MeshPhysicalMaterial({
-                map: frostedFilmTex,
-                color: COLORS.FROSTED_FILM,
-                transparent: true,
-                opacity: 0.35,
-                roughness: 0.20,
-                metalness: 0.10,
-                clearcoat: 0.60,
-                clearcoatRoughness: 0.15
-            }),
-            // Gold ENIG Pins & Pads
-            gold: new THREE.MeshStandardMaterial({
-                color: COLORS.GOLD_ENIG,
-                metalness: 1.0,
-                roughness: 0.22
-            }),
-            // Brushed Aluminum Heatsink
-            heatsinkAluminum: new THREE.MeshStandardMaterial({
-                color: COLORS.ALUMINUM_HEATSINK,
-                metalness: 0.95,
-                roughness: 0.22
-            }),
-            // Brushed Steel Connector Housings
-            brushedSteel: new THREE.MeshStandardMaterial({
-                color: COLORS.BRUSHED_STEEL,
-                metalness: 1.0,
-                roughness: 0.32,
-                envMapIntensity: 1.2
-            }),
-            // Port Cavities Dark Interior
-            portInteriorDark: new THREE.MeshStandardMaterial({
-                color: 0x090d16,
-                roughness: 0.85,
-                metalness: 0.10
-            }),
-            // USB 3.0 Tongue Blue Plastic
-            usb3Blue: new THREE.MeshStandardMaterial({
-                color: COLORS.USB3_BLUE,
-                roughness: 0.35,
-                metalness: 0.05
-            }),
-            // Laser-Etched ICs
-            chipCpu: new THREE.MeshStandardMaterial({
-                color: COLORS.CHIP_BODY,
-                map: cpuTex,
-                metalness: 0.08,
-                roughness: 0.70
-            }),
-            chipRam: new THREE.MeshStandardMaterial({
-                color: COLORS.CHIP_BODY,
-                map: ramTex,
-                metalness: 0.08,
-                roughness: 0.70
-            }),
-            chipMatte: new THREE.MeshStandardMaterial({
-                color: COLORS.CHIP_BODY,
-                metalness: 0.08,
-                roughness: 0.75
-            }),
-            // Header Plastic Body
-            headerPlastic: new THREE.MeshStandardMaterial({
-                color: 0x18181b,
-                roughness: 0.85
-            }),
-            // SMD Passives
-            smdCapacitor: new THREE.MeshStandardMaterial({
-                color: COLORS.SMD_CAPACITOR,
-                metalness: 0.60,
-                roughness: 0.30
-            }),
-            smdResistor: new THREE.MeshStandardMaterial({
-                color: COLORS.SMD_RESISTOR,
-                metalness: 0.20,
-                roughness: 0.60
-            }),
-            // Corner Standoff Pillars & Screws
-            standoffPillar: new THREE.MeshStandardMaterial({
-                color: COLORS.STANDOFF_BLACK,
-                metalness: 0.85,
-                roughness: 0.28
-            }),
-            screwSteel: new THREE.MeshStandardMaterial({
-                color: COLORS.SCREW_STEEL,
-                metalness: 0.95,
-                roughness: 0.18
-            }),
-            // Indicator LEDs
-            ledCyan: new THREE.MeshStandardMaterial({
-                color: COLORS.LED_CYAN,
-                emissive: COLORS.LED_CYAN,
-                emissiveIntensity: 0.85,
-                roughness: 0.20
-            }),
-            ledAmber: new THREE.MeshStandardMaterial({
-                color: COLORS.LED_AMBER,
-                emissive: 0xd97706,
-                emissiveIntensity: 0.60,
-                roughness: 0.20
-            }),
-            // Atmospheric Drifting Dust / Particles
-            particleMat: new THREE.MeshBasicMaterial({
-                color: 0x7dd3fc,
-                transparent: true,
-                opacity: 0.65,
-                blending: THREE.AdditiveBlending
-            })
-        };
-
-        // ---------------------------------------------------------------------
-        // 4.6 Exploded Layer Stack Hierarchy
-        // ---------------------------------------------------------------------
-        const boardRoot = new THREE.Group();
-        boardRoot.scale.set(1.22, 1.22, 1.22);
-        boardRoot.rotation.x = 0.22;
-        boardRoot.rotation.y = -0.48;
-        scene.add(boardRoot);
-
-        const animatedLayers = [];
-
-        function registerLayer(group, explodedY, assembledY, options = {}) {
-            group.position.y = prefersReducedMotion ? assembledY : explodedY;
-            boardRoot.add(group);
-            animatedLayers.push({
-                group: group,
-                explodedY: explodedY,
-                assembledY: assembledY,
-                rotatesY: !!options.rotatesY,
-                initialRotY: group.rotation.y,
-                turns: options.turns || 0
-            });
-            return group;
-        }
-
-        // =====================================================================
-        // LAYER 1: Four Standoff Pillars linking the stack
-        // =====================================================================
-        const standoffsGroup = new THREE.Group();
-        CORNER_HOLES.forEach(pos => {
-            const pillar = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.13, 0.13, 0.36, 16),
-                materials.standoffPillar
-            );
-            pillar.position.set(pos.x, 0, pos.z);
-            pillar.castShadow = true;
-            pillar.receiveShadow = true;
-            standoffsGroup.add(pillar);
-        });
-        registerLayer(standoffsGroup, GAPS.EXPLODED.STANDOFF_FEET, GAPS.ASSEMBLED.STANDOFF_FEET);
-
-        // =====================================================================
-        // LAYER 2: Copper/Tan Substrate Layer (FR-4 core with copper pour)
-        // =====================================================================
-        const substrateGroup = new THREE.Group();
-        const substrateMesh = new THREE.Mesh(
-            createRoundedBox(BOARD_WIDTH, 0.04, BOARD_DEPTH, 0.02),
-            materials.substrate
-        );
-        substrateMesh.castShadow = true;
-        substrateMesh.receiveShadow = true;
-        substrateGroup.add(substrateMesh);
-
-        // Copper ground pads at corners
-        CORNER_HOLES.forEach(pos => {
-            const pad = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.20, 0.20, 0.045, 16),
-                materials.gold
-            );
-            pad.position.set(pos.x, 0, pos.z);
-            substrateGroup.add(pad);
-        });
-        registerLayer(substrateGroup, GAPS.EXPLODED.SUBSTRATE, GAPS.ASSEMBLED.SUBSTRATE);
-
-        // =====================================================================
-        // LAYER 3: Main Green Solder-Mask PCB with copper traces & gold pads
-        // =====================================================================
-        const pcbGroup = new THREE.Group();
-        const pcbMesh = new THREE.Mesh(
-            createRoundedBox(BOARD_WIDTH, 0.06, BOARD_DEPTH, 0.02),
-            materials.pcbGreen
-        );
-        pcbMesh.castShadow = true;
-        pcbMesh.receiveShadow = true;
-        pcbGroup.add(pcbMesh);
-        registerLayer(pcbGroup, GAPS.EXPLODED.MAIN_PCB, GAPS.ASSEMBLED.MAIN_PCB);
-
-        // =====================================================================
-        // LAYER 4: Translucent Frosted Top Film with faint trace art
-        // =====================================================================
-        const filmGroup = new THREE.Group();
-        const filmMesh = new THREE.Mesh(
-            createRoundedBox(BOARD_WIDTH, 0.025, BOARD_DEPTH, 0.02),
-            materials.frostedFilm
-        );
-        filmGroup.add(filmMesh);
-        registerLayer(filmGroup, GAPS.EXPLODED.FROSTED_FILM, GAPS.ASSEMBLED.FROSTED_FILM);
-
-        // =====================================================================
-        // LAYER 5: 60+ Tiny SMD Resistors & Capacitors (InstancedMesh)
-        // =====================================================================
-        const smdCount = 72;
-        const smdGeo = createRoundedBox(0.12, 0.05, 0.07, 0.01);
-        const smdInstanced = new THREE.InstancedMesh(smdGeo, materials.smdCapacitor, smdCount);
-        smdInstanced.castShadow = true;
-        smdInstanced.receiveShadow = true;
-
-        const dummy = new THREE.Object3D();
-        let smdIdx = 0;
-
-        // Decoupling ring surrounding CPU
-        for (let x = -0.72; x <= 0.72; x += 0.24) {
-            dummy.position.set(x, 0.03, -0.70);
-            dummy.rotation.y = 0;
-            dummy.updateMatrix();
-            smdInstanced.setMatrixAt(smdIdx++, dummy.matrix);
-
-            dummy.position.set(x, 0.03, 0.70);
-            dummy.rotation.y = 0;
-            dummy.updateMatrix();
-            smdInstanced.setMatrixAt(smdIdx++, dummy.matrix);
-        }
-
-        // DRAM filter banks
-        for (let z = -0.8; z <= 0.8; z += 0.20) {
-            dummy.position.set(1.28, 0.03, z);
-            dummy.rotation.y = Math.PI / 2;
-            dummy.updateMatrix();
-            smdInstanced.setMatrixAt(smdIdx++, dummy.matrix);
-        }
-
-        // Voltage regulator and USB decoupling rails
-        for (let z = -0.35; z <= 0.65; z += 0.16) {
-            dummy.position.set(-1.15, 0.03, z);
-            dummy.rotation.y = 0;
-            dummy.updateMatrix();
-            smdInstanced.setMatrixAt(smdIdx++, dummy.matrix);
-
-            dummy.position.set(-0.95, 0.03, z);
-            dummy.rotation.y = 0;
-            dummy.updateMatrix();
-            smdInstanced.setMatrixAt(smdIdx++, dummy.matrix);
-        }
-
-        // Remaining capacitors on peripheral tracks
-        while (smdIdx < smdCount) {
-            dummy.position.set(-0.5 + (smdIdx % 6) * 0.20, 0.03, -0.95);
-            dummy.rotation.y = 0;
-            dummy.updateMatrix();
-            smdInstanced.setMatrixAt(smdIdx++, dummy.matrix);
-        }
-        smdInstanced.instanceMatrix.needsUpdate = true;
-
-        const smdGroup = new THREE.Group();
-        smdGroup.add(smdInstanced);
-        registerLayer(smdGroup, GAPS.EXPLODED.SMD_PARTS, GAPS.ASSEMBLED.SMD_PARTS);
-
-        // =====================================================================
-        // LAYER 6: Floating Components (ICs, Ports, GPIO Header, Capacitors)
-        // =====================================================================
-        const compGroup = new THREE.Group();
-
-        // Central 64-bit SoC
-        const cpuPkg = new THREE.Mesh(
-            createRoundedBox(1.04, 0.09, 1.04, 0.02),
-            materials.chipCpu
-        );
-        cpuPkg.castShadow = true;
-        cpuPkg.receiveShadow = true;
-        compGroup.add(cpuPkg);
-
-        // SoC Heartbeat micro-LED
-        const cpuLed = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.03, 0.06), materials.ledCyan);
-        cpuLed.position.set(0.36, 0.05, 0.36);
-        compGroup.add(cpuLed);
-
-        // Dual LPDDR5X DRAM ICs
-        [-0.44, 0.44].forEach(z => {
-            const ram = new THREE.Mesh(
-                createRoundedBox(0.56, 0.07, 0.76, 0.02),
-                materials.chipRam
-            );
-            ram.position.set(0.90, 0, z);
-            ram.castShadow = true;
-            compGroup.add(ram);
-        });
-
-        // Stacked Dual USB-A 3.0 Housing (Brushed Steel with Blue Tongues)
-        const usbBlock = new THREE.Mesh(
-            createRoundedBox(0.72, 0.58, 0.82, 0.02),
-            materials.brushedSteel
-        );
-        usbBlock.castShadow = true;
-        usbBlock.receiveShadow = true;
-
-        [-0.14, 0.14].forEach(yOff => {
-            const cavity = new THREE.Mesh(
-                new THREE.BoxGeometry(0.26, 0.18, 0.56),
-                materials.portInteriorDark
-            );
-            cavity.position.set(-0.25, yOff, 0);
-            usbBlock.add(cavity);
-
-            // Blue USB3.0 Tongue
-            const tongue = new THREE.Mesh(
-                new THREE.BoxGeometry(0.20, 0.04, 0.44),
-                materials.usb3Blue
-            );
-            tongue.position.set(-0.27, yOff - 0.045, 0);
-            usbBlock.add(tongue);
-
-            // Gold spring contact fingers
-            for (let p = 0; p < 4; p++) {
-                const pin = new THREE.Mesh(
-                    new THREE.BoxGeometry(0.12, 0.012, 0.045),
-                    materials.gold
-                );
-                pin.position.set(-0.27, yOff - 0.02, -0.15 + p * 0.10);
-                usbBlock.add(pin);
-            }
-        });
-        usbBlock.position.set(-1.68, 0.22, 0.88);
-        compGroup.add(usbBlock);
-
-        // RJ-45 Gigabit Ethernet Jack (Brushed Steel Housing with Cavity & LEDs)
-        const ethBlock = new THREE.Mesh(
-            createRoundedBox(0.78, 0.62, 0.86, 0.02),
-            materials.brushedSteel
-        );
-        ethBlock.castShadow = true;
-        ethBlock.receiveShadow = true;
-
-        const ethCavity = new THREE.Mesh(
-            new THREE.BoxGeometry(0.30, 0.44, 0.66),
-            materials.portInteriorDark
-        );
-        ethCavity.position.set(-0.26, -0.04, 0);
-        ethBlock.add(ethCavity);
-
-        // 8 gold contact wire springs inside
-        for (let i = 0; i < 8; i++) {
-            const wire = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.008, 0.008, 0.14, 8),
-                materials.gold
-            );
-            wire.rotation.z = Math.PI / 4;
-            wire.position.set(-0.28, 0.10, -0.22 + i * 0.06);
-            ethBlock.add(wire);
-        }
-
-        // Ethernet Status LEDs
-        const ethLed1 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.05), materials.ledCyan);
-        ethLed1.position.set(-0.38, 0.25, -0.25);
-        ethBlock.add(ethLed1);
-        const ethLed2 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.05), materials.ledAmber);
-        ethLed2.position.set(-0.38, 0.25, 0.25);
-        ethBlock.add(ethLed2);
-
-        ethBlock.position.set(-1.68, 0.24, -0.55);
-        compGroup.add(ethBlock);
-
-        // 2x20 (40-Pin) Gold GPIO Header Strip via InstancedMesh
-        const gpioBase = new THREE.Mesh(
-            createRoundedBox(1.72, 0.12, 0.26, 0.01),
-            materials.headerPlastic
-        );
-        gpioBase.position.set(0.68, 0.06, 1.20);
-        gpioBase.castShadow = true;
-        compGroup.add(gpioBase);
-
-        const pinCount = 40;
-        const pinGeo = new THREE.CylinderGeometry(0.022, 0.022, 0.38, 12);
-        const pinInstanced = new THREE.InstancedMesh(pinGeo, materials.gold, pinCount);
-        pinInstanced.castShadow = true;
-
-        let pinIdx = 0;
-        for (let col = -0.74; col <= 0.74; col += 0.185) {
-            [-0.06, 0.06].forEach(rowZ => {
-                dummy.position.set(0.68 + col, 0.25, 1.20 + rowZ);
-                dummy.rotation.set(0, 0, 0);
-                dummy.updateMatrix();
-                pinInstanced.setMatrixAt(pinIdx++, dummy.matrix);
-            });
-        }
-        pinInstanced.instanceMatrix.needsUpdate = true;
-        compGroup.add(pinInstanced);
-
-        // Cylindrical Electrolytic Filter Capacitors (Aluminum Can with Vents)
-        [-0.85, -0.55].forEach((zPos, i) => {
-            const capGroup = new THREE.Group();
-            const can = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.18, 0.18, 0.42, 20),
-                materials.chipMatte
-            );
-            can.castShadow = true;
-            capGroup.add(can);
-
-            // Aluminum stamped top vent groove
-            const topDisc = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.178, 0.178, 0.02, 20),
-                materials.heatsinkAluminum
-            );
-            topDisc.position.y = 0.21;
-            capGroup.add(topDisc);
-
-            capGroup.position.set(-0.25 + i * 0.22, 0.21, zPos);
-            compGroup.add(capGroup);
-        });
-
-        registerLayer(compGroup, GAPS.EXPLODED.COMPONENTS, GAPS.ASSEMBLED.COMPONENTS);
-
-        // =====================================================================
-        // LAYER 7: Extruded Finned Aluminum Heatsink
-        // =====================================================================
-        const heatsinkGroup = new THREE.Group();
-        const hsBase = new THREE.Mesh(
-            createRoundedBox(1.10, 0.06, 1.10, 0.015),
-            materials.heatsinkAluminum
-        );
-        hsBase.castShadow = true;
-        hsBase.receiveShadow = true;
-        heatsinkGroup.add(hsBase);
-
-        const finCount = 14;
-        const finSpacing = 0.98 / (finCount - 1);
-        for (let i = 0; i < finCount; i++) {
-            const fx = -0.49 + i * finSpacing;
-            const fin = new THREE.Mesh(
-                new THREE.BoxGeometry(0.022, 0.40, 1.06),
-                materials.heatsinkAluminum
-            );
-            fin.position.set(fx, 0.23, 0);
-            fin.castShadow = true;
-            fin.receiveShadow = true;
-            heatsinkGroup.add(fin);
-        }
-        heatsinkGroup.position.set(0, 0, 0);
-        registerLayer(heatsinkGroup, GAPS.EXPLODED.HEATSINK, GAPS.ASSEMBLED.HEATSINK);
-
-        // =====================================================================
-        // LAYER 8: 4 Corner Screws (Tightening with spin rotation)
-        // =====================================================================
-        CORNER_HOLES.forEach(pos => {
-            const screwGroup = new THREE.Group();
-            const head = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.14, 0.13, 0.07, 16),
-                materials.screwSteel
-            );
-            head.position.y = 0.035;
-            head.castShadow = true;
-            screwGroup.add(head);
-
-            // Phillips cross slots
-            const slot1 = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.02, 0.04), materials.chipMatte);
-            slot1.position.y = 0.075;
-            screwGroup.add(slot1);
-            const slot2 = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.02, 0.18), materials.chipMatte);
-            slot2.position.y = 0.075;
-            screwGroup.add(slot2);
-
-            const shank = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.05, 0.05, 0.30, 8),
-                materials.screwSteel
-            );
-            shank.position.y = -0.13;
-            shank.castShadow = true;
-            screwGroup.add(shank);
-
-            screwGroup.position.set(pos.x, 0, pos.z);
-            registerLayer(screwGroup, GAPS.EXPLODED.SCREWS, GAPS.ASSEMBLED.SCREWS, {
-                rotatesY: true,
-                turns: 6.0
-            });
-        });
-
-        // =====================================================================
-        // LAYER 9: Drifting Atmospheric SMD Dust / Motes (InstancedMesh)
-        // =====================================================================
-        const particleCount = 42;
-        const particleGeo = new THREE.BoxGeometry(0.035, 0.035, 0.035);
-        const particleInstanced = new THREE.InstancedMesh(particleGeo, materials.particleMat, particleCount);
-
-        const particleData = [];
-        for (let i = 0; i < particleCount; i++) {
-            const p = {
-                x: (Math.random() - 0.5) * 4.6,
-                y: 0.4 + Math.random() * 3.8,
-                z: (Math.random() - 0.5) * 3.4,
-                speedY: 0.15 + Math.random() * 0.25,
-                rotSpeed: (Math.random() - 0.5) * 2.0,
-                phase: Math.random() * Math.PI * 2
-            };
-            particleData.push(p);
-            dummy.position.set(p.x, p.y, p.z);
-            dummy.updateMatrix();
-            particleInstanced.setMatrixAt(i, dummy.matrix);
-        }
-        particleInstanced.instanceMatrix.needsUpdate = true;
-        boardRoot.add(particleInstanced);
-
-        // ---------------------------------------------------------------------
-        // 4.7 Animation & State Controller
-        // ---------------------------------------------------------------------
-        const startTime = performance.now();
-        let isRunning = true;
-        let isPoweringOn = false;
-        let manualAssembleOverride = null; // null = auto loop; true/false = user hover/click toggle
-
-        // Smooth cubic-bezier easing
-        function easeInOutCubic(t) {
-            return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-        }
-
-        // Parallax cursor tracking
-        const mouseTarget = { x: 0, y: 0 };
-        const mouseCurrent = { x: 0, y: 0 };
-
-        function onMouseMove(e) {
-            const nx = (e.clientX / window.innerWidth) - 0.5;
-            const ny = (e.clientY / window.innerHeight) - 0.5;
-            mouseTarget.x = nx * 0.35;
-            mouseTarget.y = ny * 0.25;
-        }
-        window.addEventListener('mousemove', onMouseMove, { passive: true });
-
-        // Click / Hover interaction to snap or explode on demand
-        function toggleAssemblyState() {
-            if (manualAssembleOverride === null) {
-                manualAssembleOverride = true;
-            } else {
-                manualAssembleOverride = !manualAssembleOverride;
-            }
-        }
-        canvas.addEventListener('click', toggleAssemblyState);
-
-        // Window resize handler
-        function onWindowResize() {
-            if (!container || !renderer || !camera) return;
-            const newW = Math.max(container.clientWidth || 0, 360);
-            const newH = Math.max(container.clientHeight || 0, 340);
-            if (newW !== width || newH !== height) {
-                width = newW;
-                height = newH;
-                camera.aspect = width / height;
-                camera.updateProjectionMatrix();
-                renderer.setSize(width, height);
-            }
-        }
-        window.addEventListener('resize', onWindowResize);
-
-        // Pause rendering when tab is hidden (saves 100% GPU / CPU)
-        document.addEventListener('visibilitychange', () => {
-            isRunning = !document.hidden;
-            if (isRunning) requestAnimationFrame(renderLoop);
-        });
-
-        // ---------------------------------------------------------------------
-        // 4.8 Main Render Loop
-        // ---------------------------------------------------------------------
-        let currentAssembleFactor = 0; // 0 = fully exploded, 1 = fully assembled
-
-        function renderLoop(now) {
-            if (!isRunning) return;
-
-            // Responsive bounds check
-            if (container && container.clientWidth > 0 && container.clientHeight > 0) {
-                if (Math.abs(container.clientWidth - width) > 8 || Math.abs(container.clientHeight - height) > 8) {
-                    onWindowResize();
-                }
-            }
-
-            const elapsed = now - startTime;
-
-            // Determine target assembly factor (0..1)
-            let targetFactor = 0;
-
-            if (prefersReducedMotion) {
-                targetFactor = 1.0;
-            } else if (manualAssembleOverride !== null) {
-                targetFactor = manualAssembleOverride ? 1.0 : 0.0;
-            } else {
-                // Autonomous Cycle: Exploded Hold -> Assemble -> Assembled Hold -> Explode
-                const cycleTime = elapsed % TIMINGS.CYCLE_TOTAL;
-
-                if (cycleTime < TIMINGS.EXPLODED_HOLD) {
-                    targetFactor = 0.0;
-                    if (statusText && !isPoweringOn) {
-                        statusText.textContent = 'EXPLODED LAYER STACK // STANDBY';
-                    }
-                } else if (cycleTime < TIMINGS.EXPLODED_HOLD + TIMINGS.ASSEMBLE_DURATION) {
-                    const t = (cycleTime - TIMINGS.EXPLODED_HOLD) / TIMINGS.ASSEMBLE_DURATION;
-                    targetFactor = easeInOutCubic(t);
-                    if (statusText && !isPoweringOn) {
-                        statusText.textContent = 'ASSEMBLING CIRCUIT BOARD...';
-                    }
-                } else if (cycleTime < TIMINGS.EXPLODED_HOLD + TIMINGS.ASSEMBLE_DURATION + TIMINGS.ASSEMBLED_HOLD) {
-                    targetFactor = 1.0;
-                    if (statusText && !isPoweringOn) {
-                        statusText.textContent = 'ELECTRODESK HARDWARE ONLINE // ALL SYSTEMS NOMINAL';
-                    }
-                } else {
-                    const t = 1.0 - (cycleTime - (TIMINGS.EXPLODED_HOLD + TIMINGS.ASSEMBLE_DURATION + TIMINGS.ASSEMBLED_HOLD)) / TIMINGS.EXPLODE_DURATION;
-                    targetFactor = easeInOutCubic(t);
-                    if (statusText && !isPoweringOn) {
-                        statusText.textContent = 'EXPLODING LAYERS...';
-                    }
-                }
-            }
-
-            // Smooth interpolation of current assembly factor
-            const lerpSpeed = prefersReducedMotion ? 1.0 : 0.08;
-            currentAssembleFactor += (targetFactor - currentAssembleFactor) * lerpSpeed;
-
-            // Apply positions and spin to each exploded layer
-            animatedLayers.forEach(layer => {
-                layer.group.position.y = THREE.MathUtils.lerp(layer.explodedY, layer.assembledY, currentAssembleFactor);
-                if (layer.rotatesY) {
-                    layer.group.rotation.y = layer.initialRotY + (layer.turns * Math.PI * 2 * currentAssembleFactor);
-                }
-            });
-
-            // Update drifting particles
-            const timeSec = now * 0.001;
-            for (let i = 0; i < particleCount; i++) {
-                const p = particleData[i];
-                const py = p.y + Math.sin(timeSec * p.speedY + p.phase) * 0.18;
-                const px = p.x + Math.cos(timeSec * 0.2 + p.phase) * 0.08;
-                dummy.position.set(px, py, p.z);
-                dummy.rotation.set(timeSec * p.rotSpeed, timeSec * p.rotSpeed, 0);
-                dummy.updateMatrix();
-                particleInstanced.setMatrixAt(i, dummy.matrix);
-            }
-            particleInstanced.instanceMatrix.needsUpdate = true;
-
-            // Idle float breathing & mouse parallax tilt
-            const idleBreath = Math.sin(timeSec * 1.2) * 0.06;
-            boardRoot.position.y = idleBreath;
-
-            mouseCurrent.x += (mouseTarget.x - mouseCurrent.x) * 0.045;
-            mouseCurrent.y += (mouseTarget.y - mouseCurrent.y) * 0.045;
-
-            boardRoot.rotation.y = -0.48 + Math.sin(timeSec * 0.35) * 0.05 + mouseCurrent.x;
-            boardRoot.rotation.x =  0.22 + Math.cos(timeSec * 0.40) * 0.03 + mouseCurrent.y;
-
-            // LED pulse behavior
-            if (currentAssembleFactor > 0.85 && !isPoweringOn) {
-                materials.ledCyan.emissiveIntensity = 0.90 + Math.sin(timeSec * 4.0) * 0.40;
-                materials.ledAmber.emissiveIntensity = 0.60 + Math.cos(timeSec * 3.0) * 0.30;
-            } else if (!isPoweringOn) {
-                materials.ledCyan.emissiveIntensity = 0.50;
-                materials.ledAmber.emissiveIntensity = 0.30;
-            }
-
-            renderer.render(scene, camera);
-            requestAnimationFrame(renderLoop);
-        }
-
-        requestAnimationFrame(renderLoop);
-
-        // ---------------------------------------------------------------------
-        // 4.9 Login Form Submit Power-On Sequence
-        // ---------------------------------------------------------------------
-        global.triggerBoardPowerOn = function (callback) {
-            if (isPoweringOn) {
-                if (callback) callback();
-                return;
-            }
-            isPoweringOn = true;
-
-            // Snap layers together immediately
-            manualAssembleOverride = true;
-
-            if (statusText) statusText.textContent = 'SYSTEM POWERING ON...';
-
-            const overlay = document.getElementById('login-poweron-overlay');
-            if (overlay) overlay.classList.add('login-poweron-active');
-
-            materials.ledCyan.emissiveIntensity = 5.0;
-            materials.ledCyan.emissive.setHex(0x38bdf8);
-
-            camera.position.z -= 0.40;
-            camera.position.y += 0.18;
-
-            setTimeout(() => {
-                if (callback) callback();
-            }, 450);
-        };
-
-        // ---------------------------------------------------------------------
-        // 4.10 Resource Disposal (Memory Leak Prevention)
-        // ---------------------------------------------------------------------
-        function disposeScene() {
-            isRunning = false;
-            window.removeEventListener('mousemove', onMouseMove);
-            window.removeEventListener('resize', onWindowResize);
-            canvas.removeEventListener('click', toggleAssemblyState);
-
-            scene.traverse(obj => {
-                if (obj.geometry) obj.geometry.dispose();
-                if (obj.material) {
-                    if (Array.isArray(obj.material)) {
-                        obj.material.forEach(m => m.dispose());
-                    } else {
-                        obj.material.dispose();
-                    }
-                }
-            });
-
-            if (pcbColorTex) pcbColorTex.dispose();
-            if (pcbBumpTex) pcbBumpTex.dispose();
-            if (substrateTex) substrateTex.dispose();
-            if (frostedFilmTex) frostedFilmTex.dispose();
-            if (cpuTex) cpuTex.dispose();
-            if (ramTex) ramTex.dispose();
-            if (floorGlowTex) floorGlowTex.dispose();
-
-            if (renderer) {
-                renderer.dispose();
-                renderer.forceContextLoss();
-            }
-            window.__circuitBoardInitialized = false;
-        }
-
-        window.addEventListener('beforeunload', disposeScene, { once: true });
-    }
-
-    // Export module
-    global.initCircuitBoardScene = initCircuitBoardScene;
-    global.initLoginScene = initCircuitBoardScene;
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initCircuitBoardScene);
-    } else {
-        initCircuitBoardScene();
-    }
-    window.addEventListener('load', initCircuitBoardScene);
-
-})(typeof window !== 'undefined' ? window : this);
+  }
+  animate();
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { running = false; clock.stop(); }
+    else { running = true; clock.start(); animate(); }
+  });
+
+  // --- Submit effect: pulses converge on processor without delaying form submission ---
+  window.triggerBoardPowerOn = function (cb) {
+    triggerTraceWave(2.2);
+    statusLEDs.leds.forEach(led => {
+      led.color.setHex(0x22ff66);
+      led.intensity = 1.0;
+      led.hold = 1.5;
+    });
+    if (cb) cb();
+  };
+
+  console.log('[Electrodesk] Studio motherboard scene initialised (Stage 3)');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   5.  FALLBACK
+   ═══════════════════════════════════════════════════════════ */
+function showFallback() {
+  const c = document.getElementById('login-canvas-container');
+  if (!c) return;
+  c.innerHTML = `
+    <div class="webgl-fallback-container">
+      <div class="fallback-glow"></div>
+      <img src="/static/images/motherboard-fallback.png" alt="Electrodesk Motherboard" class="webgl-fallback-image" />
+      <span class="fallback-caption">ELECTRODESK CIRCUIT BOARD</span>
+    </div>`;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   6.  BOOTSTRAP
+   ═══════════════════════════════════════════════════════════ */
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initCircuitBoardScene);
+} else {
+  initCircuitBoardScene();
+}
+window.initCircuitBoardScene = initCircuitBoardScene;
+window.initLoginScene = initCircuitBoardScene;

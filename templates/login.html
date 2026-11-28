@@ -23,10 +23,6 @@
         <div class="login-3d-scene-col">
             <div class="login-canvas-container" id="login-canvas-container">
                 <canvas id="login-board-canvas"></canvas>
-                <div class="scene-hardware-status">
-                    <span class="scene-status-dot"></span>
-                    <span id="scene-status-text">INITIALIZING CIRCUIT BOARD...</span>
-                </div>
             </div>
         </div>
 
@@ -108,20 +104,16 @@
 {% endblock %}
 
 {% block scripts %}
-<!-- Three.js pinned from cdnjs exclusively for login intro scene -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script type="module">
-  if (typeof THREE === 'undefined') {
-    try {
-      const THREE_MOD = await import('three');
-      window.THREE = THREE_MOD;
-      if (window.initLoginScene) window.initLoginScene();
-    } catch (e) {
-      console.warn('Three.js module fallback error:', e);
-    }
+<!-- Three.js r143 – local ES modules via import map (pinned) -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "{{ url_for('static', filename='vendor/three/three.module.js') }}",
+    "three/addons/": "{{ url_for('static', filename='vendor/three/addons/') }}"
   }
+}
 </script>
-<script src="{{ url_for('static', filename='js/circuit-board.js') }}"></script>
+<script type="module" src="{{ url_for('static', filename='js/circuit-board.js') }}"></script>
 
 <script>
 let submitting = false;
